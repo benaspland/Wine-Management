@@ -196,7 +196,7 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
     const values = params
     const newRow: any = {}
 
-    const columnMatch = sql.match(/INSERT INTO\s+\w+\s*\((.*?)\)/i)
+    const columnMatch = sql.match(/INSERT INTO\s+\w+\s*\((.*?)\)\s*VALUES/is)
     if (columnMatch) {
       const columns = columnMatch[1].split(',').map(c => c.trim())
       columns.forEach((col, idx) => {
