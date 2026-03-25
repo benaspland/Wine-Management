@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useWineStore } from '../store/wineStore'
-import { WineService } from '../services/wine.service'
+import { ScheduleService } from '../services/schedule.service'
 
 interface ScheduleEntry {
   month: string
@@ -19,7 +19,7 @@ interface ScheduleEntry {
 export default function DrinkingSchedulePage() {
   const wines = useWineStore(state => state.wines)
 
-  // Group wines by drinking window months
+  // Generate drinking schedule using algorithm
   const schedule = useMemo(() => {
     const homeWines = wines.filter(w => w.location === 'home')
 
@@ -27,39 +27,49 @@ export default function DrinkingSchedulePage() {
       return []
     }
 
-    // For now, group by drinking window start year/month
-    // Phase 7 will apply the scheduling algorithm
+    // Generate drinking schedule using ScheduleService
+    const drinkingSchedule = ScheduleService.generateDrinkingSchedule(homeWines)
+
+    if (drinkingSchedule.length === 0) {
+      return []
+    }
+
+    // Group schedule entries by year/month for timeline display
     const grouped: Record<string, ScheduleEntry['wines']> = {}
 
-    homeWines.forEach(wine => {
-      // Create key from drinking window start
-      const key = `${wine.drinking_window_start}`
+    drinkingSchedule.forEach(entry => {
+      const key = `${entry.suggestedYear}-${entry.suggestedMonth}`
       if (!grouped[key]) {
         grouped[key] = []
       }
 
       grouped[key].push({
-        id: wine.id,
-        producer: wine.producer,
-        name: wine.name,
-        vintage: wine.vintage,
-        region: wine.region,
-        tier: wine.tier,
-        status: WineService.getDrinkingWindowLabel(wine),
+        id: entry.wineId,
+        producer: entry.producer,
+        name: entry.name,
+        vintage: entry.vintage,
+        region: entry.region,
+        tier: entry.tier,
+        status: entry.status,
       })
     })
 
-    // Convert to timeline format
+    // Convert to timeline format with month names
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December']
+
     const timeline: ScheduleEntry[] = Object.entries(grouped)
-      .map(([yearStr, wines]) => {
+      .map(([key, winesInPeriod]) => {
+        const [yearStr, monthStr] = key.split('-')
         const year = parseInt(yearStr)
+        const month = parseInt(monthStr)
         return {
-          month: 'Optimal Window',
+          month: monthNames[month] || 'Month',
           year,
-          wines: wines.sort((a, b) => b.tier - a.tier),
+          wines: winesInPeriod.sort((a, b) => b.tier - a.tier),
         }
       })
-      .sort((a, b) => a.year - b.year)
+      .sort((a, b) => a.year !== b.year ? a.year - b.year : 0)
 
     return timeline
   }, [wines])

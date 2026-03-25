@@ -3,6 +3,7 @@ import { useWineStore } from '../store/wineStore'
 import type { Tier } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import * as db from '../services/database'
+import { ScheduleService } from '../services/schedule.service'
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
@@ -20,40 +21,61 @@ export default function DeliverySchedulePage() {
     return wines.filter(w => w.location === 'home')
   }, [wines])
 
-  // For now, show pending deliveries from database
-  // Phase 7 will generate these based on scheduling rules
+  // Generate delivery schedule using algorithm
   const schedule = useMemo(() => {
-    // Placeholder: In Phase 7, this will be populated by scheduling algorithm
-    // For now, suggest the first wines from storage that should be delivered
-    const storageWines = wines
-      .filter(w => w.location === 'storage')
-      .sort((a, b) => a.drinking_window_start - b.drinking_window_start)
-      .slice(0, 3) // Show first 3 suggestions
+    // Generate delivery schedule using ScheduleService
+    const deliverySchedule = ScheduleService.generateDeliverySchedule(
+      wines,
+      cellarCapacity,
+      homeWines.length,
+      [3, 9] // Fixed delivery months: March and September
+    )
 
-    if (storageWines.length === 0) {
+    if (deliverySchedule.length === 0) {
       return []
     }
 
-    // Group by suggested delivery date (first of next month for demo)
-    const now = new Date()
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    // Group schedule entries by date
+    const grouped: Record<string, Array<{
+      id: string
+      producer: string
+      name: string
+      vintage: number
+      region: string
+      tier: number
+      quantity: number
+      format: string
+    }>> = {}
 
-    return [
-      {
-        date: nextMonth.toISOString().split('T')[0],
-        wines: storageWines.map(w => ({
-          id: w.id,
-          producer: w.producer,
-          name: w.name,
-          vintage: w.vintage,
-          region: w.region,
-          tier: w.tier,
-          quantity: Math.min(w.quantity, 6), // Delivery threshold
-          format: w.format,
-        })),
-      },
-    ]
-  }, [wines])
+    deliverySchedule.forEach(entry => {
+      if (!grouped[entry.scheduled_date]) {
+        grouped[entry.scheduled_date] = []
+      }
+
+      // Find the wine details
+      const wine = wines.find(w => w.id === entry.wine_id)
+      if (wine) {
+        grouped[entry.scheduled_date].push({
+          id: wine.id,
+          producer: wine.producer,
+          name: wine.name,
+          vintage: wine.vintage,
+          region: wine.region,
+          tier: wine.tier,
+          quantity: entry.quantity,
+          format: wine.format,
+        })
+      }
+    })
+
+    // Convert to array format, sorted by date
+    return Object.entries(grouped)
+      .map(([date, winesInDelivery]) => ({
+        date,
+        wines: winesInDelivery,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [wines, cellarCapacity, homeWines.length])
 
   const getTierColor = (tier: number): string => {
     if (tier === 5) return 'bg-primary text-on-primary-fixed-variant'
