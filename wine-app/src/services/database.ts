@@ -45,6 +45,7 @@ async function initMemoryDatabase() {
 async function initCapacitorDatabase() {
   // Capacitor SQLite will be implemented in Phase 8 when building for mobile
   // For now, use in-memory storage
+  dbType = 'memory'
   await initMemoryDatabase()
 }
 
