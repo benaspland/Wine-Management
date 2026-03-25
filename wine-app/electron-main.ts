@@ -1,7 +1,11 @@
 import { app, BrowserWindow, Menu, ipcMain } from 'electron'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import isDev from 'electron-is-dev'
 import Database from 'better-sqlite3'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 let mainWindow: BrowserWindow | null = null
 let db: Database.Database | null = null
