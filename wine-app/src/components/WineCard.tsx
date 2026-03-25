@@ -84,7 +84,7 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
               {tierLabel}
             </span>
             <span className="bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter text-on-surface-variant uppercase whitespace-nowrap">
-              {wine.varietal.split(':')[0].trim()}
+              {wine.varietal ? wine.varietal.split(':')[0].trim() : 'Unknown'}
             </span>
             <span className={`bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter uppercase whitespace-nowrap ${drinkingColor}`}>
               {drinkingStatus}
