@@ -7,14 +7,14 @@ let memoryStorage: Map<string, any[]> = new Map()
 
 export async function initializeDatabase() {
   // Detect environment
-  const isElectron = (window as any).electron !== undefined
+  const isElectron = (window as any).electronAPI !== undefined
 
   if (isElectron) {
     dbType = 'electron'
     // Electron will handle initialization via preload
-    db = (window as any).electron?.database
+    db = (window as any).electronAPI
     if (!db) {
-      console.warn('Electron database not found, falling back to memory storage')
+      console.warn('Electron API not found, falling back to memory storage')
       dbType = 'memory'
       await initMemoryDatabase()
     }
@@ -137,7 +137,18 @@ async function executeQuery(sql: string, params: any[] = []): Promise<any> {
   if (dbType === 'memory') {
     return handleMemoryQuery(sql, params)
   } else if (dbType === 'electron') {
-    return (window as any).electron?.database.execute(sql, params)
+    const api = (window as any).electronAPI
+    const upperSql = sql.trim().toUpperCase()
+
+    if (upperSql.startsWith('SELECT')) {
+      const result = await api.db.query(sql, params)
+      // Wrap array result in values property for consistency
+      return { values: result }
+    } else {
+      // For INSERT/UPDATE/DELETE, use run() method
+      const result = await api.db.run(sql, params)
+      return result
+    }
   } else {
     return db.query(sql, params)
   }
