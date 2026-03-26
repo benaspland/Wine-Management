@@ -15,18 +15,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('app:getDataPath'),
   },
 })
-
-declare global {
-  interface Window {
-    electronAPI: {
-      db: {
-        query: (sql: string, params?: unknown[]) => Promise<unknown[]>
-        run: (sql: string, params?: unknown[]) => Promise<{ changes: number; lastInsertRowid: number | bigint }>
-        exec: (sql: string) => Promise<{ success: boolean }>
-      }
-      app: {
-        getDataPath: () => Promise<string>
-      }
-    }
-  }
-}
