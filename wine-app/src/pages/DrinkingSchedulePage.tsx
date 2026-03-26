@@ -128,8 +128,8 @@ export default function DrinkingSchedulePage() {
 
                 {/* Wines in this period */}
                 <div className="space-y-10 pl-10">
-                  {entry.wines.map(wine => (
-                    <div key={wine.id} className="relative group cursor-pointer hover:opacity-80 transition-opacity">
+                  {entry.wines.map((wine, idx) => (
+                    <div key={`${entry.year}-${entry.month}-${wine.id}-${idx}`} className="relative group cursor-pointer hover:opacity-80 transition-opacity">
                       <div className="flex flex-col">
                         <span className={`text-xs font-bold tracking-widest uppercase mb-1 ${getTierColor(wine.tier)}`}>
                           {wine.status}
