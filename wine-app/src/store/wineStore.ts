@@ -23,6 +23,7 @@ interface WineStore {
   deleteWine: (id: string) => Promise<void>
   consumeWine: (wineId: string, quantity?: number) => Promise<void>
   moveWineToHome: (wineId: string) => Promise<void>
+  deduplicateWines: () => Promise<void>
 
   selectWine: (wine: Wine | null) => void
   setLocationFilter: (filter: 'all' | 'home' | 'storage') => void
@@ -129,6 +130,19 @@ export const useWineStore = create<WineStore>((set, get) => ({
       }
     } catch (error) {
       set({ error: (error as Error).message })
+    }
+  },
+
+  deduplicateWines: async () => {
+    set({ loading: true, error: null })
+    try {
+      await db.deduplicateWines()
+      await get().loadWines()
+      set({ selectedWine: null })
+    } catch (error) {
+      set({ error: (error as Error).message })
+    } finally {
+      set({ loading: false })
     }
   },
 

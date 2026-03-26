@@ -506,6 +506,24 @@ function parseWineRow(row: any): Wine {
   }
 }
 
+// Admin utilities
+export async function deduplicateWines(): Promise<number> {
+  // Delete all but the first (oldest) copy of each wine based on producer + name
+  const sql = `
+    DELETE FROM wines WHERE id IN (
+      SELECT id FROM wines w1
+      WHERE EXISTS (
+        SELECT 1 FROM wines w2
+        WHERE w1.producer = w2.producer
+        AND w1.name = w2.name
+        AND w1.created_at > w2.created_at
+      )
+    )
+  `
+  await executeQuery(sql, [])
+  return (await getWines()).length
+}
+
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 }
