@@ -13,6 +13,7 @@ export default function TopAppBar() {
             <Link to="/" className="text-[#FFBF00] font-medium transition-colors hover:text-[#FFE2AB]">Cellar</Link>
             <Link to="/schedule" className="text-[#9C8F78] font-medium transition-colors hover:text-[#FFE2AB]">Schedule</Link>
             <Link to="/deliveries" className="text-[#9C8F78] font-medium transition-colors hover:text-[#FFE2AB]">Deliveries</Link>
+            <Link to="/settings" className="text-[#9C8F78] font-medium transition-colors hover:text-[#FFE2AB]">Settings</Link>
           </div>
           <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant/30">
             <span className="text-2xl">👤</span>
