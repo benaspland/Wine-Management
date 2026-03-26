@@ -9,12 +9,17 @@ export async function initializeDatabase() {
   // Detect environment
   const isElectron = (window as any).electronAPI !== undefined
 
+  console.log('[Database] Initializing database...')
+  console.log('[Database] window.electronAPI exists:', isElectron)
+  console.log('[Database] window.electronAPI:', (window as any).electronAPI)
+
   if (isElectron) {
     dbType = 'electron'
     // Electron will handle initialization via preload
     db = (window as any).electronAPI
+    console.log('[Database] Using Electron SQLite database')
     if (!db) {
-      console.warn('Electron API not found, falling back to memory storage')
+      console.warn('[Database] Electron API not found, falling back to memory storage')
       dbType = 'memory'
       await initMemoryDatabase()
     }
@@ -24,12 +29,13 @@ export async function initializeDatabase() {
       // Try to initialize Capacitor SQLite
       await initCapacitorDatabase()
     } catch (error) {
-      console.warn('Capacitor not available, falling back to memory storage:', error)
+      console.warn('[Database] Capacitor not available, falling back to memory storage:', error)
       dbType = 'memory'
       await initMemoryDatabase()
     }
   }
 
+  console.log('[Database] Database type:', dbType)
   await createSchema()
 }
 
