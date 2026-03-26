@@ -21,14 +21,18 @@ export default function DrinkingSchedulePage() {
 
   // Generate drinking schedule using algorithm
   const schedule = useMemo(() => {
-    const homeWines = wines.filter(w => w.location === 'home')
+    // For now, generate delivery schedule inline
+    // In the future, this could be cached or passed from DeliverySchedulePage
+    const cellarCapacity = 80 // Default; should come from settings
+    const homeWineCount = wines.filter(w => w.location === 'home').length
+    const deliverySchedule = ScheduleService.generateDeliverySchedule(wines, cellarCapacity, homeWineCount)
 
-    if (homeWines.length === 0) {
+    if (wines.length === 0) {
       return []
     }
 
-    // Generate drinking schedule using ScheduleService
-    const drinkingSchedule = ScheduleService.generateDrinkingSchedule(homeWines)
+    // Generate drinking schedule using ScheduleService with ALL wines
+    const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule)
 
     if (drinkingSchedule.length === 0) {
       return []
@@ -99,8 +103,8 @@ export default function DrinkingSchedulePage() {
       {/* Timeline */}
       {schedule.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-outline mb-4">No wines in home cellar yet</p>
-          <p className="text-outline-variant text-sm">Move wines from storage to home to see drinking schedule</p>
+          <p className="text-outline mb-4">No wines available to drink yet</p>
+          <p className="text-outline-variant text-sm">Add wines to your collection or schedule deliveries from storage to see drinking schedule</p>
         </div>
       ) : (
         <div className="relative">
