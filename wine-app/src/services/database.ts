@@ -216,7 +216,7 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
     rows = rows.map(row => {
       if (evaluateWhere(row, sql)) {
         // Extract SET values - simplified
-        const setMatch = sql.match(/SET\s+(.*?)\s+WHERE/i)
+        const setMatch = sql.match(/SET\s+(.*?)\s+WHERE/is)
         if (setMatch) {
           const setParts = setMatch[1].split(',')
           setParts.forEach((setPart, idx) => {
@@ -250,7 +250,7 @@ function extractTableName(sql: string): string {
 }
 
 function evaluateWhere(_row: any, sql: string): boolean {
-  const whereMatch = sql.match(/WHERE\s+(.*?)(?:ORDER BY|LIMIT|$)/i)
+  const whereMatch = sql.match(/WHERE\s+(.*?)(?:ORDER BY|LIMIT|$)/is)
   if (!whereMatch) return true
 
   const whereClause = whereMatch[1].trim()
