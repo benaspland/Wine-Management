@@ -35,11 +35,35 @@ export async function initializeDatabase() {
 
 async function initMemoryDatabase() {
   // Initialize in-memory storage for development/testing
+  // Try to load from localStorage first
+  const stored = localStorage.getItem('wine-app-db')
+  if (stored) {
+    try {
+      const data = JSON.parse(stored)
+      memoryStorage = new Map(Object.entries(data))
+      console.log('Loaded database from localStorage')
+      return
+    } catch (error) {
+      console.warn('Failed to load from localStorage, starting fresh:', error)
+    }
+  }
+
+  // Initialize with empty tables
   memoryStorage = new Map()
   memoryStorage.set('wines', [])
   memoryStorage.set('cellar_config', [])
   memoryStorage.set('consumption_log', [])
   memoryStorage.set('delivery_schedule', [])
+}
+
+// Persist memory database to localStorage
+function persistMemoryDatabase() {
+  try {
+    const data = Object.fromEntries(memoryStorage)
+    localStorage.setItem('wine-app-db', JSON.stringify(data))
+  } catch (error) {
+    console.warn('Failed to persist to localStorage:', error)
+  }
 }
 
 async function initCapacitorDatabase() {
@@ -136,7 +160,13 @@ async function createSchema() {
 
 async function executeQuery(sql: string, params: any[] = []): Promise<any> {
   if (dbType === 'memory') {
-    return handleMemoryQuery(sql, params)
+    const result = handleMemoryQuery(sql, params)
+    // Persist to localStorage after write operations
+    const upperSql = sql.trim().toUpperCase()
+    if (upperSql.startsWith('INSERT') || upperSql.startsWith('UPDATE') || upperSql.startsWith('DELETE')) {
+      persistMemoryDatabase()
+    }
+    return result
   } else if (dbType === 'electron') {
     const api = (window as any).electronAPI
     const upperSql = sql.trim().toUpperCase()
