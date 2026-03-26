@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import TopAppBar from './components/TopAppBar'
 import BottomNavBar from './components/BottomNavBar'
@@ -16,8 +16,13 @@ function App() {
   const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadWines = useWineStore(state => state.loadWines)
+  const initRef = useRef(false)
 
   useEffect(() => {
+    // Prevent double initialization in React Strict Mode (development)
+    if (initRef.current) return
+    initRef.current = true
+
     const init = async () => {
       try {
         await initializeDatabase()
