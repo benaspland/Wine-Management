@@ -5,7 +5,14 @@ export async function seedDatabase() {
   // Check if data already exists
   const wines = await db.getWines()
   if (wines.length > 0) {
-    console.log('Database already seeded')
+    console.log('[Seed] Database already seeded, skipping')
+    return
+  }
+
+  // Safety check: prevent accidental re-seeding by checking for specific wine
+  const hasMargeaux = wines.some(w => w.producer === 'Château Margaux')
+  if (hasMargeaux) {
+    console.log('[Seed] Found existing Château Margaux, skipping seed')
     return
   }
 
