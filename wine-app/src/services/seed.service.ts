@@ -241,9 +241,16 @@ export async function seedDatabase() {
     },
   ]
 
+  let createdCount = 0
   for (const wine of sampleWines) {
+    console.log(`[Seed] Creating wine ${createdCount + 1}/${sampleWines.length}: ${wine.producer} ${wine.name}`)
     await db.createWine(wine)
+    createdCount++
   }
 
-  console.log(`Seeded ${sampleWines.length} wines`)
+  console.log(`[Seed] Completed. Created ${createdCount} wines`)
+
+  // Verify actual count in database
+  const finalWines = await db.getWines()
+  console.log(`[Seed] Verified: ${finalWines.length} wines now in database`)
 }
