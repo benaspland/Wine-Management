@@ -407,35 +407,39 @@ export async function consumeWine(wineId: string, quantity: number = 1, notes?: 
   if (!wine) throw new Error(`Wine ${wineId} not found`)
   if (wine.quantity < quantity) throw new Error('Not enough bottles to consume')
 
-  // Update wine quantity
-  await updateWine(wineId, { quantity: wine.quantity - quantity })
+  // Update wine quantity directly in database (more efficient than fetching full record)
+  await executeQuery('UPDATE wines SET quantity = quantity - ? WHERE id = ?', [quantity, wineId])
 
   // Log consumption
   const logId = generateId()
-  const sql = `
-    INSERT INTO consumption_log (id, wine_id, quantity, consumed_at, notes)
-    VALUES (?, ?, ?, ?, ?)
-  `
-  await executeQuery(sql, [logId, wineId, quantity, new Date().toISOString(), notes || null])
+  await executeQuery(
+    'INSERT INTO consumption_log (id, wine_id, quantity, consumed_at, notes) VALUES (?, ?, ?, ?, ?)',
+    [logId, wineId, quantity, new Date().toISOString(), notes || null]
+  )
 }
 
 export async function moveWineLocation(wineId: string, toLocation: 'home' | 'storage', _quantity?: number): Promise<void> {
-  const wine = await getWine(wineId)
-  if (!wine) throw new Error(`Wine ${wineId} not found`)
+  // Verify wine exists
+  const result = await executeQuery('SELECT id FROM wines WHERE id = ?', [wineId])
+  if (!result.values?.length) throw new Error(`Wine ${wineId} not found`)
 
-  // For now, move entire wine entry. Future: support partial moves via delivery schedule
-  await updateWine(wineId, { location: toLocation })
+  // Direct UPDATE is more efficient than fetching and updating full record
+  await executeQuery('UPDATE wines SET location = ?, updated_at = ? WHERE id = ?', [
+    toLocation,
+    new Date().toISOString(),
+    wineId,
+  ])
 }
 
 // Cellar config
 export async function getCellarConfig(): Promise<CellarConfig> {
-  const result = await executeQuery('SELECT * FROM cellar_config WHERE id = 1')
+  const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', ['default'])
   const row = result.values?.[0]
   return row || { max_slots: 80, current_slots: 0 }
 }
 
 export async function updateCellarCapacity(maxSlots: number): Promise<void> {
-  await executeQuery('UPDATE cellar_config SET max_slots = ? WHERE id = 1', [maxSlots])
+  await executeQuery('UPDATE cellar_config SET max_slots = ? WHERE id = ?', [maxSlots, 'default'])
 }
 
 // Consumption log
@@ -463,7 +467,8 @@ export async function getConsumptionLog(wineId?: string, year?: number): Promise
 // Delivery schedule
 export async function getDeliverySchedule(): Promise<DeliveryScheduleEntry[]> {
   const result = await executeQuery(
-    'SELECT * FROM delivery_schedule WHERE status = "pending" ORDER BY scheduled_date ASC'
+    'SELECT * FROM delivery_schedule WHERE status = ? ORDER BY scheduled_date ASC',
+    ['pending']
   )
   return result.values || []
 }
@@ -472,31 +477,22 @@ export async function createDelivery(delivery: Omit<DeliveryScheduleEntry, 'id' 
   const id = generateId()
   const now = new Date().toISOString()
 
-  const sql = `
-    INSERT INTO delivery_schedule (id, wine_id, quantity, scheduled_date, from_location, to_location, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `
-
-  await executeQuery(sql, [
-    id,
-    delivery.wine_id,
-    delivery.quantity,
-    delivery.scheduled_date,
-    delivery.from_location,
-    delivery.to_location,
-    delivery.status || 'pending',
-    now,
-  ])
+  await executeQuery(
+    'INSERT INTO delivery_schedule (id, wine_id, quantity, scheduled_date, from_location, to_location, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, delivery.wine_id, delivery.quantity, delivery.scheduled_date, delivery.from_location, delivery.to_location, delivery.status || 'pending', now]
+  )
 
   return { ...delivery, id, created_at: now }
 }
 
 export async function completeDelivery(deliveryId: string): Promise<void> {
-  const delivery = (await executeQuery('SELECT * FROM delivery_schedule WHERE id = ?', [deliveryId])).values?.[0]
+  // Only fetch what we need (wine_id and to_location)
+  const result = await executeQuery('SELECT wine_id, to_location FROM delivery_schedule WHERE id = ?', [deliveryId])
+  const delivery = result.values?.[0]
   if (!delivery) throw new Error(`Delivery ${deliveryId} not found`)
 
   // Move wine location
-  await moveWineLocation(delivery.wine_id, delivery.to_location, delivery.quantity)
+  await moveWineLocation(delivery.wine_id, delivery.to_location)
 
   // Mark delivery as complete
   await executeQuery('UPDATE delivery_schedule SET status = ? WHERE id = ?', ['completed', deliveryId])
