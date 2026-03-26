@@ -5,6 +5,11 @@ let db: any = null
 let dbType: 'electron' | 'capacitor' | 'memory' = 'memory'
 let memoryStorage: Map<string, any[]> = new Map()
 
+// Export dbType for other modules
+export function getDbType() {
+  return dbType
+}
+
 export async function initializeDatabase() {
   // Detect environment
   const isElectron = (window as any).electronAPI !== undefined
@@ -36,8 +41,6 @@ export async function initializeDatabase() {
   }
 
   console.log('[Database] Database type:', dbType)
-  // Expose dbType globally so seed service can check it
-  ;(window as any).__dbType = dbType
   await createSchema()
 }
 

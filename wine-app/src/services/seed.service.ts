@@ -3,12 +3,12 @@ import * as db from './database'
 
 export async function seedDatabase() {
   // Get current DB type to see which backend is in use
-  const dbType = (window as any).__dbType
+  const dbType = db.getDbType()
 
   // Only seed Electron SQLite database, not memory/web databases
   // (Memory databases seed themselves, Electron SQLite needs explicit seeding)
   if (dbType !== 'electron') {
-    console.log('[Seed] Skipping seed for non-Electron database')
+    console.log('[Seed] Skipping seed for non-Electron database (type: ' + dbType + ')')
     return
   }
 
