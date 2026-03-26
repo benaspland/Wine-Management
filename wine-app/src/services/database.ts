@@ -244,7 +244,7 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
 
     // Very simple update handling
     rows = rows.map(row => {
-      if (evaluateWhere(row, sql)) {
+      if (evaluateWhere(row, sql, params)) {
         // Extract SET values - simplified
         const setMatch = sql.match(/SET\s+(.*?)\s+WHERE/is)
         if (setMatch) {
@@ -265,7 +265,7 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
     const originalLength = memoryStorage.get(table)?.length || 0
     let rows = memoryStorage.get(table) || []
 
-    rows = rows.filter(r => !evaluateWhere(r, sql))
+    rows = rows.filter(r => !evaluateWhere(r, sql, params))
 
     memoryStorage.set(table, rows)
     return { changes: originalLength - rows.length }
@@ -279,7 +279,7 @@ function extractTableName(sql: string): string {
   return (match?.[1] || 'wines').toLowerCase()
 }
 
-function evaluateWhere(_row: any, sql: string): boolean {
+function evaluateWhere(row: any, sql: string, params: any[] = []): boolean {
   const whereMatch = sql.match(/WHERE\s+(.*?)(?:ORDER BY|LIMIT|$)/is)
   if (!whereMatch) return true
 
@@ -287,8 +287,9 @@ function evaluateWhere(_row: any, sql: string): boolean {
   // Very simple WHERE handling - just check for equality
   const conditionMatch = whereClause.match(/(\w+)\s*=\s*\?/)
   if (conditionMatch) {
-    // This would need proper parameter binding
-    return true
+    const fieldName = conditionMatch[1]
+    const expectedValue = params[0] // WHERE clause typically uses first parameter
+    return row[fieldName] === expectedValue
   }
 
   return true
