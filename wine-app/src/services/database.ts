@@ -36,6 +36,8 @@ export async function initializeDatabase() {
   }
 
   console.log('[Database] Database type:', dbType)
+  // Expose dbType globally so seed service can check it
+  ;(window as any).__dbType = dbType
   await createSchema()
 }
 

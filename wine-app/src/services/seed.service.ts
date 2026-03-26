@@ -2,6 +2,16 @@ import type { Wine } from '../types/index'
 import * as db from './database'
 
 export async function seedDatabase() {
+  // Get current DB type to see which backend is in use
+  const dbType = (window as any).__dbType
+
+  // Only seed Electron SQLite database, not memory/web databases
+  // (Memory databases seed themselves, Electron SQLite needs explicit seeding)
+  if (dbType !== 'electron') {
+    console.log('[Seed] Skipping seed for non-Electron database')
+    return
+  }
+
   // Check if data already exists
   const wines = await db.getWines()
   if (wines.length > 0) {
