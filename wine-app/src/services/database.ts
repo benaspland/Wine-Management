@@ -374,41 +374,25 @@ export async function updateWine(id: string, updates: Partial<Wine>): Promise<Wi
 
   const updated = { ...wine, ...updates, updated_at: new Date().toISOString() }
 
-  const sql = `
-    UPDATE wines SET
-      producer = ?, name = ?, vintage = ?, country = ?, region = ?,
-      classification = ?, wine_type = ?, varietal = ?, tier = ?, location = ?,
-      quantity = ?, format = ?, drinking_window_start = ?, drinking_window_end = ?,
-      alcohol_percent = ?, serving_temp_min = ?, serving_temp_max = ?, notes = ?,
-      critic_ratings = ?, flavor_profile = ?, image_url = ?, updated_at = ?
-    WHERE id = ?
-  `
+  // Build dynamic UPDATE statement with only changed fields
+  const fields = Object.keys(updates).filter(key => key !== 'id' && key !== 'created_at')
+  if (fields.length === 0) {
+    return updated // No changes to make
+  }
 
-  const params = [
-    updated.producer,
-    updated.name,
-    updated.vintage,
-    updated.country,
-    updated.region,
-    updated.classification,
-    updated.wine_type,
-    updated.varietal,
-    updated.tier,
-    updated.location,
-    updated.quantity,
-    updated.format,
-    updated.drinking_window_start,
-    updated.drinking_window_end,
-    updated.alcohol_percent,
-    updated.serving_temp_min,
-    updated.serving_temp_max,
-    updated.notes,
-    JSON.stringify(updated.critic_ratings),
-    updated.flavor_profile,
-    updated.image_url || null,
-    updated.updated_at,
-    id,
-  ]
+  const setClauses = fields.map(field => `${field} = ?`)
+  const sql = `UPDATE wines SET ${setClauses.join(', ')}, updated_at = ? WHERE id = ?`
+
+  const params = fields.map(field => {
+    const value = (updated as any)[field]
+    // Special handling for JSON fields
+    if (field === 'critic_ratings' && typeof value === 'object') {
+      return JSON.stringify(value)
+    }
+    return value ?? null
+  })
+  params.push(updated.updated_at)
+  params.push(id)
 
   await executeQuery(sql, params)
   return updated
