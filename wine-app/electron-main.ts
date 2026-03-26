@@ -252,6 +252,7 @@ ipcMain.handle('db:run', async (_event, sql: string, params?: unknown[]) => {
   try {
     if (!db) throw new Error('Database not initialized')
 
+    console.log('[Database] Running:', sql, 'with params:', params)
     const stmt = db.prepare(sql)
     stmt.bind(params || [])
     stmt.step()
@@ -259,8 +260,11 @@ ipcMain.handle('db:run', async (_event, sql: string, params?: unknown[]) => {
 
     saveDatabase()
 
+    const changes = db.getRowsModified()
+    console.log('[Database] Changes made:', changes)
+
     return {
-      changes: db.getRowsModified(),
+      changes,
       lastInsertRowid: 0, // sql.js doesn't provide this, approximation
     }
   } catch (error) {
