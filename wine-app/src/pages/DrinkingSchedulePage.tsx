@@ -32,7 +32,8 @@ export default function DrinkingSchedulePage() {
     }
 
     // Generate drinking schedule using ScheduleService with ALL wines
-    const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule)
+    // Generate 20 years of schedule to accommodate full wine collection
+    const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, 20)
 
     if (drinkingSchedule.length === 0) {
       return []
