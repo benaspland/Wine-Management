@@ -1,14 +1,10 @@
-import { app, BrowserWindow, Menu, ipcMain } from 'electron'
-import path from 'path'
-import { fileURLToPath } from 'url'
-import isDev from 'electron-is-dev'
-import initSqlJs from 'sql.js'
-import * as fs from 'fs'
+const { app, BrowserWindow, Menu, ipcMain } = require('electron')
+const path = require('path')
+const isDev = require('electron-is-dev')
+const initSqlJs = require('sql.js')
+const fs = require('fs')
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
-let mainWindow: BrowserWindow | null = null
+let mainWindow: any = null
 let db: any = null
 let SQL: any = null
 
