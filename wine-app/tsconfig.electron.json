@@ -16,5 +16,10 @@
   "include": [
     "electron-main.ts",
     "electron-preload.ts"
-  ]
+  ],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  }
 }

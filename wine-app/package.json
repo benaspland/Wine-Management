@@ -2,7 +2,6 @@
   "name": "wine-app",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "main": "dist-electron/electron-main.js",
   "homepage": "./",
   "scripts": {
