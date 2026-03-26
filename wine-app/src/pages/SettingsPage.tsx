@@ -152,15 +152,34 @@ export default function SettingsPage() {
     <div className="px-6 max-w-2xl mx-auto py-8">
       <h2 className="font-headline text-5xl md:text-7xl mb-4 text-on-surface">Settings</h2>
 
+      {/* Modal notification for import/export feedback */}
       {message && (
-        <div
-          className={`mb-6 p-4 rounded ${
-            message.type === 'success'
-              ? 'bg-tertiary-fixed/20 text-tertiary border border-tertiary/30'
-              : 'bg-error-container/20 text-error border border-error/30'
-          }`}
-        >
-          {message.text}
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            className={`bg-surface rounded-lg shadow-lg p-8 max-w-md mx-4 ${
+              message.type === 'success'
+                ? 'border-l-4 border-l-green-500'
+                : 'border-l-4 border-l-red-500'
+            }`}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`text-3xl ${message.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
+                {message.type === 'success' ? '✓' : '✕'}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-headline text-lg font-bold text-on-surface mb-2">
+                  {message.type === 'success' ? 'Success' : 'Error'}
+                </h3>
+                <p className="text-on-surface text-sm">{message.text}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setMessage(null)}
+              className="mt-6 w-full bg-primary text-on-primary py-2 rounded font-medium hover:bg-primary/90 transition-colors"
+            >
+              OK
+            </button>
+          </div>
         </div>
       )}
 
