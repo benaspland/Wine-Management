@@ -2,13 +2,15 @@ import { app, BrowserWindow, Menu, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import isDev from 'electron-is-dev'
-import Database from 'better-sqlite3'
+import initSqlJs from 'sql.js'
+import * as fs from 'fs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 let mainWindow: BrowserWindow | null = null
-let db: Database.Database | null = null
+let db: any = null
+let SQL: any = null
 
 // Get the database path
 function getDatabasePath(): string {
@@ -16,25 +18,57 @@ function getDatabasePath(): string {
   return path.join(userDataPath, 'wine-collection.db')
 }
 
+// Save database to file
+function saveDatabase(): void {
+  if (!db) return
+  try {
+    const data = db.export()
+    const buffer = Buffer.from(data)
+    const dbPath = getDatabasePath()
+    fs.writeFileSync(dbPath, buffer)
+    console.log('[Database] Saved to', dbPath)
+  } catch (error) {
+    console.error('[Database] Error saving:', error)
+  }
+}
+
 // Initialize database
-function initializeDatabase(): Database.Database {
+async function initializeDatabase(): Promise<void> {
+  if (!SQL) {
+    SQL = await initSqlJs()
+  }
+
   const dbPath = getDatabasePath()
-  const database = new Database(dbPath)
+  let fileData: Buffer | undefined
 
-  // Enable foreign keys
-  database.pragma('journal_mode = WAL')
-  database.pragma('foreign_keys = ON')
+  // Load existing database or create new
+  try {
+    if (fs.existsSync(dbPath)) {
+      fileData = fs.readFileSync(dbPath)
+      db = new SQL.Database(fileData)
+      console.log('[Database] Loaded existing database from', dbPath)
+    } else {
+      // Ensure directory exists
+      const dir = path.dirname(dbPath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+      db = new SQL.Database()
+      console.log('[Database] Created new database')
+    }
+  } catch (error) {
+    console.error('[Database] Error initializing:', error)
+    db = new SQL.Database()
+  }
 
-  // Initialize schema if needed
-  initializeSchema(database)
-
-  return database
+  // Initialize schema
+  initializeSchema()
 }
 
 // Initialize database schema
-function initializeSchema(database: Database.Database): void {
-  const schema = `
-    CREATE TABLE IF NOT EXISTS wines (
+function initializeSchema(): void {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS wines (
       id TEXT PRIMARY KEY,
       producer TEXT NOT NULL,
       name TEXT NOT NULL,
@@ -59,16 +93,14 @@ function initializeSchema(database: Database.Database): void {
       image_url TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS cellar_config (
+    )`,
+    `CREATE TABLE IF NOT EXISTS cellar_config (
       id TEXT PRIMARY KEY DEFAULT 'default',
       max_slots INTEGER DEFAULT 80,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS consumption_log (
+    )`,
+    `CREATE TABLE IF NOT EXISTS consumption_log (
       id TEXT PRIMARY KEY,
       wine_id TEXT NOT NULL,
       quantity INTEGER NOT NULL,
@@ -76,9 +108,8 @@ function initializeSchema(database: Database.Database): void {
       notes TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (wine_id) REFERENCES wines(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS delivery_schedule (
+    )`,
+    `CREATE TABLE IF NOT EXISTS delivery_schedule (
       id TEXT PRIMARY KEY,
       wine_id TEXT NOT NULL,
       quantity INTEGER NOT NULL,
@@ -88,14 +119,29 @@ function initializeSchema(database: Database.Database): void {
       status TEXT NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY (wine_id) REFERENCES wines(id)
-    );
+    )`,
+  ]
 
-    -- Create default cellar config if it doesn't exist
-    INSERT OR IGNORE INTO cellar_config (id, max_slots, created_at, updated_at)
-    VALUES ('default', 80, datetime('now'), datetime('now'));
-  `
+  for (const stmt of statements) {
+    try {
+      db.run(stmt)
+    } catch (error) {
+      // Table might already exist, ignore
+    }
+  }
 
-  database.exec(schema)
+  // Ensure default config exists
+  try {
+    db.run(
+      `INSERT OR IGNORE INTO cellar_config (id, max_slots, created_at, updated_at)
+       VALUES (?, ?, datetime('now'), datetime('now'))`,
+      ['default', 80]
+    )
+  } catch (error) {
+    // Might already exist
+  }
+
+  saveDatabase()
 }
 
 // Create app window
@@ -167,8 +213,8 @@ function createMenu(): void {
 }
 
 // Handle app events
-app.on('ready', () => {
-  db = initializeDatabase()
+app.on('ready', async () => {
+  await initializeDatabase()
   createWindow()
   createMenu()
 })
@@ -189,10 +235,19 @@ app.on('activate', () => {
 ipcMain.handle('db:query', async (_event, sql: string, params?: unknown[]) => {
   try {
     if (!db) throw new Error('Database not initialized')
+
     const stmt = db.prepare(sql)
-    return stmt.all(...(params || []))
+    stmt.bind(params || [])
+
+    const results: any[] = []
+    while (stmt.step()) {
+      results.push(stmt.getAsObject())
+    }
+    stmt.free()
+
+    return results
   } catch (error) {
-    console.error('Database query error:', error)
+    console.error('[Database] Query error:', error)
     throw error
   }
 })
@@ -200,14 +255,20 @@ ipcMain.handle('db:query', async (_event, sql: string, params?: unknown[]) => {
 ipcMain.handle('db:run', async (_event, sql: string, params?: unknown[]) => {
   try {
     if (!db) throw new Error('Database not initialized')
+
     const stmt = db.prepare(sql)
-    const result = stmt.run(...(params || []))
+    stmt.bind(params || [])
+    stmt.step()
+    stmt.free()
+
+    saveDatabase()
+
     return {
-      changes: result.changes,
-      lastInsertRowid: result.lastInsertRowid,
+      changes: db.getRowsModified(),
+      lastInsertRowid: 0, // sql.js doesn't provide this, approximation
     }
   } catch (error) {
-    console.error('Database run error:', error)
+    console.error('[Database] Run error:', error)
     throw error
   }
 })
@@ -215,10 +276,11 @@ ipcMain.handle('db:run', async (_event, sql: string, params?: unknown[]) => {
 ipcMain.handle('db:exec', async (_event, sql: string) => {
   try {
     if (!db) throw new Error('Database not initialized')
-    db.exec(sql)
+    db.run(sql)
+    saveDatabase()
     return { success: true }
   } catch (error) {
-    console.error('Database exec error:', error)
+    console.error('[Database] Exec error:', error)
     throw error
   }
 })
@@ -230,7 +292,13 @@ ipcMain.handle('app:getDataPath', () => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   if (db) {
-    db.close()
+    saveDatabase()
   }
   app.quit()
+})
+
+app.on('before-quit', () => {
+  if (db) {
+    saveDatabase()
+  }
 })
