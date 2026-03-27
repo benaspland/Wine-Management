@@ -347,12 +347,12 @@ export class ScheduleService {
       }
 
       // Build batch for this delivery slot prioritizing urgency with producer diversity
-      // Goal: Deliver wines approaching their drinking window first, with diverse producers
-      // Cap batch size to ~40-60 bottles to provide choice without over-delivering
+      // Goal: Replenish cellar to capacity with wines approaching their drinking window
+      // Minimum: 24 wines per delivery, Maximum: fill remaining cellar capacity
       const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
       let bottleCount = 0
       let wineCount = 0
-      const targetBatchSize = 50 // Aim for 50-bottle batches to balance choice and manageability
+      const minWinesPerDelivery = 24 // Minimum wines to deliver in single batch
 
       // Sort by drinking window urgency (wines opening soonest first)
       // This naturally sequences lower tiers before higher tiers
@@ -369,11 +369,11 @@ export class ScheduleService {
         producerMap.get(w.producer)!.push(w)
       })
 
-      // Rotate through producers to ensure diversity, capping at sensible batch size
+      // Rotate through producers to ensure diversity, filling remaining capacity
       let producerIndex = 0
       const producers = Array.from(producerMap.keys())
 
-      while (bottleCount < targetBatchSize && producers.length > 0) {
+      while (wineCount < remainingCapacity && producers.length > 0) {
         const producer = producers[producerIndex % producers.length]
         const producerWines = producerMap.get(producer) || []
         const unscheduledFromProducer = producerWines.filter(
@@ -398,8 +398,8 @@ export class ScheduleService {
         }
       }
 
-      // Only create delivery if we meet 24-bottle minimum
-      if (bottleCount >= minDeliveryBottles) {
+      // Only create delivery if we meet minimum wines threshold (24 wines) and 24-bottle minimum
+      if (wineCount >= minWinesPerDelivery && bottleCount >= minDeliveryBottles) {
         const scheduledDate = new Date(year, month - 1, 1)
 
         for (const { wine, quantity } of deliveryBatch) {
