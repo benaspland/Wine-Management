@@ -348,9 +348,11 @@ export class ScheduleService {
 
       // Build batch for this delivery slot prioritizing urgency with producer diversity
       // Goal: Deliver wines approaching their drinking window first, with diverse producers
+      // Cap batch size to ~40-60 bottles to provide choice without over-delivering
       const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
       let bottleCount = 0
       let wineCount = 0
+      const targetBatchSize = 50 // Aim for 50-bottle batches to balance choice and manageability
 
       // Sort by drinking window urgency (wines opening soonest first)
       // This naturally sequences lower tiers before higher tiers
@@ -367,11 +369,11 @@ export class ScheduleService {
         producerMap.get(w.producer)!.push(w)
       })
 
-      // Rotate through producers to ensure diversity
+      // Rotate through producers to ensure diversity, capping at sensible batch size
       let producerIndex = 0
       const producers = Array.from(producerMap.keys())
 
-      while (wineCount < remainingCapacity && producers.length > 0) {
+      while (bottleCount < targetBatchSize && producers.length > 0) {
         const producer = producers[producerIndex % producers.length]
         const producerWines = producerMap.get(producer) || []
         const unscheduledFromProducer = producerWines.filter(
