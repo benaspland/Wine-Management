@@ -60,6 +60,14 @@ export default function CollectionPage() {
 
   return (
     <>
+      {/* Test Button */}
+      <button
+        onClick={() => alert('TEST BUTTON WORKS!')}
+        className="fixed top-6 right-6 z-50 p-2 bg-red-500 text-white rounded"
+      >
+        TEST
+      </button>
+
       {/* Filter Panel (Top-Level) */}
       <FilterPanel />
 
