@@ -190,25 +190,16 @@ export default function FilterPanel() {
 
   return (
     <>
-      {/* Desktop: Fixed Toggle Button (top-left) */}
+      {/* Fixed Toggle Button (Top-Left Corner) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-6 left-6 z-40 hidden md:flex p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity"
+        className="fixed top-6 left-6 z-40 flex items-center justify-center p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity"
         title="Toggle filters"
       >
         <span className="material-symbols-outlined">tune</span>
       </button>
 
-      {/* Mobile: Full-width Toggle Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="md:hidden w-full mb-6 p-3 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 font-medium"
-      >
-        <span className="material-symbols-outlined">tune</span>
-        Filters
-      </button>
-
-      {/* Overlay (both desktop and mobile) */}
+      {/* Overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-30"
@@ -216,9 +207,9 @@ export default function FilterPanel() {
         />
       )}
 
-      {/* Desktop: Side Drawer (left side) */}
+      {/* Side Drawer */}
       <div
-        className={`hidden md:flex fixed left-0 top-0 h-screen w-80 bg-surface-container-low border-r border-outline-variant/10 p-6 overflow-y-auto z-40 flex-col transition-transform duration-300 ${
+        className={`fixed left-0 top-0 h-screen w-80 bg-surface-container-low border-r border-outline-variant/10 p-6 overflow-y-auto z-40 flex flex-col transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -232,24 +223,6 @@ export default function FilterPanel() {
 
         {/* Title */}
         <h2 className="text-lg font-semibold text-on-surface mb-6 mt-8">Filters</h2>
-
-        {/* Filter Content */}
-        <FilterContent />
-      </div>
-
-      {/* Mobile: Bottom Sheet (slides up from bottom) */}
-      <div
-        className={`md:hidden fixed bottom-0 left-0 right-0 bg-surface-container-low rounded-t-2xl p-6 z-40 transition-transform duration-300 max-h-[80vh] overflow-y-auto ${
-          isOpen ? 'translate-y-0' : 'translate-y-full'
-        }`}
-      >
-        {/* Handle Bar */}
-        <div className="flex justify-center mb-4">
-          <div className="w-12 h-1 bg-outline-variant/30 rounded-full" />
-        </div>
-
-        {/* Title */}
-        <h2 className="text-lg font-semibold text-on-surface mb-6">Filters</h2>
 
         {/* Filter Content */}
         <FilterContent />
