@@ -141,7 +141,7 @@ export default function DeliverySchedulePage() {
             <section key={`delivery-${idx}`}>
               <div className="flex items-baseline gap-4 mb-6 border-b border-outline-variant/10 pb-4">
                 <h3 className="font-headline text-2xl text-on-surface">
-                  Arriving {new Date(group.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                  Arriving {new Date(group.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </h3>
               </div>
 

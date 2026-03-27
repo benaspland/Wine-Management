@@ -79,8 +79,8 @@ export class ScheduleService {
       // Determine how many months remain in current year (for first partial year)
       let monthsInYear = 12
       if (year === startYear) {
-        const now = new Date()
-        monthsInYear = 12 - now.getMonth()
+        const currentMonth = now.getMonth() + 1 // 1-indexed
+        monthsInYear = 12 - currentMonth + 1 // Remaining months including current
       }
 
       // Pro-rata consumption target for partial years
@@ -177,8 +177,16 @@ export class ScheduleService {
     }
 
     console.log('[ScheduleService] Before final filter:', schedule.length, 'entries')
+    const currentMonth = now.getMonth() + 1
+
     const filtered = schedule
-      .filter(e => allWines.some(w => w.id === e.wineId))
+      .filter(e => {
+        // For current year, exclude past months
+        if (e.suggestedYear === currentYear && e.suggestedMonth < currentMonth) {
+          return false
+        }
+        return allWines.some(w => w.id === e.wineId)
+      })
       .sort((a, b) => {
         if (a.suggestedYear !== b.suggestedYear) {
           return a.suggestedYear - b.suggestedYear
