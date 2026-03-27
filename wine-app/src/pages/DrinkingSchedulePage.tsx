@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { ScheduleService } from '../services/schedule.service'
 import * as db from '../services/database'
@@ -23,6 +23,14 @@ export default function DrinkingSchedulePage() {
   const loadWines = useWineStore(state => state.loadWines)
   const [isConsuming, setIsConsuming] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [schedule, setSchedule] = useState<ScheduleEntry[]>([])
+  const [isRegenerating, setIsRegenerating] = useState(false)
+  const [lastRegenerated, setLastRegenerated] = useState<string>('')
+
+  // Generate schedule on mount
+  useEffect(() => {
+    generateDrinkingSchedule()
+  }, [])
 
   const handleMarkConsumed = async (wineId: string, producerName: string, wineName: string) => {
     setIsConsuming(true)
@@ -51,69 +59,78 @@ export default function DrinkingSchedulePage() {
     }
   }
 
-  // Generate drinking schedule using algorithm
-  const schedule = useMemo(() => {
-    // For now, generate delivery schedule inline
-    // In the future, this could be cached or passed from DeliverySchedulePage
-    const cellarCapacity = 80 // Default; should come from settings
-    const totalBottlesAtHome = wines
-      .filter(w => w.location === 'home')
-      .reduce((sum, w) => sum + w.quantity, 0)
-    const deliverySchedule = ScheduleService.generateDeliverySchedule(wines, cellarCapacity, totalBottlesAtHome)
+  // Generate drinking schedule
+  const generateDrinkingSchedule = async () => {
+    setIsRegenerating(true)
+    try {
+      const config = await db.getCellarConfig()
+      const cellarCapacity = config.max_slots
+      const totalBottlesAtHome = wines
+        .filter(w => w.location === 'home')
+        .reduce((sum, w) => sum + w.quantity, 0)
+      const deliverySchedule = ScheduleService.generateDeliverySchedule(wines, cellarCapacity, totalBottlesAtHome)
 
-    if (wines.length === 0) {
-      return []
-    }
-
-    // Generate drinking schedule using ScheduleService with ALL wines
-    // Calculate years needed: assume ~30 wines/year consumption, so total wines / 30
-    // Add buffer for spacing and tier constraints
-    const yearsNeeded = Math.ceil((wines.length / 30) * 1.5) + 5
-    const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, yearsNeeded)
-
-    if (drinkingSchedule.length === 0) {
-      return []
-    }
-
-    // Group schedule entries by year/month for timeline display
-    const grouped: Record<string, ScheduleEntry['wines']> = {}
-
-    drinkingSchedule.forEach(entry => {
-      const key = `${entry.suggestedYear}-${entry.suggestedMonth}`
-      if (!grouped[key]) {
-        grouped[key] = []
+      if (wines.length === 0) {
+        setSchedule([])
+        setLastRegenerated(new Date().toLocaleTimeString())
+        return
       }
 
-      grouped[key].push({
-        id: entry.wineId,
-        producer: entry.producer,
-        name: entry.name,
-        vintage: entry.vintage,
-        region: entry.region,
-        tier: entry.tier,
-        status: entry.status,
-      })
-    })
+      // Generate drinking schedule using ScheduleService with ALL wines
+      // Calculate years needed: assume ~30 wines/year consumption, so total wines / 30
+      // Add buffer for spacing and tier constraints
+      const yearsNeeded = Math.ceil((wines.length / 30) * 1.5) + 5
+      const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, yearsNeeded)
 
-    // Convert to timeline format with month names
-    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December']
+      if (drinkingSchedule.length === 0) {
+        setSchedule([])
+        setLastRegenerated(new Date().toLocaleTimeString())
+        return
+      }
 
-    const timeline: ScheduleEntry[] = Object.entries(grouped)
-      .map(([key, winesInPeriod]) => {
-        const [yearStr, monthStr] = key.split('-')
-        const year = parseInt(yearStr)
-        const month = parseInt(monthStr)
-        return {
-          month: monthNames[month] || 'Month',
-          year,
-          wines: winesInPeriod.sort((a, b) => b.tier - a.tier),
+      // Group schedule entries by year/month for timeline display
+      const grouped: Record<string, ScheduleEntry['wines']> = {}
+
+      drinkingSchedule.forEach(entry => {
+        const key = `${entry.suggestedYear}-${entry.suggestedMonth}`
+        if (!grouped[key]) {
+          grouped[key] = []
         }
-      })
-      .sort((a, b) => a.year !== b.year ? a.year - b.year : 0)
 
-    return timeline
-  }, [wines])
+        grouped[key].push({
+          id: entry.wineId,
+          producer: entry.producer,
+          name: entry.name,
+          vintage: entry.vintage,
+          region: entry.region,
+          tier: entry.tier,
+          status: entry.status,
+        })
+      })
+
+      // Convert to timeline format with month names
+      const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+
+      const timeline: ScheduleEntry[] = Object.entries(grouped)
+        .map(([key, winesInPeriod]) => {
+          const [yearStr, monthStr] = key.split('-')
+          const year = parseInt(yearStr)
+          const month = parseInt(monthStr)
+          return {
+            month: monthNames[month] || 'Month',
+            year,
+            wines: winesInPeriod.sort((a, b) => b.tier - a.tier),
+          }
+        })
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : 0)
+
+      setSchedule(timeline)
+      setLastRegenerated(new Date().toLocaleTimeString())
+    } finally {
+      setIsRegenerating(false)
+    }
+  }
 
   const getTierColor = (tier: number): string => {
     if (tier === 5) return 'text-primary-container'
@@ -157,15 +174,29 @@ export default function DrinkingSchedulePage() {
 
       {/* Header */}
       <div className="mb-16">
-        <span className="text-primary-container font-label text-xs tracking-[0.3em] uppercase mb-2 block">
-          Curation Engine
-        </span>
-        <h2 className="font-headline text-5xl md:text-7xl font-bold text-on-surface leading-tight mb-4">
-          Drinking Schedule
-        </h2>
-        <p className="text-outline mt-4 text-sm max-w-md font-light leading-relaxed">
-          Your home cellar's peak maturity timeline, algorithmically ordered for optimal preservation and enjoyment.
-        </p>
+        <div className="flex items-start justify-between gap-6 mb-6">
+          <div>
+            <span className="text-primary-container font-label text-xs tracking-[0.3em] uppercase mb-2 block">
+              Curation Engine
+            </span>
+            <h2 className="font-headline text-5xl md:text-7xl font-bold text-on-surface leading-tight mb-4">
+              Drinking Schedule
+            </h2>
+            <p className="text-outline mt-4 text-sm max-w-md font-light leading-relaxed">
+              Your home cellar's peak maturity timeline, algorithmically ordered for optimal preservation and enjoyment.
+            </p>
+          </div>
+          <button
+            onClick={generateDrinkingSchedule}
+            disabled={isRegenerating}
+            className="btn-primary whitespace-nowrap disabled:opacity-50"
+          >
+            {isRegenerating ? 'Regenerating...' : 'Regenerate Schedule'}
+          </button>
+        </div>
+        {lastRegenerated && (
+          <p className="text-outline-variant text-xs">Last regenerated: {lastRegenerated}</p>
+        )}
       </div>
 
       {/* Timeline */}

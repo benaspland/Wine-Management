@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
 import type { Tier } from '../types/index'
 import { TIER_LABELS } from '../types/index'
@@ -24,91 +24,98 @@ export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]))
+  const [deliveriesByYear, setDeliveriesByYear] = useState<Record<number, DeliveryDate[]>>({})
+  const [isRegenerating, setIsRegenerating] = useState(false)
+  const [lastRegenerated, setLastRegenerated] = useState<string>('')
 
-  // Load cellar config
+  // Load cellar config and generate initial schedule
   useEffect(() => {
     db.getCellarConfig().then(config => {
       setCellarCapacity(config.max_slots)
     })
+    generateDeliverySchedule()
   }, [])
 
-  // Calculate current home inventory
-  const homeWines = useMemo(() => {
-    return wines.filter(w => w.location === 'home')
-  }, [wines])
+  // Generate delivery schedule
+  const generateDeliverySchedule = async () => {
+    setIsRegenerating(true)
+    try {
+      const totalBottlesAtHome = wines
+        .filter(w => w.location === 'home')
+        .reduce((sum, w) => sum + w.quantity, 0)
 
-  // Calculate total bottles at home (sum of all quantities)
-  const totalBottlesAtHome = useMemo(() => {
-    return homeWines.reduce((sum, w) => sum + w.quantity, 0)
-  }, [homeWines])
+      const deliverySchedule = ScheduleService.generateDeliverySchedule(
+        wines,
+        cellarCapacity,
+        totalBottlesAtHome,
+        [3, 9] // Fixed delivery months: March and September
+      )
 
-  // Generate delivery schedule using algorithm
-  const deliveriesByYear = useMemo(() => {
-    // Generate delivery schedule using ScheduleService
-    const deliverySchedule = ScheduleService.generateDeliverySchedule(
-      wines,
-      cellarCapacity,
-      totalBottlesAtHome,
-      [3, 9] // Fixed delivery months: March and September
-    )
+      if (deliverySchedule.length === 0) {
+        setDeliveriesByYear({})
+        setLastRegenerated(new Date().toLocaleTimeString())
+        return
+      }
 
-    if (deliverySchedule.length === 0) {
-      return {}
+      // Group schedule entries by date
+      const grouped: Record<string, Array<{
+        id: string
+        producer: string
+        name: string
+        vintage: number
+        region: string
+        tier: number
+        quantity: number
+        format: string
+      }>> = {}
+
+      deliverySchedule.forEach(entry => {
+        if (!grouped[entry.scheduled_date]) {
+          grouped[entry.scheduled_date] = []
+        }
+
+        const wine = wines.find(w => w.id === entry.wine_id)
+        if (wine) {
+          grouped[entry.scheduled_date].push({
+            id: wine.id,
+            producer: wine.producer,
+            name: wine.name,
+            vintage: wine.vintage,
+            region: wine.region,
+            tier: wine.tier,
+            quantity: entry.quantity,
+            format: wine.format,
+          })
+        }
+      })
+
+      // Convert to array format, sorted by date
+      const datesSorted = Object.entries(grouped)
+        .map(([date, winesInDelivery]) => ({
+          date,
+          wines: winesInDelivery,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+
+      // Group by year
+      const byYear: Record<number, DeliveryDate[]> = {}
+      datesSorted.forEach(delivery => {
+        const year = parseInt(delivery.date.split('-')[0])
+        if (!byYear[year]) {
+          byYear[year] = []
+        }
+        byYear[year].push(delivery)
+      })
+
+      setDeliveriesByYear(byYear)
+      setLastRegenerated(new Date().toLocaleTimeString())
+    } finally {
+      setIsRegenerating(false)
     }
+  }
 
-    // Group schedule entries by date
-    const grouped: Record<string, Array<{
-      id: string
-      producer: string
-      name: string
-      vintage: number
-      region: string
-      tier: number
-      quantity: number
-      format: string
-    }>> = {}
-
-    deliverySchedule.forEach(entry => {
-      if (!grouped[entry.scheduled_date]) {
-        grouped[entry.scheduled_date] = []
-      }
-
-      // Find the wine details
-      const wine = wines.find(w => w.id === entry.wine_id)
-      if (wine) {
-        grouped[entry.scheduled_date].push({
-          id: wine.id,
-          producer: wine.producer,
-          name: wine.name,
-          vintage: wine.vintage,
-          region: wine.region,
-          tier: wine.tier,
-          quantity: entry.quantity,
-          format: wine.format,
-        })
-      }
-    })
-
-    // Convert to array format, sorted by date
-    const datesSorted = Object.entries(grouped)
-      .map(([date, winesInDelivery]) => ({
-        date,
-        wines: winesInDelivery,
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-
-    // Group by year
-    const byYear: Record<number, DeliveryDate[]> = {}
-    datesSorted.forEach(delivery => {
-      const year = parseInt(delivery.date.split('-')[0])
-      if (!byYear[year]) {
-        byYear[year] = []
-      }
-      byYear[year].push(delivery)
-    })
-
-    return byYear
-  }, [wines, cellarCapacity, homeWines.length])
+  // Calculate current home inventory
+  const homeWines = wines.filter(w => w.location === 'home')
 
   const toggleYear = (year: number) => {
     const newExpanded = new Set(expandedYears)
@@ -137,15 +144,29 @@ export default function DeliverySchedulePage() {
     <div className="px-6 max-w-5xl mx-auto py-8">
       {/* Header */}
       <header className="mb-12">
-        <span className="text-primary-container font-label text-xs tracking-widest uppercase mb-2 block">
-          Logistics & Intake
-        </span>
-        <h2 className="font-headline text-5xl md:text-7xl font-bold text-on-surface leading-tight mb-4">
-          Upcoming Arrivals
-        </h2>
-        <p className="text-outline mt-4 max-w-md font-light">
-          Inventory transitioning from professional climate-controlled storage to your private home vault.
-        </p>
+        <div className="flex items-start justify-between gap-6 mb-6">
+          <div>
+            <span className="text-primary-container font-label text-xs tracking-widest uppercase mb-2 block">
+              Logistics & Intake
+            </span>
+            <h2 className="font-headline text-5xl md:text-7xl font-bold text-on-surface leading-tight mb-4">
+              Upcoming Arrivals
+            </h2>
+            <p className="text-outline mt-4 max-w-md font-light">
+              Inventory transitioning from professional climate-controlled storage to your private home vault.
+            </p>
+          </div>
+          <button
+            onClick={generateDeliverySchedule}
+            disabled={isRegenerating}
+            className="btn-primary whitespace-nowrap disabled:opacity-50"
+          >
+            {isRegenerating ? 'Regenerating...' : 'Regenerate Schedule'}
+          </button>
+        </div>
+        {lastRegenerated && (
+          <p className="text-outline-variant text-xs">Last regenerated: {lastRegenerated}</p>
+        )}
       </header>
 
       {/* Capacity Summary */}
