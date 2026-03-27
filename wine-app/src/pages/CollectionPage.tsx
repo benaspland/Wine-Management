@@ -67,7 +67,7 @@ export default function CollectionPage() {
       {/* Filter Toggle Button */}
       <button
         onClick={() => setShowFilters(!showFilters)}
-        style={{ position: 'fixed', top: '24px', left: '24px', padding: '8px 12px', background: '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 50, fontWeight: 'bold' }}
+        style={{ position: 'fixed', top: '120px', left: '24px', padding: '8px 12px', background: '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 50, fontWeight: 'bold' }}
       >
         🔍 Filters
       </button>
