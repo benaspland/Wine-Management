@@ -66,7 +66,12 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
               <h3 className="font-headline text-2xl mt-1 text-on-surface leading-tight">
                 {wine.producer}
               </h3>
-              <p className="text-outline text-sm font-light">{wine.name}</p>
+              {/* For Bordeaux châteaux, show classification/appellation instead of redundant wine name */}
+              {wine.country === 'France' && wine.region === 'Bordeaux' && wine.classification && wine.classification !== '-' ? (
+                <p className="text-outline text-sm font-light">{wine.classification}</p>
+              ) : (
+                <p className="text-outline text-sm font-light">{wine.name}</p>
+              )}
             </div>
             <button
               onClick={handleConsume}
