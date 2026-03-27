@@ -222,6 +222,7 @@ export class ScheduleService {
    * - Diverse regions/producers
    * - Respect cellar capacity
    * - Minimum 24 bottles per delivery batch (skip slot if not met)
+   * - Plans through maximum drinking window start date
    */
   static generateDeliverySchedule(
     allWines: Wine[],
@@ -241,6 +242,16 @@ export class ScheduleService {
     const currentMonth = now.getMonth() + 1
     const minDeliveryBottles = 24
 
+    // Calculate planning horizon based on maximum drinking window start date
+    const maxDrinkingWindowStart = Math.max(
+      ...storageWines.map(w => w.drinking_window_start || currentYear)
+    )
+    const yearsToSchedule = Math.max(4, maxDrinkingWindowStart - currentYear + 2)
+
+    console.log(
+      `[ScheduleService] Planning deliveries from ${currentYear} to ${currentYear + yearsToSchedule}, max window start: ${maxDrinkingWindowStart}`
+    )
+
     // Track deliveries per year and scheduled wines
     const deliveriesPerYear: Record<number, number> = {}
     const scheduledWineIds = new Set<string>()
@@ -253,7 +264,7 @@ export class ScheduleService {
           return false
         }
         // Can't deliver before drinking window starts
-        if (w.drinking_window_start > currentYear + 3) {
+        if (w.drinking_window_start > currentYear + yearsToSchedule) {
           return false
         }
         if (w.quantity === 0) {
@@ -268,9 +279,11 @@ export class ScheduleService {
         return aYearsToWindow - bYearsToWindow
       })
 
-    // Generate all valid delivery slots
+    console.log(`[ScheduleService] ${candidateWines.length} candidate wines for delivery from ${storageWines.length} storage wines`)
+
+    // Generate all valid delivery slots through planning horizon
     const deliverySlots: Array<[number, number]> = []
-    for (let year = currentYear; year < currentYear + 4; year++) {
+    for (let year = currentYear; year < currentYear + yearsToSchedule; year++) {
       for (const month of deliveryMonths) {
         if (year === currentYear && month < currentMonth) {
           continue // Skip past months
