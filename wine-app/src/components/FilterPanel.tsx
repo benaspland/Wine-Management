@@ -192,9 +192,13 @@ export default function FilterPanel() {
     <>
       {/* Fixed Toggle Button (Top-Left Corner) */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-6 left-6 z-40 flex items-center justify-center p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity"
+        onClick={() => {
+          console.log('Filter button clicked! Current isOpen:', isOpen)
+          setIsOpen(!isOpen)
+        }}
+        className="fixed top-6 left-6 z-40 flex items-center justify-center p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
         title="Toggle filters"
+        style={{ pointerEvents: 'auto' }}
       >
         <span className="material-symbols-outlined">tune</span>
       </button>
