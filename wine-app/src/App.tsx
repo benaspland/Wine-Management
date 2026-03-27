@@ -8,7 +8,6 @@ import DrinkingSchedulePage from './pages/DrinkingSchedulePage'
 import DeliverySchedulePage from './pages/DeliverySchedulePage'
 import SettingsPage from './pages/SettingsPage'
 import { initializeDatabase } from './services/database'
-import { seedDatabase } from './services/seed.service'
 import { useWineStore } from './store/wineStore'
 import './styles/globals.css'
 
@@ -26,7 +25,7 @@ function App() {
     const init = async () => {
       try {
         await initializeDatabase()
-        await seedDatabase()
+        // await seedDatabase() // Disabled: start with empty database, import your own collection
         await loadWines()
         setIsReady(true)
       } catch (err) {
