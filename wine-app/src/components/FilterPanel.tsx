@@ -1,9 +1,7 @@
 import { useWineStore } from '../store/wineStore'
-import { useIsDesktop } from '../hooks/useMediaQuery'
 import { useMemo, useState } from 'react'
 
 export default function FilterPanel() {
-  const isDesktop = useIsDesktop()
   const [isOpen, setIsOpen] = useState(false)
 
   const wines = useWineStore(state => state.wines)
@@ -190,64 +188,27 @@ export default function FilterPanel() {
     </>
   )
 
-  // Desktop: Side Drawer
-  if (isDesktop) {
-    return (
-      <>
-        {/* Filter Toggle Button */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="fixed top-6 left-6 z-40 p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity md:relative md:mb-6 md:top-0 md:left-0"
-          title="Toggle filters"
-        >
-          <span className="material-symbols-outlined">tune</span>
-        </button>
-
-        {/* Side Drawer Overlay */}
-        {isOpen && (
-          <div
-            className="fixed inset-0 bg-black/40 z-30 md:hidden"
-            onClick={() => setIsOpen(false)}
-          />
-        )}
-
-        {/* Side Drawer */}
-        <div
-          className={`fixed left-0 top-0 h-screen w-80 bg-surface-container-low border-r border-outline-variant/10 p-6 overflow-y-auto z-40 transition-transform duration-300 ${
-            isOpen ? 'translate-x-0' : '-translate-x-full'
-          } md:relative md:translate-x-0 md:h-auto md:w-auto md:border-r-0 md:border-b md:p-6 md:mb-8 md:rounded-lg`}
-        >
-          {/* Close Button (Mobile) */}
-          <button
-            onClick={() => setIsOpen(false)}
-            className="absolute top-4 right-4 p-2 hover:bg-surface-container rounded md:hidden"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-
-          {/* Drawer Title */}
-          <h2 className="text-lg font-semibold text-on-surface mb-6 mt-8 md:hidden">Filters</h2>
-
-          {/* Filter Content */}
-          <FilterContent />
-        </div>
-      </>
-    )
-  }
-
-  // Mobile: Bottom Sheet
   return (
     <>
-      {/* Filter Toggle Button */}
+      {/* Desktop: Fixed Toggle Button (top-left) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full mb-6 p-3 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 font-medium"
+        className="fixed top-6 left-6 z-40 hidden md:flex p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity"
+        title="Toggle filters"
+      >
+        <span className="material-symbols-outlined">tune</span>
+      </button>
+
+      {/* Mobile: Full-width Toggle Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="md:hidden w-full mb-6 p-3 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 font-medium"
       >
         <span className="material-symbols-outlined">tune</span>
         Filters
       </button>
 
-      {/* Bottom Sheet Overlay */}
+      {/* Overlay (both desktop and mobile) */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-30"
@@ -255,9 +216,30 @@ export default function FilterPanel() {
         />
       )}
 
-      {/* Bottom Sheet */}
+      {/* Desktop: Side Drawer (left side) */}
       <div
-        className={`fixed bottom-0 left-0 right-0 bg-surface-container-low rounded-t-2xl p-6 z-40 transition-transform duration-300 max-h-[80vh] overflow-y-auto ${
+        className={`hidden md:flex fixed left-0 top-0 h-screen w-80 bg-surface-container-low border-r border-outline-variant/10 p-6 overflow-y-auto z-40 flex-col transition-transform duration-300 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Close Button */}
+        <button
+          onClick={() => setIsOpen(false)}
+          className="absolute top-4 right-4 p-2 hover:bg-surface-container rounded"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+
+        {/* Title */}
+        <h2 className="text-lg font-semibold text-on-surface mb-6 mt-8">Filters</h2>
+
+        {/* Filter Content */}
+        <FilterContent />
+      </div>
+
+      {/* Mobile: Bottom Sheet (slides up from bottom) */}
+      <div
+        className={`md:hidden fixed bottom-0 left-0 right-0 bg-surface-container-low rounded-t-2xl p-6 z-40 transition-transform duration-300 max-h-[80vh] overflow-y-auto ${
           isOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
@@ -266,7 +248,7 @@ export default function FilterPanel() {
           <div className="w-12 h-1 bg-outline-variant/30 rounded-full" />
         </div>
 
-        {/* Sheet Title */}
+        {/* Title */}
         <h2 className="text-lg font-semibold text-on-surface mb-6">Filters</h2>
 
         {/* Filter Content */}

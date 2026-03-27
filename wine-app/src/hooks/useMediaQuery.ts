@@ -6,12 +6,26 @@ import { useState, useEffect } from 'react'
  * @returns boolean indicating if query matches
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false)
+  const [matches, setMatches] = useState(() => {
+    // Try to get initial value during render (for SSR compatibility)
+    if (typeof window === 'undefined') {
+      return false
+    }
+    try {
+      return window.matchMedia(query).matches
+    } catch {
+      return false
+    }
+  })
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
     const mediaQuery = window.matchMedia(query)
 
-    // Set initial state
+    // Ensure state is set correctly on mount
     setMatches(mediaQuery.matches)
 
     // Handle changes
