@@ -32,37 +32,39 @@ export class ScheduleService {
 
     console.log('[ScheduleService] generateDrinkingSchedule called with', allWines.length, 'total wines')
 
-    // Build availability map: wine ID -> earliest date it's available
-    const wineAvailability: Record<string, number> = {} // wineId -> year when available
+    // Build availability map: wine ID -> earliest date it's available (YYYY-MM format for comparison)
+    const wineAvailability: Record<string, string> = {} // wineId -> YYYY-MM when available
     const now = new Date()
     const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    const currentYearMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
 
     allWines.forEach(w => {
       // Wine is available immediately if at home
       if (w.location === 'home') {
-        wineAvailability[w.id] = currentYear
+        wineAvailability[w.id] = currentYearMonth
       } else if (w.location === 'storage') {
         // Otherwise, check delivery schedule
         const delivery = deliveryScheduleEntries?.find(d => d.wine_id === w.id && d.status === 'pending')
         if (delivery) {
-          const deliveryYear = parseInt(delivery.scheduled_date.split('-')[0])
-          wineAvailability[w.id] = deliveryYear
+          // Extract YYYY-MM from delivery date (YYYY-MM-DD format)
+          wineAvailability[w.id] = delivery.scheduled_date.substring(0, 7)
         } else {
           // If no delivery scheduled, assume not available this period
-          wineAvailability[w.id] = currentYear + 10 // Far future
+          wineAvailability[w.id] = '9999-12' // Far future
         }
       }
     })
 
     const homeWines = allWines.filter(w => w.location === 'home')
     const storageWines = allWines.filter(w => w.location === 'storage')
-    const totalDeliverable = allWines.filter(w => wineAvailability[w.id] < currentYear + 10).length
 
-    console.log('[ScheduleService] Wine availability:', Object.entries(wineAvailability).map(([id, year]) => {
+    console.log('[ScheduleService] Wine availability:', Object.entries(wineAvailability).map(([id, yearMonth]) => {
       const wine = allWines.find(w => w.id === id)
-      return `${wine?.producer} ${wine?.name}: available ${year}`
+      return `${wine?.producer} ${wine?.name}: available ${yearMonth}`
     }))
-    console.log(`[ScheduleService] Home wines: ${homeWines.length}, Storage wines: ${storageWines.length}, Deliverable: ${totalDeliverable}`)
+    const deliverableWines = allWines.filter(w => wineAvailability[w.id] !== '9999-12').length
+    console.log(`[ScheduleService] Home wines: ${homeWines.length}, Storage wines: ${storageWines.length}, Deliverable: ${deliverableWines}`)
 
     // Group wines by tier
     const winesByTier = this.groupWinesByTier(allWines)
@@ -85,7 +87,6 @@ export class ScheduleService {
       // Determine how many months remain in current year (for first partial year)
       let monthsInYear = 12
       if (year === startYear) {
-        const currentMonth = now.getMonth() + 1 // 1-indexed
         monthsInYear = 12 - currentMonth + 1 // Remaining months including current
       }
 
@@ -104,13 +105,18 @@ export class ScheduleService {
 
       // Strategy: Balance across tiers, respecting availability and spacing
       for (const tier of [5, 4, 3, 2, 1]) {
-        const tierWines = (winesByTier[tier] || []).filter(
-          w =>
+        const tierWines = (winesByTier[tier] || []).filter(w => {
+          // Check if wine is available by this point in the year
+          const availabilityYearMonth = wineAvailability[w.id]
+          const consumptionYearMonth = `${year}-03` // Conservative: assume March consumption
+
+          return (
             this.canConsumeThisYear(w, year) &&
-            wineAvailability[w.id] <= year && // Wine must be available by this year
+            availabilityYearMonth <= consumptionYearMonth && // Wine must be available by consumption month
             !yearsConsumption.some(e => e.wineId === w.id) && // Not already scheduled this year
             !this.hasExceededTierLimit(tier, tier4_5Count[tier] || 0)
-        )
+          )
+        })
         console.log(`[ScheduleService] Tier ${tier}: ${tierWines.length} available wines for year ${year}`)
 
         for (const wine of tierWines) {
@@ -154,10 +160,11 @@ export class ScheduleService {
       // Add padding if under minimum
       if (yearlyConsumption[year] < minConsumption) {
         const padding = minConsumption - yearlyConsumption[year]
+        const consumptionYearMonth = `${year}-03` // Conservative: assume March consumption
         const availableWinesForPadding = allWines.filter(
           w =>
             this.canConsumeThisYear(w, year) &&
-            wineAvailability[w.id] <= year &&
+            wineAvailability[w.id] <= consumptionYearMonth &&
             !yearsConsumption.some(e => e.wineId === w.id)
         )
 
@@ -186,7 +193,6 @@ export class ScheduleService {
     }
 
     console.log('[ScheduleService] Before final filter:', schedule.length, 'total drinking entries')
-    const currentMonth = now.getMonth() + 1
 
     const filtered = schedule
       .filter(e => {
