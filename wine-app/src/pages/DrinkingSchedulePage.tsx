@@ -25,8 +25,10 @@ export default function DrinkingSchedulePage() {
     // For now, generate delivery schedule inline
     // In the future, this could be cached or passed from DeliverySchedulePage
     const cellarCapacity = 80 // Default; should come from settings
-    const homeWineCount = wines.filter(w => w.location === 'home').length
-    const deliverySchedule = ScheduleService.generateDeliverySchedule(wines, cellarCapacity, homeWineCount)
+    const totalBottlesAtHome = wines
+      .filter(w => w.location === 'home')
+      .reduce((sum, w) => sum + w.quantity, 0)
+    const deliverySchedule = ScheduleService.generateDeliverySchedule(wines, cellarCapacity, totalBottlesAtHome)
 
     if (wines.length === 0) {
       return []

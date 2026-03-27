@@ -37,13 +37,18 @@ export default function DeliverySchedulePage() {
     return wines.filter(w => w.location === 'home')
   }, [wines])
 
+  // Calculate total bottles at home (sum of all quantities)
+  const totalBottlesAtHome = useMemo(() => {
+    return homeWines.reduce((sum, w) => sum + w.quantity, 0)
+  }, [homeWines])
+
   // Generate delivery schedule using algorithm
   const deliveriesByYear = useMemo(() => {
     // Generate delivery schedule using ScheduleService
     const deliverySchedule = ScheduleService.generateDeliverySchedule(
       wines,
       cellarCapacity,
-      homeWines.length,
+      totalBottlesAtHome,
       [3, 9] // Fixed delivery months: March and September
     )
 

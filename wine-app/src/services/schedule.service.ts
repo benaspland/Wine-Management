@@ -372,7 +372,7 @@ export class ScheduleService {
       let producerIndex = 0
       const producers = Array.from(producerMap.keys())
 
-      while (wineCount < remainingCapacity && producers.length > 0) {
+      while (bottleCount < remainingCapacity && producers.length > 0) {
         const producer = producers[producerIndex % producers.length]
         const producerWines = producerMap.get(producer) || []
         const unscheduledFromProducer = producerWines.filter(
@@ -416,7 +416,7 @@ export class ScheduleService {
         }
 
         deliveriesPerYear[year]++
-        homeWineCount += wineCount
+        homeWineCount += bottleCount
       }
       // If < 24 bottles, skip this slot and wines carry forward to next slot
     }
