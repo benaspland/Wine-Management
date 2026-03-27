@@ -64,16 +64,35 @@ export default function CollectionPage() {
         RED BANNER TEST
       </div>
 
+      {/* Filter Toggle Button */}
       <button
-        onClick={() => {
-          console.log('BUTTON CLICKED! showFilters was:', showFilters)
-          setShowFilters(!showFilters)
-          alert('Button clicked! New state: ' + !showFilters)
-        }}
-        style={{ position: 'fixed', top: '100px', left: '24px', padding: '8px 12px', background: showFilters ? '#00ff00' : '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 50 }}
+        onClick={() => setShowFilters(!showFilters)}
+        style={{ position: 'fixed', top: '24px', left: '24px', padding: '8px 12px', background: '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 50, fontWeight: 'bold' }}
       >
-        🔍 Filters {showFilters ? '(OPEN)' : '(closed)'}
+        🔍 Filters
       </button>
+
+      {/* Filter Overlay */}
+      {showFilters && (
+        <div
+          onClick={() => setShowFilters(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 40 }}
+        />
+      )}
+
+      {/* Filter Drawer */}
+      {showFilters && (
+        <div style={{ position: 'fixed', left: 0, top: 0, height: '100vh', width: '320px', background: '#1c1b1b', borderRight: '1px solid #504532', padding: '24px', overflowY: 'auto', zIndex: 45, display: 'flex', flexDirection: 'column' }}>
+          <button
+            onClick={() => setShowFilters(false)}
+            style={{ alignSelf: 'flex-end', padding: '4px 8px', background: 'transparent', border: 'none', color: '#e5e2e1', cursor: 'pointer', fontSize: '20px' }}
+          >
+            ✕
+          </button>
+          <h2 style={{ color: '#e5e2e1', fontSize: '18px', fontWeight: 'bold', marginTop: '16px' }}>Filters</h2>
+          <p style={{ color: '#9c8f78', marginTop: '12px' }}>Filter panel UI coming soon...</p>
+        </div>
+      )}
 
       <div className="px-6 max-w-7xl mx-auto py-8">
         {/* Hero Section */}
