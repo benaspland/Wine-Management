@@ -4,6 +4,7 @@ import type { Tier } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import * as db from '../services/database'
 import { ScheduleService } from '../services/schedule.service'
+import WineInfo from '../components/WineInfo'
 
 interface DeliveryDate {
   date: string
@@ -225,14 +226,19 @@ export default function DeliverySchedulePage() {
                                 </span>
                               </div>
 
-                              <div>
-                                <h5 className="font-headline text-lg text-on-surface group-hover:text-primary transition-colors">
-                                  {wine.producer}
-                                </h5>
-                                <p className="text-outline text-sm font-light uppercase tracking-wider mb-2">
+                              <div className="flex-1">
+                                <WineInfo
+                                  wine={wine}
+                                  producerSize="lg"
+                                  nameSize="sm"
+                                  classificationSize="xs"
+                                  showClassification={true}
+                                  layout="vertical"
+                                />
+                                <p className="text-outline text-xs font-light uppercase tracking-wider mb-2 mt-1">
                                   {wine.region} · {wine.vintage}
                                 </p>
-                                <div className="flex gap-2 flex-wrap">
+                                <div className="flex gap-2 flex-wrap mt-2">
                                   <span
                                     className={`${getTierColor(wine.tier)} px-2 py-0.5 text-[10px] uppercase tracking-wider rounded-sm shrink-0`}
                                   >

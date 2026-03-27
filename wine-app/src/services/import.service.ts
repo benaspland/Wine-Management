@@ -95,7 +95,32 @@ export class ImportService {
 
   private static csvRowToWine(row: CSVRow): Omit<Wine, 'id' | 'created_at' | 'updated_at'> {
     // Parse wine name into producer + name
-    const { producer, name } = this.parseWineName(row.Wine)
+    let { producer, name } = this.parseWineName(row.Wine)
+
+    // Extract classification from wine name if not already in CSV Classification field
+    let classification = row.Classification?.trim() || ''
+
+    // Check if wine name contains classification keywords and extract them
+    const classificationKeywords = /\b(Grand Cru|1er Cru|Premier Cru|Village|Appellation|AOC|DOCG|DOC|Classico|Riserva|Superiore)\b/gi
+    const matches = name.match(classificationKeywords)
+
+    if (matches && matches.length > 0) {
+      // Use the first matched classification if not already set
+      if (!classification || classification === '-') {
+        classification = matches[0]
+      }
+      // Clean the classification keywords from the wine name
+      name = name.replace(classificationKeywords, '').trim()
+      // Clean up extra spaces
+      name = name.replace(/\s+/g, ' ')
+    }
+
+    // For Bordeaux wines, use the region/appellation as the wine name instead of duplicating the château
+    if (row.Country.toLowerCase() === 'france' && row.Region.toLowerCase() === 'bordeaux') {
+      // Extract the specific appellation from the region field if available
+      // e.g., "St Estephe" -> use as name instead of château name
+      name = row.Region.split(',')[0].trim() // Take first part if multiple regions
+    }
 
     // Parse drinking window
     const { start, end } = this.parseDrinkingWindow(row['Peak Drinking Window'])
@@ -118,7 +143,7 @@ export class ImportService {
       vintage: parseInt(row.Vintage),
       country: row.Country.trim(),
       region: row.Region.trim(),
-      classification: row.Classification.trim(),
+      classification: classification || '-',
       wine_type: this.detectWineType(row.Varietal),
       varietal: row.Varietal.trim(),
       tier,

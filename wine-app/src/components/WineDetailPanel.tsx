@@ -1,5 +1,6 @@
 import type { Wine } from '../types/index'
 import { TIER_LABELS } from '../types/index'
+import WineInfo from './WineInfo'
 
 interface WineDetailPanelProps {
   wine: Wine
@@ -72,16 +73,20 @@ export default function WineDetailPanel({
         </div>
 
         {/* Header Info */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex flex-col gap-1 text-primary-container font-label text-xs tracking-[0.2em] font-bold uppercase">
             <span className="opacity-80">
               {wine.region}, {wine.country}
             </span>
-            <span className="text-[10px] text-outline tracking-[0.3em]">{wine.classification}</span>
           </div>
-          <h2 className="font-headline text-4xl font-bold leading-tight">
-            {wine.producer} {wine.name}
-          </h2>
+          <WineInfo
+            wine={wine}
+            producerSize="2xl"
+            nameSize="base"
+            classificationSize="sm"
+            showClassification={true}
+            layout="vertical"
+          />
         </div>
 
         {/* Scores */}

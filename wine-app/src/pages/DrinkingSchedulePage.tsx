@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { ScheduleService } from '../services/schedule.service'
+import WineInfo from '../components/WineInfo'
 
 interface ScheduleEntry {
   month: string
@@ -137,10 +138,16 @@ export default function DrinkingSchedulePage() {
                         <span className={`text-xs font-bold tracking-widest uppercase mb-1 ${getTierColor(wine.tier)}`}>
                           {wine.status}
                         </span>
-                        <h4 className="text-lg font-medium text-on-surface leading-snug">
-                          {wine.producer}
-                        </h4>
-                        <p className="text-on-surface text-sm opacity-80">{wine.name}</p>
+                        <div className="mb-2">
+                          <WineInfo
+                            wine={wine}
+                            producerSize="lg"
+                            nameSize="sm"
+                            classificationSize="xs"
+                            showClassification={true}
+                            layout="vertical"
+                          />
+                        </div>
                         <div className="flex items-center gap-3 mt-1">
                           <span className="text-outline text-sm font-light">{wine.vintage} Vintage</span>
                           <span className="h-1 w-1 rounded-full bg-outline-variant"></span>

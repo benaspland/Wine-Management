@@ -7,6 +7,7 @@ export interface DrinkingScheduleEntry {
   vintage: number
   region: string
   tier: number
+  classification?: string
   suggestedMonth: number // 1-12
   suggestedYear: number
   status: string
@@ -128,6 +129,7 @@ export class ScheduleService {
               vintage: wine.vintage,
               region: wine.region,
               tier: wine.tier,
+              classification: wine.classification,
               suggestedMonth: month,
               suggestedYear: year,
               status: this.getConsumptionStatus(wine, year),
@@ -164,6 +166,7 @@ export class ScheduleService {
             vintage: wine.vintage,
             region: wine.region,
             tier: wine.tier,
+            classification: wine.classification,
             suggestedMonth: month,
             suggestedYear: year,
             status: this.getConsumptionStatus(wine, year),

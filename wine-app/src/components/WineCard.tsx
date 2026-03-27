@@ -1,6 +1,7 @@
 import type { Wine } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import { WineService } from '../services/wine.service'
+import WineInfo from './WineInfo'
 
 interface WineCardProps {
   wine: Wine
@@ -59,19 +60,20 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
         <div className="flex-1 space-y-4">
           {/* Header */}
           <div className="flex justify-between items-start">
-            <div>
+            <div className="flex-1">
               <span className="text-primary text-xs font-bold tracking-[0.2em] uppercase">
                 {wine.country}, {wine.region}
               </span>
-              <h3 className="font-headline text-2xl mt-1 text-on-surface leading-tight">
-                {wine.producer}
-              </h3>
-              {/* For Bordeaux châteaux, show classification/appellation instead of redundant wine name */}
-              {wine.country === 'France' && wine.region === 'Bordeaux' && wine.classification && wine.classification !== '-' ? (
-                <p className="text-outline text-sm font-light">{wine.classification}</p>
-              ) : (
-                <p className="text-outline text-sm font-light">{wine.name}</p>
-              )}
+              <div className="mt-1">
+                <WineInfo
+                  wine={wine}
+                  producerSize="2xl"
+                  nameSize="sm"
+                  classificationSize="xs"
+                  showClassification={true}
+                  layout="vertical"
+                />
+              </div>
             </div>
             <button
               onClick={handleConsume}
