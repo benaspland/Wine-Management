@@ -246,20 +246,21 @@ export class ScheduleService {
   }
 
   /**
-   * Generate delivery schedule based on rules:
+   * Generate delivery schedule with consumption awareness:
+   * - Accounts for anticipated consumption before each delivery
+   * - Replenishes cellar to maintain inventory supporting consumption rate
    * - Max 2 deliveries/calendar year in fixed months
    * - Tier 4-5 never before 2029
-   * - Min thresholds: 6/3/12 by format
-   * - Diverse regions/producers
-   * - Respect cellar capacity
-   * - Minimum 24 bottles per delivery batch (skip slot if not met)
-   * - Plans through maximum drinking window start date
+   * - Minimum 24 bottles per delivery
+   * - Prioritizes urgent wines (approaching drinking window)
+   * - Diverse producer/region selection
    */
   static generateDeliverySchedule(
     allWines: Wine[],
     cellarCapacity: number,
-    homeWineCount: number,
-    deliveryMonths: [number, number] = [3, 9] // March and September
+    currentBottlesAtHome: number,
+    deliveryMonths: [number, number] = [3, 9], // March and September
+    annualConsumptionTarget: number = 30 // From config
   ): DeliveryScheduleEntry[] {
     const schedule: DeliveryScheduleEntry[] = []
     const storageWines = allWines.filter(w => w.location === 'storage')
@@ -280,12 +281,16 @@ export class ScheduleService {
     const yearsToSchedule = Math.max(4, maxDrinkingWindowStart - currentYear + 2)
 
     console.log(
-      `[ScheduleService] Planning deliveries from ${currentYear} to ${currentYear + yearsToSchedule}, max window start: ${maxDrinkingWindowStart}`
+      `[ScheduleService] Planning consumption-aware deliveries from ${currentYear} to ${currentYear + yearsToSchedule}`
+    )
+    console.log(
+      `[ScheduleService] Current inventory: ${currentBottlesAtHome} bottles, Target consumption: ${annualConsumptionTarget} bottles/year`
     )
 
     // Track deliveries per year and scheduled wines
     const deliveriesPerYear: Record<number, number> = {}
     const scheduledWineIds = new Set<string>()
+    let projectedInventory = currentBottlesAtHome // Track inventory across deliveries
 
     // Sort wines by drinking window priority (most urgent first)
     const candidateWines = storageWines
@@ -332,8 +337,18 @@ export class ScheduleService {
         continue // Max 2 deliveries per year
       }
 
-      const remainingCapacity = cellarCapacity - homeWineCount
-      if (remainingCapacity <= 0) {
+      // Calculate consumption up to this delivery slot (consumption-aware planning)
+      const monthsUntilDelivery = (month - currentMonth) + (year - currentYear) * 12
+      const monthsUntilDeliveryAdjusted = Math.max(0, monthsUntilDelivery)
+      const estimatedConsumption = Math.round((annualConsumptionTarget / 12) * monthsUntilDeliveryAdjusted)
+      const projectedAvailableAtDelivery = Math.max(0, projectedInventory - estimatedConsumption)
+      const availableSlotsAtDelivery = Math.max(0, cellarCapacity - projectedAvailableAtDelivery)
+
+      // Only deliver if there's meaningful available capacity
+      if (availableSlotsAtDelivery < minDeliveryBottles) {
+        console.log(
+          `[ScheduleService] Skipping ${year}-${String(month).padStart(2, '0')}: projected inventory ${projectedAvailableAtDelivery} bottles, available slots ${availableSlotsAtDelivery}`
+        )
         continue
       }
 
@@ -347,11 +362,12 @@ export class ScheduleService {
       }
 
       // Build batch for this delivery slot prioritizing urgency with producer diversity
-      // Goal: Replenish cellar to capacity with wines approaching their drinking window
-      // Minimum: 24 bottles per delivery, Maximum: fill remaining cellar capacity
+      // Goal: Deliver wines to replenish available slots, maintaining choice
+      // Minimum: 24 bottles per delivery, Maximum: available slots at delivery time
       const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
       let bottleCount = 0
       let wineCount = 0
+      const targetDeliverySize = Math.min(availableSlotsAtDelivery, Math.ceil(availableSlotsAtDelivery * 0.75)) // Fill 75% to avoid over-delivering
 
       // Sort by drinking window urgency (wines opening soonest first)
       // This naturally sequences lower tiers before higher tiers
@@ -368,11 +384,11 @@ export class ScheduleService {
         producerMap.get(w.producer)!.push(w)
       })
 
-      // Rotate through producers to ensure diversity, filling remaining capacity
+      // Rotate through producers to ensure diversity, filling up to target delivery size
       let producerIndex = 0
       const producers = Array.from(producerMap.keys())
 
-      while (bottleCount < remainingCapacity && producers.length > 0) {
+      while (bottleCount < targetDeliverySize && producers.length > 0) {
         const producer = producers[producerIndex % producers.length]
         const producerWines = producerMap.get(producer) || []
         const unscheduledFromProducer = producerWines.filter(
@@ -416,9 +432,16 @@ export class ScheduleService {
         }
 
         deliveriesPerYear[year]++
-        homeWineCount += bottleCount
+        projectedInventory += bottleCount // Update projected inventory with delivery
+        console.log(
+          `[ScheduleService] Delivery ${year}-${String(month).padStart(2, '0')}: ${bottleCount} bottles (${wineCount} wines), projected inventory after: ${projectedInventory}`
+        )
       }
       // If < 24 bottles, skip this slot and wines carry forward to next slot
+
+      // Consume wine from projected inventory for next calculations
+      const estimatedConsumptionThisSlot = Math.round((annualConsumptionTarget / 12) * monthsUntilDeliveryAdjusted)
+      projectedInventory = Math.max(0, projectedInventory - estimatedConsumptionThisSlot)
     }
 
     console.log(

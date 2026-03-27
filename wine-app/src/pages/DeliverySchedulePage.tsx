@@ -40,15 +40,17 @@ export default function DeliverySchedulePage() {
   const generateDeliverySchedule = async () => {
     setIsRegenerating(true)
     try {
+      const config = await db.getCellarConfig()
       const totalBottlesAtHome = wines
         .filter(w => w.location === 'home')
         .reduce((sum, w) => sum + w.quantity, 0)
 
       const deliverySchedule = ScheduleService.generateDeliverySchedule(
         wines,
-        cellarCapacity,
+        config.max_slots,
         totalBottlesAtHome,
-        [3, 9] // Fixed delivery months: March and September
+        [3, 9], // Fixed delivery months: March and September
+        config.annual_consumption_target || 30
       )
 
       if (deliverySchedule.length === 0) {

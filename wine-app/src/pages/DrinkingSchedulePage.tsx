@@ -68,7 +68,13 @@ export default function DrinkingSchedulePage() {
       const totalBottlesAtHome = wines
         .filter(w => w.location === 'home')
         .reduce((sum, w) => sum + w.quantity, 0)
-      const deliverySchedule = ScheduleService.generateDeliverySchedule(wines, cellarCapacity, totalBottlesAtHome)
+      const deliverySchedule = ScheduleService.generateDeliverySchedule(
+        wines,
+        cellarCapacity,
+        totalBottlesAtHome,
+        [3, 9], // Fixed delivery months: March and September
+        config.annual_consumption_target || 30
+      )
 
       if (wines.length === 0) {
         setSchedule([])
