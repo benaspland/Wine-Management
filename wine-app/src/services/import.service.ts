@@ -140,6 +140,16 @@ export class ImportService {
   private static parseWineName(fullName: string): { producer: string; name: string } {
     const trimmed = fullName.trim()
 
+    // Handle Bordeaux/château pattern: "Chateau/Château/Clos {Name}"
+    const chateauMatch = trimmed.match(/^(Chateau|Château|Clos|Ch\.|Domaine)\s+(.+)$/i)
+    if (chateauMatch) {
+      const chateauName = chateauMatch[2].trim()
+      return {
+        producer: trimmed, // Keep full name as producer
+        name: chateauName // Display without prefix
+      }
+    }
+
     // Handle Piedmont/Italian pattern: "Barolo: Fratelli Alessandria, Comune di Verduno"
     // Format: {WineType}: {Producer}, {Location/Cru}
     const piedmontMatch = trimmed.match(/^([^:]+):\s*([^,]+),\s*(.+)$/)
