@@ -17,7 +17,6 @@ export default function CollectionPage() {
   const [editingWine, setEditingWine] = useState<Wine | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [stats, setStats] = useState<any>(null)
-  const [filterOpen, setFilterOpen] = useState(false)
 
   useEffect(() => {
     loadStats()
@@ -60,36 +59,9 @@ export default function CollectionPage() {
 
   return (
     <>
-      {/* Filter Toggle Button */}
-      <button
-        onClick={() => setFilterOpen(!filterOpen)}
-        style={{ position: 'fixed', top: '24px', left: '24px', zIndex: 40, padding: '8px', backgroundColor: '#ffbf00', color: '#402d00', borderRadius: '8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        title="Toggle filters"
-      >
-        <span className="material-symbols-outlined">tune</span>
-      </button>
-
-      {/* Filter Drawer Overlay */}
-      {filterOpen && (
-        <div
-          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 30 }}
-          onClick={() => setFilterOpen(false)}
-        />
-      )}
-
-      {/* Filter Drawer */}
-      {filterOpen && (
-        <div style={{ position: 'fixed', left: 0, top: 0, height: '100vh', width: '320px', backgroundColor: '#1c1b1b', borderRight: '1px solid #504532', padding: '24px', overflowY: 'auto', zIndex: 40, display: 'flex', flexDirection: 'column' }}>
-          <button
-            onClick={() => setFilterOpen(false)}
-            style={{ position: 'absolute', top: '16px', right: '16px', padding: '8px', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#e5e2e1', marginBottom: '24px', marginTop: '32px' }}>Filters</h2>
-          <p style={{ color: '#9c8f78' }}>Filter panel content coming soon...</p>
-        </div>
-      )}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: 'red', color: 'white', padding: '20px', fontSize: '24px', zIndex: 999 }}>
+        RED BANNER TEST
+      </div>
 
       <div className="px-6 max-w-7xl mx-auto py-8">
         {/* Hero Section */}
