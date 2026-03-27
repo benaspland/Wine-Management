@@ -72,9 +72,34 @@ export default function CollectionPage() {
       {/* Filter Toggle Button */}
       <button
         onClick={() => setShowFilters(!showFilters)}
-        style={{ position: 'fixed', top: '24px', left: '24px', padding: '8px 12px', background: '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 50, fontWeight: 'bold' }}
+        title="Open filters"
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#ffcd45'
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 191, 0, 0.3)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 191, 0, 0.1)'
+          e.currentTarget.style.boxShadow = 'none'
+        }}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          left: '20px',
+          padding: '10px',
+          background: 'rgba(255, 191, 0, 0.1)',
+          color: '#ffbf00',
+          border: '1px solid rgba(255, 191, 0, 0.2)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.2s ease',
+          backdropFilter: 'blur(8px)'
+        }}
       >
-        🔍 Filters
+        <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>tune</span>
       </button>
 
       {/* Filter Overlay */}
