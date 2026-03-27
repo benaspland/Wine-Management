@@ -93,6 +93,8 @@ function initializeSchema(): void {
     `CREATE TABLE IF NOT EXISTS cellar_config (
       id TEXT PRIMARY KEY DEFAULT 'default',
       max_slots INTEGER DEFAULT 80,
+      min_delivery_bottles INTEGER DEFAULT 24,
+      annual_consumption_target INTEGER DEFAULT 30,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,

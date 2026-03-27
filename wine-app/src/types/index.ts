@@ -40,6 +40,8 @@ export interface Wine {
 export interface CellarConfig {
   max_slots: number;
   current_slots: number;
+  min_delivery_bottles?: number; // Minimum bottles per delivery (default: 24)
+  annual_consumption_target?: number; // Target bottles per year (default: 30)
 }
 
 export interface ConsumptionLogEntry {

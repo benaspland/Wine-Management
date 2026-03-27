@@ -440,11 +440,42 @@ export async function moveWineLocation(wineId: string, toLocation: 'home' | 'sto
 export async function getCellarConfig(): Promise<CellarConfig> {
   const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', ['default'])
   const row = result.values?.[0]
-  return row || { max_slots: 80, current_slots: 0 }
+  return (
+    row || {
+      max_slots: 80,
+      current_slots: 0,
+      min_delivery_bottles: 24,
+      annual_consumption_target: 30,
+    }
+  )
 }
 
 export async function updateCellarCapacity(maxSlots: number): Promise<void> {
   await executeQuery('UPDATE cellar_config SET max_slots = ? WHERE id = ?', [maxSlots, 'default'])
+}
+
+export async function updateCellarConfig(config: Partial<CellarConfig>): Promise<void> {
+  const updates: string[] = []
+  const values: (string | number)[] = []
+
+  if (config.max_slots !== undefined) {
+    updates.push('max_slots = ?')
+    values.push(config.max_slots)
+  }
+  if (config.min_delivery_bottles !== undefined) {
+    updates.push('min_delivery_bottles = ?')
+    values.push(config.min_delivery_bottles)
+  }
+  if (config.annual_consumption_target !== undefined) {
+    updates.push('annual_consumption_target = ?')
+    values.push(config.annual_consumption_target)
+  }
+
+  if (updates.length === 0) return
+
+  values.push('default')
+  const sql = `UPDATE cellar_config SET ${updates.join(', ')} WHERE id = ?`
+  await executeQuery(sql, values)
 }
 
 // Consumption log

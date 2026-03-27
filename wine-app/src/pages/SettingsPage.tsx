@@ -6,6 +6,8 @@ import { ImportService } from '../services/import.service'
 export default function SettingsPage() {
   const wines = useWineStore(state => state.wines)
   const [cellarCapacity, setCellarCapacity] = useState(80)
+  const [minDeliveryBottles, setMinDeliveryBottles] = useState(24)
+  const [annualConsumptionTarget, setAnnualConsumptionTarget] = useState(30)
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -16,6 +18,8 @@ export default function SettingsPage() {
   useEffect(() => {
     db.getCellarConfig().then(config => {
       setCellarCapacity(config.max_slots)
+      setMinDeliveryBottles(config.min_delivery_bottles || 24)
+      setAnnualConsumptionTarget(config.annual_consumption_target || 30)
     })
   }, [])
 
@@ -23,11 +27,23 @@ export default function SettingsPage() {
     setCellarCapacity(parseInt(e.target.value) || 80)
   }
 
-  const handleSaveCapacity = async () => {
+  const handleMinDeliveryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMinDeliveryBottles(parseInt(e.target.value) || 24)
+  }
+
+  const handleAnnualConsumptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAnnualConsumptionTarget(parseInt(e.target.value) || 30)
+  }
+
+  const handleSaveConfig = async () => {
     setIsLoading(true)
     try {
-      await db.updateCellarCapacity(cellarCapacity)
-      setMessage({ type: 'success', text: 'Cellar capacity updated successfully' })
+      await db.updateCellarConfig({
+        max_slots: cellarCapacity,
+        min_delivery_bottles: minDeliveryBottles,
+        annual_consumption_target: annualConsumptionTarget,
+      })
+      setMessage({ type: 'success', text: 'Settings updated successfully' })
       setTimeout(() => setMessage(null), 3000)
     } catch (error) {
       setMessage({ type: 'error', text: `Error: ${(error as Error).message}` })
@@ -184,14 +200,14 @@ export default function SettingsPage() {
       )}
 
       <div className="space-y-8">
-        {/* Cellar Capacity */}
+        {/* Schedule & Cellar Configuration */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-2">Cellar Capacity</h3>
-          <p className="text-outline text-sm mb-6">Configure maximum wine slots in your home cellar</p>
+          <h3 className="font-headline text-2xl font-bold mb-2">Schedule & Cellar Configuration</h3>
+          <p className="text-outline text-sm mb-6">Configure cellar capacity, delivery, and consumption settings</p>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-on-surface mb-2">Maximum Slots</label>
+              <label className="block text-sm font-medium text-on-surface mb-2">Maximum Cellar Capacity (bottles)</label>
               <input
                 type="number"
                 value={cellarCapacity}
@@ -201,14 +217,43 @@ export default function SettingsPage() {
                 max="500"
                 className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded border border-outline-variant/20 focus:outline-none focus:border-primary disabled:opacity-50"
               />
+              <p className="text-xs text-outline mt-1">Maximum total bottles your home cellar can hold</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-on-surface mb-2">Minimum Delivery (bottles)</label>
+              <input
+                type="number"
+                value={minDeliveryBottles}
+                onChange={handleMinDeliveryChange}
+                disabled={isLoading}
+                min="1"
+                max="100"
+                className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded border border-outline-variant/20 focus:outline-none focus:border-primary disabled:opacity-50"
+              />
+              <p className="text-xs text-outline mt-1">Minimum bottles required for a delivery to be created</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-on-surface mb-2">Annual Consumption Target (bottles)</label>
+              <input
+                type="number"
+                value={annualConsumptionTarget}
+                onChange={handleAnnualConsumptionChange}
+                disabled={isLoading}
+                min="1"
+                max="200"
+                className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded border border-outline-variant/20 focus:outline-none focus:border-primary disabled:opacity-50"
+              />
+              <p className="text-xs text-outline mt-1">Target number of bottles to consume per year</p>
             </div>
 
             <button
-              onClick={handleSaveCapacity}
+              onClick={handleSaveConfig}
               disabled={isLoading}
               className="btn-primary w-full disabled:opacity-50"
             >
-              {isLoading ? 'Saving...' : 'Save Capacity'}
+              {isLoading ? 'Saving...' : 'Save Settings'}
             </button>
           </div>
         </div>
