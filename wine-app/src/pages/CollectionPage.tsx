@@ -65,10 +65,14 @@ export default function CollectionPage() {
       </div>
 
       <button
-        onClick={() => setShowFilters(!showFilters)}
-        style={{ position: 'fixed', top: '100px', left: '24px', padding: '8px 12px', background: '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 40 }}
+        onClick={() => {
+          console.log('BUTTON CLICKED! showFilters was:', showFilters)
+          setShowFilters(!showFilters)
+          alert('Button clicked! New state: ' + !showFilters)
+        }}
+        style={{ position: 'fixed', top: '100px', left: '24px', padding: '8px 12px', background: showFilters ? '#00ff00' : '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 50 }}
       >
-        🔍 Filters
+        🔍 Filters {showFilters ? '(OPEN)' : '(closed)'}
       </button>
 
       <div className="px-6 max-w-7xl mx-auto py-8">
