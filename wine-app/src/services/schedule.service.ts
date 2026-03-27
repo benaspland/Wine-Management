@@ -321,40 +321,40 @@ export class ScheduleService {
         continue
       }
 
-      // Build batch for this delivery slot with intelligent diversity
-      // Goal: Fill capacity while maintaining tier/region variety for choice
+      // Build batch for this delivery slot prioritizing urgency with producer diversity
+      // Goal: Deliver wines approaching their drinking window first, with diverse producers
       const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
       let bottleCount = 0
       let wineCount = 0
 
-      // Group available wines by tier for diverse selection
-      const winesByTierForDelivery: Record<number, Wine[]> = {}
-      for (let t = 1; t <= 5; t++) {
-        winesByTierForDelivery[t] = availableWines.filter(w => w.tier === t)
-      }
+      // Sort by drinking window urgency (wines opening soonest first)
+      // This naturally sequences lower tiers before higher tiers
+      const winesByUrgency = availableWines.sort(
+        (a, b) => a.drinking_window_start - b.drinking_window_start
+      )
 
-      // Accumulate wines with tier-weighted distribution for variety
-      // Prioritize across tiers rather than exhausting one tier
-      const tiersInOrder = [1, 2, 3, 4, 5] // Start with accessible, end with premium
-      let rotations = 0
-      const maxRotations = 3 // Prevent infinite loop
+      // Group urgent wines by producer for diversity
+      const producerMap = new Map<string, Wine[]>()
+      winesByUrgency.forEach(w => {
+        if (!producerMap.has(w.producer)) {
+          producerMap.set(w.producer, [])
+        }
+        producerMap.get(w.producer)!.push(w)
+      })
 
-      while (wineCount < remainingCapacity && rotations < maxRotations) {
-        for (const tier of tiersInOrder) {
-          if (wineCount >= remainingCapacity) {
-            break
-          }
+      // Rotate through producers to ensure diversity
+      let producerIndex = 0
+      const producers = Array.from(producerMap.keys())
 
-          const tierwines = winesByTierForDelivery[tier]
-          const unscheduledInTier = tierwines.filter(
-            w => !deliveryBatch.some(db => db.wine.id === w.id)
-          )
+      while (wineCount < remainingCapacity && producers.length > 0) {
+        const producer = producers[producerIndex % producers.length]
+        const producerWines = producerMap.get(producer) || []
+        const unscheduledFromProducer = producerWines.filter(
+          w => !deliveryBatch.some(db => db.wine.id === w.id)
+        )
 
-          if (unscheduledInTier.length === 0) {
-            continue
-          }
-
-          const wine = unscheduledInTier[0] // Take next unscheduled wine from this tier
+        if (unscheduledFromProducer.length > 0) {
+          const wine = unscheduledFromProducer[0]
           const minThreshold = this.getMinDeliveryThreshold(wine.format)
           const quantityToDeliver = wine.quantity < minThreshold ? wine.quantity : minThreshold
 
@@ -363,7 +363,12 @@ export class ScheduleService {
           wineCount += 1
         }
 
-        rotations++
+        producerIndex++
+
+        // Exit if all wines are scheduled
+        if (producers.every(p => producerMap.get(p)!.every(w => deliveryBatch.some(db => db.wine.id === w.id)))) {
+          break
+        }
       }
 
       // Only create delivery if we meet 24-bottle minimum
