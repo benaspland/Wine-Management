@@ -138,37 +138,66 @@ export class ImportService {
   }
 
   private static parseWineName(fullName: string): { producer: string; name: string } {
-    // Split by first space - assume first word(s) before first noun is producer
-    const parts = fullName.trim().split(' ')
+    const trimmed = fullName.trim()
 
-    // Simple heuristic: first 1-2 words are producer, rest is name
-    // For "R. Lopez de Heredia Vina Tondonia Reserva":
-    // → producer: "R. Lopez de Heredia", name: "Vina Tondonia Reserva"
+    // Handle quoted wine names: "Producer Name 'Wine Name'"
+    const quotedMatch = trimmed.match(/^([^']+)'([^']+)'$/)
+    if (quotedMatch) {
+      return {
+        producer: quotedMatch[1].trim(),
+        name: quotedMatch[2].trim()
+      }
+    }
+
+    const parts = trimmed.split(' ')
 
     if (parts.length <= 1) {
       return { producer: parts[0], name: parts[0] }
     }
 
-    // Look for capitalized words or abbreviations followed by more words
-    let producerEnd = 0
-    for (let i = 0; i < Math.min(3, parts.length); i++) {
-      const part = parts[i]
-      // Stop at common wine name indicators
-      if (
-        /^(Vina|Château|Domaine|Vineyard|Wine|Reserve|Gran|Old)/.test(part) ||
-        (i > 0 && /^[a-z]/.test(part))
-      ) {
-        producerEnd = i
-        break
+    // Look for boundary indicators (these mark where wine name typically starts)
+    const wineNameStartPatterns = [
+      /^(Vina|Vineyard|Reserve|Reserva|Grand|Cru|AOC|DOC|DOCG|Classico|Riserva|Superiore)$/i,
+      /^[A-Z][a-z]*\s+(di|da|d'|de|le|la|al|degli|delle)$/i, // "Rosso di", "Brunello di", etc.
+    ]
+
+    // Find where the wine name likely starts
+    let nameStartIndex = parts.length // default: no split, all is name
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const nextPart = parts[i + 1]
+
+      // Check for wine name start patterns
+      for (const pattern of wineNameStartPatterns) {
+        if (pattern.test(nextPart)) {
+          nameStartIndex = i + 1
+          break
+        }
       }
-      producerEnd = i + 1
+
+      // Italian pattern: "Producer di Sotto" → producer is usually 1-2 words before "di/da/di Sotto/di Montalcino"
+      if (i > 0 && /^(di|da|d'|de)$/i.test(nextPart)) {
+        // Check if this looks like a wine type descriptor
+        const afterPrep = parts[i + 2]
+        if (afterPrep && /^[A-Z]/.test(afterPrep) && afterPrep.length > 3) {
+          nameStartIndex = i + 1
+          break
+        }
+      }
     }
 
-    if (producerEnd === 0) producerEnd = 1
-    if (producerEnd >= parts.length) producerEnd = parts.length - 1
+    // French pattern: "Domaine Producer Appellation"
+    // If we see "Domaine" or "Château", producer is typically next 1-2 words
+    if (/^(Domaine|Château|Clos|Abbaye)$/i.test(parts[0]) && parts.length >= 3) {
+      // Domaine + next 1-2 words = producer, rest = name
+      nameStartIndex = parts[1] && /^[A-Z]/.test(parts[2]) ? 2 : 1
+    }
 
-    const producer = parts.slice(0, producerEnd).join(' ')
-    const name = parts.slice(producerEnd).join(' ') || producer
+    if (nameStartIndex === 0) nameStartIndex = 1
+    if (nameStartIndex >= parts.length) nameStartIndex = Math.max(1, parts.length - 1)
+
+    const producer = parts.slice(0, nameStartIndex).join(' ')
+    const name = parts.slice(nameStartIndex).join(' ') || producer
 
     return { producer: producer.trim(), name: name.trim() }
   }
