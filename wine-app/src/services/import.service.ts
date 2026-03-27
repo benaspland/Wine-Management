@@ -140,6 +140,19 @@ export class ImportService {
   private static parseWineName(fullName: string): { producer: string; name: string } {
     const trimmed = fullName.trim()
 
+    // Handle Piedmont/Italian pattern: "Barolo: Fratelli Alessandria, Comune di Verduno"
+    // Format: {WineType}: {Producer}, {Location/Cru}
+    const piedmontMatch = trimmed.match(/^([^:]+):\s*([^,]+),\s*(.+)$/)
+    if (piedmontMatch) {
+      const wineType = piedmontMatch[1].trim() // "Barolo"
+      const producer = piedmontMatch[2].trim() // "Fratelli Alessandria"
+      const location = piedmontMatch[3].trim() // "Comune di Verduno"
+      return {
+        producer,
+        name: `${wineType} ${location}` // "Barolo Comune di Verduno"
+      }
+    }
+
     // Handle quoted wine names: "Producer Name 'Wine Name'"
     const quotedMatch = trimmed.match(/^([^']+)'([^']+)'$/)
     if (quotedMatch) {
