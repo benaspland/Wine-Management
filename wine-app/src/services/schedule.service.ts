@@ -282,9 +282,9 @@ export class ScheduleService {
             continue
           }
 
-          // Apply min threshold
-          const minThreshold = this.getMinDeliveryThreshold(wine.tier)
-          if (wine.quantity < minThreshold) {
+          // Skip if wine has no quantity
+          // Below-threshold quantities will be delivered as-is in the schedule entry
+          if (wine.quantity === 0) {
             continue
           }
 
@@ -310,10 +310,14 @@ export class ScheduleService {
         // Create delivery entries
         for (const wine of deliveryWines) {
           const scheduledDate = new Date(year, month - 1, 1)
+          const minThreshold = this.getMinDeliveryThreshold(wine.format)
+          // If below threshold, deliver all remaining; otherwise deliver threshold amount
+          const quantityToDeliver = wine.quantity < minThreshold ? wine.quantity : minThreshold
+
           schedule.push({
             id: `delivery-${wine.id}-${year}-${month}`,
             wine_id: wine.id,
-            quantity: Math.min(wine.quantity, this.getMinDeliveryThreshold(wine.tier)),
+            quantity: quantityToDeliver,
             scheduled_date: scheduledDate.toISOString().split('T')[0],
             from_location: 'storage',
             to_location: 'home',
@@ -411,11 +415,11 @@ export class ScheduleService {
     }
   }
 
-  private static getMinDeliveryThreshold(tier: number): number {
-    if (tier === 1) return 12
-    if (tier === 2) return 6
-    if (tier === 3) return 3
-    if (tier === 4) return 6
-    return 6 // Tier 5
+  private static getMinDeliveryThreshold(format: string): number {
+    // Thresholds based on bottle format, not tier
+    if (format.includes('375') || format.includes('half')) return 12 // Half bottles
+    if (format.includes('1.5') || format.includes('magnum')) return 3 // Magnum
+    // Default for 750ml and other formats
+    return 6
   }
 }
