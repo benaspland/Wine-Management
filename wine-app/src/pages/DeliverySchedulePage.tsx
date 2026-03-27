@@ -178,16 +178,26 @@ export default function DeliverySchedulePage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {years.map(year => (
-            <div key={year} className="border border-outline-variant/20 rounded-lg overflow-hidden">
-              {/* Year Header - Collapsible */}
-              <button
-                onClick={() => toggleYear(year)}
-                className="w-full bg-surface-container-low hover:bg-surface-container transition-colors p-6 flex items-center justify-between"
-              >
-                <h3 className="font-headline text-3xl text-on-surface">{year}</h3>
-                <div className="flex items-center gap-4">
-                  <span className="text-outline text-sm">{deliveriesByYear[year]?.length || 0} deliveries</span>
+          {years.map(year => {
+            const deliveries = deliveriesByYear[year] || []
+            const totalBottles = deliveries.reduce((sum, d) => sum + d.wines.reduce((s, w) => s + w.quantity, 0), 0)
+            const totalWines = new Set(deliveries.flatMap(d => d.wines.map(w => w.id))).size
+
+            return (
+              <div key={year} className="border border-outline-variant/20 rounded-lg overflow-hidden">
+                {/* Year Header - Collapsible with summary stats */}
+                <button
+                  onClick={() => toggleYear(year)}
+                  className="w-full bg-surface-container-low hover:bg-surface-container transition-colors p-6 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <h3 className="font-headline text-3xl text-on-surface">{year}</h3>
+                      <p className="text-outline-variant text-sm mt-1">
+                        {deliveries.length} {deliveries.length === 1 ? 'delivery' : 'deliveries'} • {totalBottles} bottles • {totalWines} wines
+                      </p>
+                    </div>
+                  </div>
                   <span
                     className={`material-symbols-outlined text-2xl text-outline transition-transform ${
                       expandedYears.has(year) ? 'rotate-180' : ''
@@ -195,14 +205,13 @@ export default function DeliverySchedulePage() {
                   >
                     expand_more
                   </span>
-                </div>
-              </button>
+                </button>
 
-              {/* Deliveries for this year - Collapsible */}
-              {expandedYears.has(year) && (
-                <div className="border-t border-outline-variant/10 p-6 space-y-8">
-                  {deliveriesByYear[year]?.map((group, idx) => (
-                    <section key={`delivery-${year}-${idx}`}>
+                {/* Deliveries for this year - Collapsible */}
+                {expandedYears.has(year) && (
+                  <div className="border-t border-outline-variant/10 p-6 space-y-8">
+                    {deliveries.map((group, idx) => (
+                      <section key={`delivery-${year}-${idx}`}>
                       <div className="mb-6 pb-4 border-b border-outline-variant/10">
                         <h4 className="font-headline text-xl text-on-surface">
                           {new Date(group.date).toLocaleDateString('en-US', {
@@ -258,11 +267,12 @@ export default function DeliverySchedulePage() {
                         ))}
                       </div>
                     </section>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
