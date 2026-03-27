@@ -17,10 +17,12 @@ export class ScheduleService {
   /**
    * Generate drinking schedule based on user's rules:
    * - 30 wines/year ±5 (pro-rata for partial years)
-   * - Tier spacing (T1: 6mo apart, T4-5: spread across window)
-   * - Strictly enforce before window, prefer after window
-   * - Max 1x T4-5/year unless no alternative
-   * - Considers ALL wines and factors in delivery schedule timing
+   * - Distribute across 12 months with tier preference weighting
+   * - Tier 4-5: max 1x per wine per 3 years (flexible if wine supply exhausted)
+   * - Lower tiers dominate each year (~80%), Tier 4-5 supplementary (~20%)
+   * - Producer diversity: avoid clustering same producer in adjacent months
+   * - Strictly enforce drinking window start, prefer but don't require window end
+   * - Considers delivery timing: wine must be available before consumption
    */
   static generateDrinkingSchedule(
     allWines: Wine[],
@@ -76,10 +78,11 @@ export class ScheduleService {
     // Calculate consumption targets
     const targetPerYear = 30
     const tolerance = 5 // ±5
+    const tier4_5MinSpacingYears = 3
 
-    // Track consumption per year and per wine
+    // Track consumption per year and per wine (for Tier 4-5 spacing)
     const yearlyConsumption: Record<number, number> = {}
-    const wineConsumptionThisYear: Record<string, number> = {}
+    const wineLastConsumedYear: Record<string, number> = {} // Track last year each wine was scheduled
 
     for (let year = startYear; year < startYear + yearsToSchedule; year++) {
       yearlyConsumption[year] = 0
@@ -95,82 +98,103 @@ export class ScheduleService {
       const minConsumption = Math.max(1, targetForYear - tolerance)
       const maxConsumption = targetForYear + tolerance
 
-      // Reset yearly tier consumption tracking
-      const tier4_5Count: Record<number, number> = { 4: 0, 5: 0 }
-
-      // Build consumption for this year
+      // Build consumption for this year using month-slot distribution
       const yearsConsumption: DrinkingScheduleEntry[] = []
+      const slotsPerMonth = Math.ceil(targetForYear / 12) // ~2-3 wines per month
 
-      console.log(`[ScheduleService] Processing year ${year}`)
+      console.log(`[ScheduleService] Processing year ${year}, target ${targetForYear} wines (${slotsPerMonth} per month)`)
 
-      // Strategy: Balance across tiers, respecting availability and spacing
-      for (const tier of [5, 4, 3, 2, 1]) {
-        const tierWines = (winesByTier[tier] || []).filter(w => {
-          // Check if wine is available by this point in the year
+      // Distribute wines across 12 months with tier preference
+      for (let month = 1; month <= 12; month++) {
+        const slotsToFill = Math.min(slotsPerMonth, maxConsumption - yearsConsumption.length)
+        if (slotsToFill <= 0) break
+
+        const monthYearMonth = `${year}-${String(month).padStart(2, '0')}`
+        const lastMonthProducers = yearsConsumption.slice(-2).map(e => e.producer) // Avoid clustering
+
+        // Build candidates available by this month
+        const candidates = allWines.filter(w => {
           const availabilityYearMonth = wineAvailability[w.id]
-          const consumptionYearMonth = `${year}-03` // Conservative: assume March consumption
-
           return (
             this.canConsumeThisYear(w, year) &&
-            availabilityYearMonth <= consumptionYearMonth && // Wine must be available by consumption month
+            availabilityYearMonth <= monthYearMonth && // Wine available by this month
             !yearsConsumption.some(e => e.wineId === w.id) && // Not already scheduled this year
-            !this.hasExceededTierLimit(tier, tier4_5Count[tier] || 0)
+            !lastMonthProducers.includes(w.producer) // Avoid same producer clustering
           )
         })
-        console.log(`[ScheduleService] Tier ${tier}: ${tierWines.length} available wines for year ${year}`)
 
-        for (const wine of tierWines) {
-          if (yearlyConsumption[year] >= maxConsumption) {
-            break
-          }
+        // Sort candidates by tier preference (T1 > T2-3 > T4-5)
+        const candidatesByTier = {
+          1: candidates.filter(w => w.tier === 1),
+          2: candidates.filter(w => w.tier === 2),
+          3: candidates.filter(w => w.tier === 3),
+          4: candidates.filter(w => w.tier === 4),
+          5: candidates.filter(w => w.tier === 5),
+        }
 
-          // Determine spacing for this wine
-          const spacing = this.getConsumptionSpacing(wine, year)
-          if (!wineConsumptionThisYear[wine.id]) {
-            wineConsumptionThisYear[wine.id] = 0
-          }
+        // Fill month slots with tier preference: T1 > T2-3 > T4-5
+        let slotsFilledThisMonth = 0
+        for (const tier of [1, 2, 3, 4, 5]) {
+          while (
+            slotsFilledThisMonth < slotsToFill &&
+            candidatesByTier[tier as keyof typeof candidatesByTier].length > 0
+          ) {
+            const tierCandidates = candidatesByTier[tier as keyof typeof candidatesByTier]
 
-          // Add to schedule if within spacing constraints
-          if (wineConsumptionThisYear[wine.id] < spacing) {
-            const month = this.calculateConsumptionMonth(wine, year, yearsConsumption.length)
+            // For Tier 4-5, prefer wines not scheduled in last 3 years (unless necessary)
+            let selectedWine: Wine | undefined
+            if (tier >= 4) {
+              selectedWine = tierCandidates.find(
+                w => !wineLastConsumedYear[w.id] || year - wineLastConsumedYear[w.id] >= tier4_5MinSpacingYears
+              )
+              // Fallback: if no wines respect spacing, take any available (spacing rule relaxed)
+              if (!selectedWine && tierCandidates.length > 0) {
+                selectedWine = tierCandidates[0]
+              }
+            } else {
+              selectedWine = tierCandidates[0]
+            }
+
+            if (!selectedWine) break
+
+            const monthNum = this.calculateConsumptionMonthDistributed(year, month, yearsConsumption.length)
 
             yearsConsumption.push({
-              wineId: wine.id,
-              producer: wine.producer,
-              name: wine.name,
-              vintage: wine.vintage,
-              region: wine.region,
-              tier: wine.tier,
-              classification: wine.classification,
-              suggestedMonth: month,
+              wineId: selectedWine.id,
+              producer: selectedWine.producer,
+              name: selectedWine.name,
+              vintage: selectedWine.vintage,
+              region: selectedWine.region,
+              tier: selectedWine.tier,
+              classification: selectedWine.classification,
+              suggestedMonth: monthNum,
               suggestedYear: year,
-              status: this.getConsumptionStatus(wine, year),
+              status: this.getConsumptionStatus(selectedWine, year),
             })
 
-            yearlyConsumption[year]++
-            wineConsumptionThisYear[wine.id]++
+            wineLastConsumedYear[selectedWine.id] = year
+            slotsFilledThisMonth++
 
-            if (tier >= 4) {
-              tier4_5Count[tier]++
-            }
+            // Remove from candidates
+            const idx = tierCandidates.indexOf(selectedWine)
+            if (idx > -1) tierCandidates.splice(idx, 1)
           }
         }
       }
 
       // Add padding if under minimum
-      if (yearlyConsumption[year] < minConsumption) {
-        const padding = minConsumption - yearlyConsumption[year]
-        const consumptionYearMonth = `${year}-03` // Conservative: assume March consumption
+      if (yearsConsumption.length < minConsumption) {
+        const padding = minConsumption - yearsConsumption.length
         const availableWinesForPadding = allWines.filter(
           w =>
             this.canConsumeThisYear(w, year) &&
-            wineAvailability[w.id] <= consumptionYearMonth &&
+            wineAvailability[w.id] <= `${year}-12` && // Available by end of year
             !yearsConsumption.some(e => e.wineId === w.id)
         )
 
         for (let i = 0; i < padding && availableWinesForPadding.length > 0; i++) {
           const wine = availableWinesForPadding[i % availableWinesForPadding.length]
-          const month = this.calculateConsumptionMonth(wine, year, yearsConsumption.length)
+          const monthNum = this.calculateConsumptionMonthDistributed(year, (i % 12) + 1, yearsConsumption.length)
 
           yearsConsumption.push({
             wineId: wine.id,
@@ -180,15 +204,16 @@ export class ScheduleService {
             region: wine.region,
             tier: wine.tier,
             classification: wine.classification,
-            suggestedMonth: month,
+            suggestedMonth: monthNum,
             suggestedYear: year,
             status: this.getConsumptionStatus(wine, year),
           })
 
-          yearlyConsumption[year]++
+          wineLastConsumedYear[wine.id] = year
         }
       }
 
+      yearlyConsumption[year] = yearsConsumption.length
       schedule.push(...yearsConsumption)
     }
 
@@ -420,54 +445,11 @@ export class ScheduleService {
     return true
   }
 
-  private static hasExceededTierLimit(tier: number, currentCount: number): boolean {
-    // Tier 4-5: max 1x per year unless no alternatives
-    if (tier >= 4 && currentCount >= 1) {
-      return true
-    }
-    return false
-  }
-
-  private static getConsumptionSpacing(wine: Wine, _year: number): number {
-    const tier = wine.tier
-
-    // Tier 1 (EVERYDAY): Can drink multiple times per year
-    if (tier === 1) {
-      return 2
-    }
-
-    // Tier 4-5 (PREMIUM/ICON): Spread across window, max 1x per year
-    if (tier >= 4) {
-      const windowLength = wine.drinking_window_end - wine.drinking_window_start
-      return Math.max(1, Math.floor(windowLength / 2))
-    }
-
-    // Tier 2-3: Moderate spacing
-    return 1
-  }
-
-  private static calculateConsumptionMonth(
-    wine: Wine,
-    year: number,
-    indexInYear: number
-  ): number {
-    const tier = wine.tier
-
-    if (tier === 1) {
-      // Distribute throughout the year
-      return (indexInYear % 12) + 1
-    }
-
-    if (tier >= 4) {
-      // Spread across drinking window months
-      const windowLength = wine.drinking_window_end - wine.drinking_window_start
-      const yearInWindow = year - wine.drinking_window_start
-      const progressRatio = Math.max(0, Math.min(1, yearInWindow / windowLength))
-      return Math.floor(progressRatio * 12) + 1
-    }
-
-    // Tier 2-3: distribute across year
-    return (indexInYear % 6) * 2 + 1
+  private static calculateConsumptionMonthDistributed(_year: number, targetMonth: number, indexInYear: number): number {
+    // Slight variation around target month to provide some spread
+    // But keep wines roughly in their intended month for user understanding
+    const monthVariation = indexInYear % 3 // Spread wines within target month's context
+    return Math.max(1, Math.min(12, targetMonth + monthVariation - 1))
   }
 
   private static getConsumptionStatus(_wine: Wine, year: number): string {
