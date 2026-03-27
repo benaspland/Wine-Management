@@ -19,6 +19,14 @@ export default function CollectionPage() {
   const [stats, setStats] = useState<any>(null)
   const [showFilters, setShowFilters] = useState(false)
 
+  // Get filter state and actions from store
+  const searchTerm = useWineStore(state => state.searchTerm)
+  const setSearchTerm = useWineStore(state => state.setSearchTerm)
+  const locationFilter = useWineStore(state => state.locationFilter)
+  const setLocationFilter = useWineStore(state => state.setLocationFilter)
+  const tierFilter = useWineStore(state => state.tierFilter)
+  const setTierFilter = useWineStore(state => state.setTierFilter)
+
   useEffect(() => {
     loadStats()
   }, [wines])
@@ -96,6 +104,8 @@ export default function CollectionPage() {
               <input
                 type="text"
                 placeholder="Producer, name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ width: '100%', padding: '6px', background: '#201f1f', border: '1px solid #504532', color: '#e5e2e1', borderRadius: '4px', boxSizing: 'border-box' }}
               />
             </div>
@@ -103,23 +113,29 @@ export default function CollectionPage() {
             {/* Location */}
             <div>
               <label style={{ display: 'block', color: '#9c8f78', fontSize: '12px', marginBottom: '4px' }}>Location</label>
-              <select style={{ width: '100%', padding: '6px', background: '#201f1f', border: '1px solid #504532', color: '#e5e2e1', borderRadius: '4px', boxSizing: 'border-box' }}>
-                <option>All</option>
-                <option>Home</option>
-                <option>Storage</option>
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value as 'all' | 'home' | 'storage')}
+                style={{ width: '100%', padding: '6px', background: '#201f1f', border: '1px solid #504532', color: '#e5e2e1', borderRadius: '4px', boxSizing: 'border-box' }}>
+                <option value="all">All</option>
+                <option value="home">Home</option>
+                <option value="storage">Storage</option>
               </select>
             </div>
 
             {/* Tier */}
             <div>
               <label style={{ display: 'block', color: '#9c8f78', fontSize: '12px', marginBottom: '4px' }}>Tier</label>
-              <select style={{ width: '100%', padding: '6px', background: '#201f1f', border: '1px solid #504532', color: '#e5e2e1', borderRadius: '4px', boxSizing: 'border-box' }}>
-                <option>All Tiers</option>
-                <option>1 - Everyday</option>
-                <option>2 - Quality</option>
-                <option>3 - Fine</option>
-                <option>4 - Premium</option>
-                <option>5 - Icon</option>
+              <select
+                value={tierFilter || ''}
+                onChange={(e) => setTierFilter(e.target.value ? parseInt(e.target.value) : null)}
+                style={{ width: '100%', padding: '6px', background: '#201f1f', border: '1px solid #504532', color: '#e5e2e1', borderRadius: '4px', boxSizing: 'border-box' }}>
+                <option value="">All Tiers</option>
+                <option value="1">1 - Everyday</option>
+                <option value="2">2 - Quality</option>
+                <option value="3">3 - Fine</option>
+                <option value="4">4 - Premium</option>
+                <option value="5">5 - Icon</option>
               </select>
             </div>
           </div>
