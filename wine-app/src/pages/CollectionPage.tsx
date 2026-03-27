@@ -17,6 +17,7 @@ export default function CollectionPage() {
   const [editingWine, setEditingWine] = useState<Wine | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [stats, setStats] = useState<any>(null)
+  const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
     loadStats()
@@ -62,6 +63,13 @@ export default function CollectionPage() {
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: 'red', color: 'white', padding: '20px', fontSize: '24px', zIndex: 999 }}>
         RED BANNER TEST
       </div>
+
+      <button
+        onClick={() => setShowFilters(!showFilters)}
+        style={{ position: 'fixed', top: '100px', left: '24px', padding: '8px 12px', background: '#ffbf00', color: '#402d00', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', zIndex: 40 }}
+      >
+        🔍 Filters
+      </button>
 
       <div className="px-6 max-w-7xl mx-auto py-8">
         {/* Hero Section */}
