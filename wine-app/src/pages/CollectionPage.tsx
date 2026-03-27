@@ -59,37 +59,38 @@ export default function CollectionPage() {
   }
 
   return (
-    <div className="px-6 max-w-7xl mx-auto py-8">
-      {/* Hero Section */}
-      <div className="mb-12">
-        <h2 className="font-headline text-5xl md:text-7xl mb-4 text-on-surface">Private Collection</h2>
-        <div className="flex items-baseline gap-4 mb-6">
-          <span className="text-primary font-label tracking-widest text-sm uppercase">
-            {stats?.totalBottles || 0} Bottles
-          </span>
-          <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
-          <span className="text-outline text-sm italic">
-            {wines.length} {wines.length === 1 ? 'Wine' : 'Wines'}
-          </span>
-        </div>
-
-        {/* Add Wine Button */}
-        <div className="flex justify-end">
-          <button
-            onClick={() => {
-              setEditingWine(null)
-              setShowForm(true)
-            }}
-            className="flex items-center gap-2 bg-primary-container text-on-primary px-4 py-2 rounded font-medium hover:bg-primary transition-colors active:scale-95"
-          >
-            <span className="material-symbols-outlined">add</span>
-            Add Wine
-          </button>
-        </div>
-      </div>
-
-      {/* Filter Panel */}
+    <>
+      {/* Filter Panel (Top-Level) */}
       <FilterPanel />
+
+      <div className="px-6 max-w-7xl mx-auto py-8">
+        {/* Hero Section */}
+        <div className="mb-12">
+          <h2 className="font-headline text-5xl md:text-7xl mb-4 text-on-surface">Private Collection</h2>
+          <div className="flex items-baseline gap-4 mb-6">
+            <span className="text-primary font-label tracking-widest text-sm uppercase">
+              {stats?.totalBottles || 0} Bottles
+            </span>
+            <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
+            <span className="text-outline text-sm italic">
+              {wines.length} {wines.length === 1 ? 'Wine' : 'Wines'}
+            </span>
+          </div>
+
+          {/* Add Wine Button */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setEditingWine(null)
+                setShowForm(true)
+              }}
+              className="flex items-center gap-2 bg-primary-container text-on-primary px-4 py-2 rounded font-medium hover:bg-primary transition-colors active:scale-95"
+            >
+              <span className="material-symbols-outlined">add</span>
+              Add Wine
+            </button>
+          </div>
+        </div>
 
       {/* Loading */}
       {loading && (
@@ -159,6 +160,7 @@ export default function CollectionPage() {
           isLoading={loading}
         />
       )}
-    </div>
+      </div>
+    </>
   )
 }
