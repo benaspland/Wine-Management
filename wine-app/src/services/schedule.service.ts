@@ -321,26 +321,49 @@ export class ScheduleService {
         continue
       }
 
-      // Build batch for this delivery slot
+      // Build batch for this delivery slot with intelligent diversity
+      // Goal: Fill capacity while maintaining tier/region variety for choice
       const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
       let bottleCount = 0
       let wineCount = 0
 
-      for (const wine of availableWines) {
-        if (wineCount >= remainingCapacity) {
-          break
+      // Group available wines by tier for diverse selection
+      const winesByTierForDelivery: Record<number, Wine[]> = {}
+      for (let t = 1; t <= 5; t++) {
+        winesByTierForDelivery[t] = availableWines.filter(w => w.tier === t)
+      }
+
+      // Accumulate wines with tier-weighted distribution for variety
+      // Prioritize across tiers rather than exhausting one tier
+      const tiersInOrder = [1, 2, 3, 4, 5] // Start with accessible, end with premium
+      let rotations = 0
+      const maxRotations = 3 // Prevent infinite loop
+
+      while (wineCount < remainingCapacity && rotations < maxRotations) {
+        for (const tier of tiersInOrder) {
+          if (wineCount >= remainingCapacity) {
+            break
+          }
+
+          const tierwines = winesByTierForDelivery[tier]
+          const unscheduledInTier = tierwines.filter(
+            w => !deliveryBatch.some(db => db.wine.id === w.id)
+          )
+
+          if (unscheduledInTier.length === 0) {
+            continue
+          }
+
+          const wine = unscheduledInTier[0] // Take next unscheduled wine from this tier
+          const minThreshold = this.getMinDeliveryThreshold(wine.format)
+          const quantityToDeliver = wine.quantity < minThreshold ? wine.quantity : minThreshold
+
+          deliveryBatch.push({ wine, quantity: quantityToDeliver })
+          bottleCount += quantityToDeliver
+          wineCount += 1
         }
 
-        const minThreshold = this.getMinDeliveryThreshold(wine.format)
-        const quantityToDeliver = wine.quantity < minThreshold ? wine.quantity : minThreshold
-
-        deliveryBatch.push({ wine, quantity: quantityToDeliver })
-        bottleCount += quantityToDeliver
-        wineCount += 1
-
-        if (bottleCount >= minDeliveryBottles) {
-          break // Stop accumulating once we hit minimum
-        }
+        rotations++
       }
 
       // Only create delivery if we meet 24-bottle minimum
