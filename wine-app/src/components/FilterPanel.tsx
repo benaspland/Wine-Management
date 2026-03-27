@@ -1,7 +1,11 @@
 import { useWineStore } from '../store/wineStore'
-import { useMemo } from 'react'
+import { useIsDesktop } from '../hooks/useMediaQuery'
+import { useMemo, useState } from 'react'
 
 export default function FilterPanel() {
+  const isDesktop = useIsDesktop()
+  const [isOpen, setIsOpen] = useState(false)
+
   const wines = useWineStore(state => state.wines)
   const locationFilter = useWineStore(state => state.locationFilter)
   const tierFilter = useWineStore(state => state.tierFilter)
@@ -43,8 +47,9 @@ export default function FilterPanel() {
     wineTypeFilter ||
     formatFilter
 
-  return (
-    <div className="bg-surface-container-low rounded-lg p-6 mb-8 border border-outline-variant/10">
+  // Filter content component
+  const FilterContent = () => (
+    <>
       {/* Search */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-outline mb-2">Search</label>
@@ -58,7 +63,7 @@ export default function FilterPanel() {
       </div>
 
       {/* Filters Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="space-y-4 mb-6">
         {/* Location */}
         <div>
           <label className="block text-sm font-medium text-outline mb-2">Location</label>
@@ -177,11 +182,96 @@ export default function FilterPanel() {
       {hasActiveFilters && (
         <button
           onClick={clearFilters}
-          className="px-4 py-2 text-sm bg-primary-container text-on-primary hover:opacity-90 rounded font-medium transition-opacity"
+          className="w-full px-4 py-2 text-sm bg-primary-container text-on-primary hover:opacity-90 rounded font-medium transition-opacity"
         >
           Clear All Filters
         </button>
       )}
-    </div>
+    </>
+  )
+
+  // Desktop: Side Drawer
+  if (isDesktop) {
+    return (
+      <>
+        {/* Filter Toggle Button */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="fixed top-6 left-6 z-40 p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity md:relative md:mb-6 md:top-0 md:left-0"
+          title="Toggle filters"
+        >
+          <span className="material-symbols-outlined">tune</span>
+        </button>
+
+        {/* Side Drawer Overlay */}
+        {isOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-30 md:hidden"
+            onClick={() => setIsOpen(false)}
+          />
+        )}
+
+        {/* Side Drawer */}
+        <div
+          className={`fixed left-0 top-0 h-screen w-80 bg-surface-container-low border-r border-outline-variant/10 p-6 overflow-y-auto z-40 transition-transform duration-300 ${
+            isOpen ? 'translate-x-0' : '-translate-x-full'
+          } md:relative md:translate-x-0 md:h-auto md:w-auto md:border-r-0 md:border-b md:p-6 md:mb-8 md:rounded-lg`}
+        >
+          {/* Close Button (Mobile) */}
+          <button
+            onClick={() => setIsOpen(false)}
+            className="absolute top-4 right-4 p-2 hover:bg-surface-container rounded md:hidden"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
+
+          {/* Drawer Title */}
+          <h2 className="text-lg font-semibold text-on-surface mb-6 mt-8 md:hidden">Filters</h2>
+
+          {/* Filter Content */}
+          <FilterContent />
+        </div>
+      </>
+    )
+  }
+
+  // Mobile: Bottom Sheet
+  return (
+    <>
+      {/* Filter Toggle Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full mb-6 p-3 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 font-medium"
+      >
+        <span className="material-symbols-outlined">tune</span>
+        Filters
+      </button>
+
+      {/* Bottom Sheet Overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Bottom Sheet */}
+      <div
+        className={`fixed bottom-0 left-0 right-0 bg-surface-container-low rounded-t-2xl p-6 z-40 transition-transform duration-300 max-h-[80vh] overflow-y-auto ${
+          isOpen ? 'translate-y-0' : 'translate-y-full'
+        }`}
+      >
+        {/* Handle Bar */}
+        <div className="flex justify-center mb-4">
+          <div className="w-12 h-1 bg-outline-variant/30 rounded-full" />
+        </div>
+
+        {/* Sheet Title */}
+        <h2 className="text-lg font-semibold text-on-surface mb-6">Filters</h2>
+
+        {/* Filter Content */}
+        <FilterContent />
+      </div>
+    </>
   )
 }
