@@ -17,7 +17,6 @@ export default function CollectionPage() {
   const [editingWine, setEditingWine] = useState<Wine | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [stats, setStats] = useState<any>(null)
-  const [filterOpen, setFilterOpen] = useState(false)
 
   useEffect(() => {
     loadStats()
@@ -60,39 +59,10 @@ export default function CollectionPage() {
 
   return (
     <>
-      {/* Filter Toggle Button */}
-      <button
-        onClick={() => {
-          console.log('Filter toggled! Now:', !filterOpen)
-          setFilterOpen(!filterOpen)
-        }}
-        className="fixed top-6 left-6 z-40 flex items-center justify-center p-2 bg-primary-container text-on-primary rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
-        title="Toggle filters"
-      >
-        <span className="material-symbols-outlined">tune</span>
-      </button>
-
-      {/* Filter Drawer Overlay */}
-      {filterOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-30"
-          onClick={() => setFilterOpen(false)}
-        />
-      )}
-
-      {/* Filter Drawer */}
-      {filterOpen && (
-        <div className="fixed left-0 top-0 h-screen w-80 bg-surface-container-low border-r border-outline-variant/10 p-6 overflow-y-auto z-40 flex flex-col">
-          <button
-            onClick={() => setFilterOpen(false)}
-            className="absolute top-4 right-4 p-2 hover:bg-surface-container rounded"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-          <h2 className="text-lg font-semibold text-on-surface mb-6 mt-8">Filters</h2>
-          <p className="text-outline">Filter panel content goes here</p>
-        </div>
-      )}
+      {/* HUGE TEST BANNER */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: 'red', color: 'white', padding: '20px', fontSize: '24px', zIndex: 999 }}>
+        TEST BANNER - IF YOU SEE THIS, CODE IS LOADING
+      </div>
 
       <div className="px-6 max-w-7xl mx-auto py-8">
         {/* Hero Section */}
