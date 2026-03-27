@@ -14,6 +14,10 @@ interface WineStore {
   locationFilter: 'all' | 'home' | 'storage'
   tierFilter: number | null
   searchTerm: string
+  regionFilter: string | null
+  countryFilter: string | null
+  wineTypeFilter: string | null
+  formatFilter: string | null
   sortBy: 'vintage' | 'tier' | 'producer'
 
   // Actions
@@ -29,8 +33,13 @@ interface WineStore {
   setLocationFilter: (filter: 'all' | 'home' | 'storage') => void
   setTierFilter: (tier: number | null) => void
   setSearchTerm: (term: string) => void
+  setRegionFilter: (region: string | null) => void
+  setCountryFilter: (country: string | null) => void
+  setWineTypeFilter: (type: string | null) => void
+  setFormatFilter: (format: string | null) => void
   setSortBy: (sort: 'vintage' | 'tier' | 'producer') => void
   applyFilters: () => void
+  clearFilters: () => void
 
   getStats: () => Promise<any>
 }
@@ -45,6 +54,10 @@ export const useWineStore = create<WineStore>((set, get) => ({
   locationFilter: 'all',
   tierFilter: null,
   searchTerm: '',
+  regionFilter: null,
+  countryFilter: null,
+  wineTypeFilter: null,
+  formatFilter: null,
   sortBy: 'vintage',
 
   loadWines: async () => {
@@ -165,13 +178,56 @@ export const useWineStore = create<WineStore>((set, get) => ({
     get().loadWines()
   },
 
+  setRegionFilter: (region) => {
+    set({ regionFilter: region })
+    get().loadWines()
+  },
+
+  setCountryFilter: (country) => {
+    set({ countryFilter: country })
+    get().loadWines()
+  },
+
+  setWineTypeFilter: (type) => {
+    set({ wineTypeFilter: type })
+    get().loadWines()
+  },
+
+  setFormatFilter: (format) => {
+    set({ formatFilter: format })
+    get().loadWines()
+  },
+
   setSortBy: (sort) => {
     set({ sortBy: sort })
     get().loadWines()
   },
 
+  clearFilters: () => {
+    set({
+      locationFilter: 'all',
+      tierFilter: null,
+      searchTerm: '',
+      regionFilter: null,
+      countryFilter: null,
+      wineTypeFilter: null,
+      formatFilter: null,
+    })
+    get().loadWines()
+  },
+
   applyFilters: () => {
-    const { wines, locationFilter, tierFilter, searchTerm, sortBy } = get()
+    const {
+      wines,
+      locationFilter,
+      tierFilter,
+      searchTerm,
+      regionFilter,
+      countryFilter,
+      wineTypeFilter,
+      formatFilter,
+      sortBy,
+    } = get()
 
     let filtered = wines
 
@@ -191,6 +247,22 @@ export const useWineStore = create<WineStore>((set, get) => ({
           w.name.toLowerCase().includes(term) ||
           w.region.toLowerCase().includes(term)
       )
+    }
+
+    if (regionFilter) {
+      filtered = filtered.filter(w => w.region === regionFilter)
+    }
+
+    if (countryFilter) {
+      filtered = filtered.filter(w => w.country === countryFilter)
+    }
+
+    if (wineTypeFilter) {
+      filtered = filtered.filter(w => w.wine_type === wineTypeFilter)
+    }
+
+    if (formatFilter) {
+      filtered = filtered.filter(w => w.format === formatFilter)
     }
 
     if (sortBy === 'tier') {

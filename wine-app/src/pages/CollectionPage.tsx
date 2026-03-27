@@ -2,15 +2,13 @@ import { useEffect, useState } from 'react'
 import type { Wine } from '../types/index'
 import { useWineStore } from '../store/wineStore'
 import WineCard from '../components/WineCard'
-import LocationFilter from '../components/LocationFilter'
+import FilterPanel from '../components/FilterPanel'
 import WineDetailPanel from '../components/WineDetailPanel'
 import WineForm from '../components/WineForm'
 
 export default function CollectionPage() {
   const wines = useWineStore(state => state.filteredWines)
   const loading = useWineStore(state => state.loading)
-  const locationFilter = useWineStore(state => state.locationFilter)
-  const setLocationFilter = useWineStore(state => state.setLocationFilter)
   const consumeWine = useWineStore(state => state.consumeWine)
   const moveWineToHome = useWineStore(state => state.moveWineToHome)
   const updateWine = useWineStore(state => state.updateWine)
@@ -75,9 +73,8 @@ export default function CollectionPage() {
           </span>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          <LocationFilter value={locationFilter} onChange={setLocationFilter} />
+        {/* Add Wine Button */}
+        <div className="flex justify-end">
           <button
             onClick={() => {
               setEditingWine(null)
@@ -90,6 +87,9 @@ export default function CollectionPage() {
           </button>
         </div>
       </div>
+
+      {/* Filter Panel */}
+      <FilterPanel />
 
       {/* Loading */}
       {loading && (
