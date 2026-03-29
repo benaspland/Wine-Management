@@ -1,12 +1,15 @@
 import type { Wine, DeliveryScheduleEntry } from '../types/index'
 import { DELIVERY_CONFIG, getMinDeliveryThreshold } from '../config/deliveryConfig'
 
-// Debug logging helper - only logs in development
+// Debug logging helper - logs in development and when explicitly enabled
 const debugLog = (...args: any[]) => {
-  // Only log in development/Vite dev mode
-  // Suppress in production to keep logs clean
-  if (typeof window !== 'undefined' && (window as any).__DEV__) {
-    console.log(...args)
+  // Log in development/Vite dev mode OR if explicitly enabled
+  const isDev = typeof window !== 'undefined' && (window as any).__DEV__
+  const isDebugEnabled = typeof window !== 'undefined' && (window as any).__SCHEDULE_DEBUG__
+
+  if (isDev || isDebugEnabled) {
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0]
+    console.log(`[${timestamp}]`, ...args)
   }
 }
 
@@ -273,10 +276,12 @@ export class ScheduleService {
     deliveryMonths: [number, number] = [3, 9], // March and September
     annualConsumptionTarget: number = 30 // From config
   ): DeliveryScheduleEntry[] {
+    console.log('[ScheduleService] ✓ generateDeliverySchedule called')
     const schedule: DeliveryScheduleEntry[] = []
     const storageWines = allWines.filter(w => w.location === 'storage')
 
     if (storageWines.length === 0) {
+      console.log('[ScheduleService] ✓ No storage wines, returning empty schedule')
       return []
     }
 
@@ -285,6 +290,9 @@ export class ScheduleService {
     const currentMonth = now.getMonth() + 1
     const minDeliveryBottles = DELIVERY_CONFIG.minBottles
 
+    console.log(
+      `[ScheduleService] ✓ Starting delivery schedule generation: ${storageWines.length} wines, ${currentBottlesAtHome} bottles at home`
+    )
     debugLog(
       `[ScheduleService] Starting delivery schedule generation: ${storageWines.length} wines, ${currentBottlesAtHome} bottles at home`
     )
@@ -322,7 +330,20 @@ export class ScheduleService {
 
     // MAIN LOOP: Continue until all wines scheduled or safety limit exceeded
     let noProgressIterations = 0
+    let loopIterations = 0
+    const maxLoopIterations = 200 // Safety limit: 200 delivery slots max (100+ years worth)
+
     while (scheduledWineIds.size < candidateWines.length) {
+      loopIterations++
+
+      if (loopIterations % 50 === 0) {
+        debugLog(`[ScheduleService] Loop iteration ${loopIterations}, scheduled: ${scheduledWineIds.size}/${candidateWines.length}`)
+      }
+
+      if (loopIterations > maxLoopIterations) {
+        debugLog('[ScheduleService] ERROR: Exceeded max loop iterations, stopping algorithm')
+        break
+      }
       // Step 1-2: Skip past months in current year
       const month = deliveryMonths[monthIndex]
       if (year === currentYear && month < currentMonth) {
@@ -492,10 +513,17 @@ export class ScheduleService {
     const totalBottlesScheduled = schedule.reduce((sum, d) => sum + d.quantity, 0)
     const totalBottlesAvailable = candidateWines.reduce((sum, w) => sum + w.quantity, 0)
 
+    console.log('[ScheduleService] ✓ Delivery scheduling complete:')
+    console.log(`  Wines scheduled: ${scheduledWineIds.size} / ${candidateWines.length}`)
+    console.log(`  Bottles scheduled: ${totalBottlesScheduled} / ${totalBottlesAvailable}`)
+    console.log(`  Total deliveries: ${Object.values(deliveriesPerYear).reduce((a, b) => a + b, 0)}`)
+    console.log(`  Loop iterations: ${loopIterations}`)
+
     debugLog('[ScheduleService] Delivery scheduling complete:')
     debugLog(`  Wines scheduled: ${scheduledWineIds.size} / ${candidateWines.length}`)
     debugLog(`  Bottles scheduled: ${totalBottlesScheduled} / ${totalBottlesAvailable}`)
     debugLog(`  Total deliveries: ${Object.values(deliveriesPerYear).reduce((a, b) => a + b, 0)}`)
+    debugLog(`  Loop iterations: ${loopIterations}`)
     debugLog(`  Deliveries by year:`, deliveriesPerYear)
 
     return schedule
