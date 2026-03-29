@@ -336,8 +336,8 @@ export class ScheduleService {
     while (scheduledWineIds.size < candidateWines.length) {
       loopIterations++
 
-      if (loopIterations % 50 === 0) {
-        debugLog(`[ScheduleService] Loop iteration ${loopIterations}, scheduled: ${scheduledWineIds.size}/${candidateWines.length}`)
+      if (loopIterations % 10 === 0) {
+        console.log(`[Loop ${loopIterations}] Year ${year}, Month ${month}, Scheduled ${scheduledWineIds.size}/${candidateWines.length}, Inventory ${projectedInventory}, Capacity ${availableCapacity}`)
       }
 
       if (loopIterations > maxLoopIterations) {
@@ -397,6 +397,10 @@ export class ScheduleService {
         // The drinking schedule will enforce window constraints during consumption
         return true
       })
+
+      if (loopIterations % 20 === 0) {
+        console.log(`  → Eligible wines: ${eligibleWines.length}, Capacity: ${availableCapacity}`)
+      }
 
       if (eligibleWines.length > 0) {
         // Calculate scores for each wine
