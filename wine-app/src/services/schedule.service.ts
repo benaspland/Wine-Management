@@ -305,12 +305,10 @@ export class ScheduleService {
     let monthIndex = 0
 
     // Filter candidate wines (basic constraints)
+    // NOTE: Tier 4-5 constraint is applied during eligible wine filtering per delivery slot,
+    // not here, so we don't eliminate wines from the entire schedule
     const candidateWines = storageWines.filter(w => {
       if (w.quantity === 0) return false
-      // Tier 4-5 constraint: never before 2029
-      if (w.tier >= 4 && w.drinking_window_start < DELIVERY_CONFIG.tier45StartYear) {
-        return false
-      }
       return true
     })
 
