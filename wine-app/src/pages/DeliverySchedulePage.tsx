@@ -85,12 +85,13 @@ export default function DeliverySchedulePage() {
         format: string
       }>> = {}
 
-      // Load delayed wines for the next delivery to filter them from display
+      // Load delayed and pinned wines for the next delivery
       const nextDeliveryDate = Object.entries(grouped)
         .map(([date]) => date)
         .sort()[0] // First date chronologically
 
       const nextDelayedWines = nextDeliveryDate ? await db.getDelayedWines(nextDeliveryDate) : []
+      const nextPinnedWines = nextDeliveryDate ? await db.getPinnedWines(nextDeliveryDate) : []
 
       deliverySchedule.forEach(entry => {
         // Skip delayed wines in the current (next) delivery, but include them in future deliveries
@@ -119,6 +120,38 @@ export default function DeliverySchedulePage() {
           })
         }
       })
+
+      // Ensure pinned wines are in the current delivery
+      // (They should already be there from the algorithm, but this guarantees it)
+      if (nextDeliveryDate && nextPinnedWines.length > 0) {
+        if (!grouped[nextDeliveryDate]) {
+          grouped[nextDeliveryDate] = []
+        }
+
+        const currentDeliveryWineIds = new Set(grouped[nextDeliveryDate].map(w => w.id))
+
+        for (const pinnedWineId of nextPinnedWines) {
+          if (!currentDeliveryWineIds.has(pinnedWineId)) {
+            const wine = wines.find(w => w.id === pinnedWineId)
+            if (wine) {
+              // Find the original scheduled entry to get the quantity
+              const originalEntry = deliverySchedule.find(
+                e => e.wine_id === pinnedWineId && e.scheduled_date === nextDeliveryDate
+              )
+              grouped[nextDeliveryDate].push({
+                id: wine.id,
+                producer: wine.producer,
+                name: wine.name,
+                vintage: wine.vintage,
+                region: wine.region,
+                tier: wine.tier,
+                quantity: originalEntry?.quantity || wine.quantity,
+                format: wine.format,
+              })
+            }
+          }
+        }
+      }
 
       // Convert to array format, sorted by date
       const datesSorted = Object.entries(grouped)
@@ -260,7 +293,18 @@ export default function DeliverySchedulePage() {
     setIsPromoting(true)
     try {
       if (promotionDialog.fromDeliveryDate) {
-        await promoteWineToCurrentDelivery(promotionDialog.wine.id, promotionDialog.fromDeliveryDate)
+        // Get current delivery date (first upcoming delivery)
+        const allDeliveries = Object.values(deliveriesByYear)
+          .flat()
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        const currentDelivery = allDeliveries[0]
+        const currentDeliveryDate = currentDelivery?.date
+
+        await promoteWineToCurrentDelivery(
+          promotionDialog.wine.id,
+          promotionDialog.fromDeliveryDate,
+          currentDeliveryDate
+        )
         setMessage({
           type: 'success',
           text: `${promotionDialog.wine.name} promoted to current delivery`,
