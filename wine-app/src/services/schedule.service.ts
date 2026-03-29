@@ -1,5 +1,5 @@
 import type { Wine, DeliveryScheduleEntry } from '../types/index'
-import { DELIVERY_CONFIG } from '../config/deliveryConfig'
+import { DELIVERY_CONFIG, getMinDeliveryThreshold } from '../config/deliveryConfig'
 
 // Debug logging helper - only logs in development
 const debugLog = (...args: any[]) => {
@@ -407,7 +407,7 @@ export class ScheduleService {
 
         if (unscheduledFromProducer.length > 0) {
           const wine = unscheduledFromProducer[0]
-          const minThreshold = this.getMinDeliveryThreshold(wine.format)
+          const minThreshold = getMinDeliveryThreshold(wine.format)
           const quantityToDeliver = wine.quantity < minThreshold ? wine.quantity : minThreshold
 
           deliveryBatch.push({ wine, quantity: quantityToDeliver })
@@ -498,11 +498,4 @@ export class ScheduleService {
     }
   }
 
-  private static getMinDeliveryThreshold(format: string): number {
-    // Thresholds based on bottle format, not tier
-    if (format.includes('375') || format.includes('half')) return 12 // Half bottles
-    if (format.includes('1.5') || format.includes('magnum')) return 3 // Magnum
-    // Default for 750ml and other formats
-    return 6
-  }
 }
