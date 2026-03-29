@@ -336,16 +336,16 @@ export class ScheduleService {
     while (scheduledWineIds.size < candidateWines.length) {
       loopIterations++
 
-      if (loopIterations % 10 === 0) {
-        console.log(`[Loop ${loopIterations}] Year ${year}, Month ${month}, Scheduled ${scheduledWineIds.size}/${candidateWines.length}, Inventory ${projectedInventory}, Capacity ${availableCapacity}`)
-      }
-
       if (loopIterations > maxLoopIterations) {
         debugLog('[ScheduleService] ERROR: Exceeded max loop iterations, stopping algorithm')
         break
       }
       // Step 1-2: Skip past months in current year
       const month = deliveryMonths[monthIndex]
+
+      if (loopIterations % 10 === 0) {
+        console.log(`[Loop ${loopIterations}] Year ${year}, Month ${month}, Scheduled ${scheduledWineIds.size}/${candidateWines.length}, Inventory ${projectedInventory}, Capacity ${availableCapacity}`)
+      }
       if (year === currentYear && month < currentMonth) {
         monthIndex = (monthIndex + 1) % deliveryMonths.length
         if (monthIndex === 0) year++
