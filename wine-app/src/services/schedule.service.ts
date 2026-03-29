@@ -331,7 +331,7 @@ export class ScheduleService {
     // MAIN LOOP: Continue until all wines scheduled or safety limit exceeded
     let noProgressIterations = 0
     let loopIterations = 0
-    const maxLoopIterations = 200 // Safety limit: 200 delivery slots max (100+ years worth)
+    const maxLoopIterations = 500 // Safety limit: 500 delivery slots max (~250 years worth, should complete in <100)
 
     while (scheduledWineIds.size < candidateWines.length) {
       loopIterations++
@@ -391,10 +391,10 @@ export class ScheduleService {
 
       // Constraint filtering
       const eligibleWines = unscheduledWines.filter(w => {
-        // Wine's drinking window must have started by this year
-        if (w.drinking_window_start > year) return false
         // Tier 4-5 cannot be delivered before 2029
         if (w.tier >= 4 && year < DELIVERY_CONFIG.tier45StartYear) return false
+        // All other wines can be delivered (even before their window starts)
+        // The drinking schedule will enforce window constraints during consumption
         return true
       })
 
