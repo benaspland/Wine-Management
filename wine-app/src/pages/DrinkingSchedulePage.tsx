@@ -115,15 +115,37 @@ export default function DrinkingSchedulePage() {
       // Group schedule entries by year/month for timeline display
       const grouped: Record<string, ScheduleEntry['wines']> = {}
 
-      // Check consumption status for each wine entry
+      // Batch load consumption status - eliminates N+1 queries
+      // Group unique wine IDs and their year/month combos
+      const periodMap = new Map<string, { year: number; month: number; wineIds: string[] }>()
+
+      drinkingSchedule.forEach(entry => {
+        const periodKey = `${entry.suggestedYear}-${entry.suggestedMonth}`
+        if (!periodMap.has(periodKey)) {
+          periodMap.set(periodKey, {
+            year: entry.suggestedYear,
+            month: entry.suggestedMonth,
+            wineIds: [],
+          })
+        }
+        const period = periodMap.get(periodKey)!
+        if (!period.wineIds.includes(entry.wineId)) {
+          period.wineIds.push(entry.wineId)
+        }
+      })
+
+      // Load consumption status for each period's wines in batch
       const consumptionStatus = new Map<string, { consumed: boolean; consumedDate?: string }>()
 
-      for (const entry of drinkingSchedule) {
-        const statusKey = `${entry.wineId}-${entry.suggestedYear}-${entry.suggestedMonth}`
-        const consumptionInfo = await db.isWineConsumedInPeriod(entry.wineId, entry.suggestedYear, entry.suggestedMonth)
-        consumptionStatus.set(statusKey, consumptionInfo)
+      for (const [_, period] of periodMap) {
+        const batchStatus = await db.getConsumptionStatusBatch(period.wineIds, period.year, period.month)
+        for (const [wineId, status] of batchStatus) {
+          const statusKey = `${wineId}-${period.year}-${period.month}`
+          consumptionStatus.set(statusKey, status)
+        }
       }
 
+      // Build schedule with consumption info
       drinkingSchedule.forEach(entry => {
         const key = `${entry.suggestedYear}-${entry.suggestedMonth}`
         if (!grouped[key]) {

@@ -410,7 +410,7 @@ export async function deleteWine(id: string): Promise<void> {
 
 export async function isWineConsumedInPeriod(wineId: string, year: number, month: number): Promise<{ consumed: boolean; consumedDate?: string }> {
   const result = await executeQuery(
-    'SELECT consumed_date FROM consumption_log WHERE wine_id = ? ORDER BY created_at DESC LIMIT 1',
+    'SELECT consumed_date, notes FROM consumption_log WHERE wine_id = ? ORDER BY created_at DESC LIMIT 1',
     [wineId]
   )
 
@@ -428,6 +428,54 @@ export async function isWineConsumedInPeriod(wineId: string, year: number, month
   }
 
   return { consumed: false }
+}
+
+// Batch load consumption status for multiple wines - eliminates N+1 queries
+export async function getConsumptionStatusBatch(
+  wineIds: string[],
+  year: number,
+  month: number
+): Promise<Map<string, { consumed: boolean; consumedDate?: string }>> {
+  if (wineIds.length === 0) {
+    return new Map()
+  }
+
+  const schedulePattern = `Schedule: ${year}-${String(month).padStart(2, '0')}`
+  const result = await executeQuery(
+    'SELECT wine_id, consumed_date, notes FROM consumption_log WHERE wine_id IN (' +
+    wineIds.map(() => '?').join(',') +
+    ') ORDER BY wine_id, created_at DESC',
+    wineIds
+  )
+
+  // Process results - one entry per wine (most recent)
+  const statusMap = new Map<string, { consumed: boolean; consumedDate?: string }>()
+  const seenWines = new Set<string>()
+
+  const allRows = result.values || []
+  for (const row of allRows) {
+    if (seenWines.has(row.wine_id)) continue // Already processed this wine
+    seenWines.add(row.wine_id)
+
+    const notes = row.notes || ''
+    if (notes.includes(schedulePattern)) {
+      statusMap.set(row.wine_id, {
+        consumed: true,
+        consumedDate: row.consumed_date,
+      })
+    } else {
+      statusMap.set(row.wine_id, { consumed: false })
+    }
+  }
+
+  // Add entries for wines with no consumption log
+  for (const wineId of wineIds) {
+    if (!statusMap.has(wineId)) {
+      statusMap.set(wineId, { consumed: false })
+    }
+  }
+
+  return statusMap
 }
 
 export async function consumeWine(
@@ -471,26 +519,39 @@ export async function moveWineLocation(wineId: string, toLocation: 'home' | 'sto
   ])
 }
 
-// Delivery delay management
-export async function delayWineFromDelivery(wineId: string, deliveryDate: string): Promise<void> {
+// Generic delivery marker functions (used for delays and pins)
+async function insertDeliveryMarker(table: 'delivery_delays' | 'delivery_pins', wineId: string, deliveryDate: string): Promise<void> {
   const id = generateId()
   const now = new Date().toISOString()
   await executeQuery(
-    'INSERT INTO delivery_delays (id, wine_id, delivery_date, created_at) VALUES (?, ?, ?, ?)',
+    `INSERT INTO ${table} (id, wine_id, delivery_date, created_at) VALUES (?, ?, ?, ?)`,
     [id, wineId, deliveryDate, now]
   )
 }
 
-export async function getDelayedWines(deliveryDate: string): Promise<string[]> {
+async function getDeliveryMarkers(table: 'delivery_delays' | 'delivery_pins', deliveryDate: string): Promise<string[]> {
   const result = await executeQuery(
-    'SELECT wine_id FROM delivery_delays WHERE delivery_date = ?',
+    `SELECT wine_id FROM ${table} WHERE delivery_date = ?`,
     [deliveryDate]
   )
   return (result.values || []).map((row: any) => row.wine_id)
 }
 
+async function clearDeliveryMarkers(table: 'delivery_delays' | 'delivery_pins', deliveryDate: string): Promise<void> {
+  await executeQuery(`DELETE FROM ${table} WHERE delivery_date = ?`, [deliveryDate])
+}
+
+// Delivery delay management
+export async function delayWineFromDelivery(wineId: string, deliveryDate: string): Promise<void> {
+  await insertDeliveryMarker('delivery_delays', wineId, deliveryDate)
+}
+
+export async function getDelayedWines(deliveryDate: string): Promise<string[]> {
+  return getDeliveryMarkers('delivery_delays', deliveryDate)
+}
+
 export async function clearDelayMarks(deliveryDate: string): Promise<void> {
-  await executeQuery('DELETE FROM delivery_delays WHERE delivery_date = ?', [deliveryDate])
+  await clearDeliveryMarkers('delivery_delays', deliveryDate)
   // Also clear pin marks when delivery is completed
   await clearPinMarks(deliveryDate)
 }
@@ -505,24 +566,15 @@ export async function isWineDelayed(wineId: string, deliveryDate: string): Promi
 
 // Delivery pin management (for promoted wines that must stay in current delivery)
 export async function pinWineToCurrentDelivery(wineId: string, deliveryDate: string): Promise<void> {
-  const id = generateId()
-  const now = new Date().toISOString()
-  await executeQuery(
-    'INSERT INTO delivery_pins (id, wine_id, delivery_date, created_at) VALUES (?, ?, ?, ?)',
-    [id, wineId, deliveryDate, now]
-  )
+  await insertDeliveryMarker('delivery_pins', wineId, deliveryDate)
 }
 
 export async function getPinnedWines(deliveryDate: string): Promise<string[]> {
-  const result = await executeQuery(
-    'SELECT wine_id FROM delivery_pins WHERE delivery_date = ?',
-    [deliveryDate]
-  )
-  return (result.values || []).map((row: any) => row.wine_id)
+  return getDeliveryMarkers('delivery_pins', deliveryDate)
 }
 
 export async function clearPinMarks(deliveryDate: string): Promise<void> {
-  await executeQuery('DELETE FROM delivery_pins WHERE delivery_date = ?', [deliveryDate])
+  await clearDeliveryMarkers('delivery_pins', deliveryDate)
 }
 
 export async function checkDeliveryCapacity(
