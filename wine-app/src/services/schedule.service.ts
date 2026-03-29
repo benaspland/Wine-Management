@@ -331,7 +331,7 @@ export class ScheduleService {
     // MAIN LOOP: Continue until all wines scheduled or safety limit exceeded
     let noProgressIterations = 0
     let loopIterations = 0
-    const maxLoopIterations = 500 // Safety limit: 500 delivery slots max (~250 years worth, should complete in <100)
+    const maxLoopIterations = 1000 // Safety limit: 1000 delivery slots max (~500 years worth)
 
     while (scheduledWineIds.size < candidateWines.length) {
       loopIterations++
@@ -418,8 +418,9 @@ export class ScheduleService {
           if (!homeProducers.has(wine.producer)) diversityBonus += 50
           if (!homeRegions.has(wine.region)) diversityBonus += 25
 
-          // Total score with urgency weighted heavily
-          const totalScore = urgencyScore * 100 + tierScore + diversityBonus
+          // Total score with balanced weighting to distribute wines across deliveries
+          // Reduced urgency multiplier (10x instead of 100x) to prevent all closing-window wines from being scheduled at once
+          const totalScore = urgencyScore * 10 + tierScore + diversityBonus
 
           return { wine, totalScore }
         })
