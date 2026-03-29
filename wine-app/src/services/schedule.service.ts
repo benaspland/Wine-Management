@@ -454,6 +454,119 @@ export class ScheduleService {
       projectedInventory = Math.max(0, projectedInventory - estimatedConsumptionThisSlot)
     }
 
+    // CRITICAL: Continue scheduling remaining wines beyond planning horizon
+    // This ensures ALL wines get scheduled, even if not enough capacity in initial slots
+    const unscheduledWines = candidateWines.filter(w => !scheduledWineIds.has(w.id))
+    if (unscheduledWines.length > 0) {
+      let continueYear = currentYear + yearsToSchedule
+      let continueMonth = deliveryMonths[0]
+
+      while (unscheduledWines.some(w => !scheduledWineIds.has(w.id))) {
+        const year = continueYear
+        const month = continueMonth
+
+        if (!deliveriesPerYear[year]) {
+          deliveriesPerYear[year] = 0
+        }
+        if (deliveriesPerYear[year] >= 2) {
+          continueYear++
+          continueMonth = deliveryMonths[0]
+          continue
+        }
+
+        const unscheduledForWindow = unscheduledWines.filter(
+          w => !scheduledWineIds.has(w.id) && w.drinking_window_start <= year
+        )
+
+        if (unscheduledForWindow.length === 0) {
+          const nextMonthIndex = (deliveryMonths.indexOf(month) + 1) % deliveryMonths.length
+          if (nextMonthIndex === 0) {
+            continueYear++
+          } else {
+            continueMonth = deliveryMonths[nextMonthIndex]
+          }
+          continue
+        }
+
+        const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
+        let bottleCount = 0
+        const targetDeliverySize = Math.min(cellarCapacity, Math.ceil(cellarCapacity * 0.75))
+
+        const winesByUrgency = unscheduledForWindow.sort(
+          (a, b) => a.drinking_window_start - b.drinking_window_start
+        )
+
+        const producerMap = new Map<string, Wine[]>()
+        winesByUrgency.forEach(w => {
+          if (!producerMap.has(w.producer)) {
+            producerMap.set(w.producer, [])
+          }
+          producerMap.get(w.producer)!.push(w)
+        })
+
+        let producerIndex = 0
+        const producers = Array.from(producerMap.keys())
+
+        while (bottleCount < targetDeliverySize && producers.length > 0) {
+          const producer = producers[producerIndex % producers.length]
+          const producerWines = producerMap.get(producer) || []
+          const unscheduledFromProducer = producerWines.filter(
+            w => !deliveryBatch.some(db => db.wine.id === w.id) && !scheduledWineIds.has(w.id)
+          )
+
+          if (unscheduledFromProducer.length > 0) {
+            const wine = unscheduledFromProducer[0]
+            const minThreshold = getMinDeliveryThreshold(wine.format)
+            const quantityToDeliver = wine.quantity < minThreshold ? wine.quantity : minThreshold
+
+            deliveryBatch.push({ wine, quantity: quantityToDeliver })
+            bottleCount += quantityToDeliver
+          }
+
+          producerIndex++
+
+          if (producers.every(p => producerMap.get(p)!.every(w => deliveryBatch.some(db => db.wine.id === w.id) || scheduledWineIds.has(w.id)))) {
+            break
+          }
+        }
+
+        if (bottleCount > 0) {
+          const scheduledDate = new Date(year, month - 1, 1)
+
+          for (const { wine, quantity } of deliveryBatch) {
+            schedule.push({
+              id: `delivery-${wine.id}-${year}-${month}`,
+              wine_id: wine.id,
+              quantity,
+              scheduled_date: scheduledDate.toISOString().split('T')[0],
+              from_location: 'storage',
+              to_location: 'home',
+              status: 'pending',
+              created_at: new Date().toISOString(),
+            })
+            scheduledWineIds.add(wine.id)
+          }
+
+          deliveriesPerYear[year]++
+          debugLog(
+            `[ScheduleService] Final delivery ${year}-${String(month).padStart(2, '0')}: ${bottleCount} bottles (catch-up batch)`
+          )
+        }
+
+        const nextMonthIndex = (deliveryMonths.indexOf(month) + 1) % deliveryMonths.length
+        if (nextMonthIndex === 0) {
+          continueYear++
+        } else {
+          continueMonth = deliveryMonths[nextMonthIndex]
+        }
+
+        if (continueYear > currentYear + 20) {
+          debugLog('[ScheduleService] WARNING: Exceeded year limit while scheduling remaining wines')
+          break
+        }
+      }
+    }
+
     debugLog(
       `[ScheduleService] Generated ${schedule.length} delivery entries across ${Object.values(deliveriesPerYear).reduce((a, b) => a + b, 0)} deliveries`
     )
@@ -486,16 +599,10 @@ export class ScheduleService {
     return Math.max(1, Math.min(12, targetMonth + monthVariation - 1))
   }
 
-  private static getConsumptionStatus(_wine: Wine, year: number): string {
-    const now = new Date().getFullYear()
-
-    if (year === now) {
-      return 'This Year'
-    } else if (year === now + 1) {
-      return 'Next Year'
-    } else {
-      return `${year}`
-    }
+  private static getConsumptionStatus(_wine: Wine, _year: number): string {
+    // Return empty string - year/month already shown in timeline structure
+    // Avoids "THIS YEAR" / "NEXT YEAR" clutter per user feedback
+    return ''
   }
 
 }

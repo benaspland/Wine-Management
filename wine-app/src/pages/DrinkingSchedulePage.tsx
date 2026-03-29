@@ -4,6 +4,7 @@ import { ScheduleService } from '../services/schedule.service'
 import * as db from '../services/database'
 import WineInfo from '../components/WineInfo'
 import MessageModal from '../components/MessageModal'
+import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 
 interface ScheduleEntry {
   month: string
@@ -90,8 +91,8 @@ export default function DrinkingSchedulePage() {
         wines,
         cellarCapacity,
         totalBottlesAtHome,
-        [3, 9], // Fixed delivery months: March and September
-        config.annual_consumption_target || 30
+        DELIVERY_CONFIG.months as [number, number],
+        config.annual_consumption_target || DELIVERY_CONFIG.annualTarget
       )
 
       if (wines.length === 0) {
