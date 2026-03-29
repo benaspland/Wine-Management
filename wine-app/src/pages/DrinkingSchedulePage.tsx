@@ -267,6 +267,8 @@ export default function DrinkingSchedulePage() {
                   {entry.wines.map((wine, idx) => {
                     const isConsumed = wine.consumed || false
                     const consumedDate = wine.consumedDate ? new Date(wine.consumedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : null
+                    const wineData = wines.find(w => w.id === wine.id)
+                    const isAtHome = wineData?.location === 'home'
 
                     return (
                       <div key={`${entry.year}-${entry.month}-${wine.id}-${idx}`} className="relative group">
@@ -304,6 +306,10 @@ export default function DrinkingSchedulePage() {
                           {isConsumed && consumedDate ? (
                             <div className="w-full py-2 px-3 bg-[#1A1A1A] rounded text-sm font-medium text-outline-variant text-center border border-outline-variant/20">
                               ✓ Consumed {consumedDate}
+                            </div>
+                          ) : !isAtHome ? (
+                            <div className="w-full py-2 px-3 bg-surface-container rounded text-sm font-medium text-outline-variant text-center border border-outline-variant/20">
+                              📦 In Storage (Pending Delivery)
                             </div>
                           ) : (
                             <button

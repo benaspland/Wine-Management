@@ -23,11 +23,14 @@ interface DeliveryDate {
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
   const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
+  const moveWineToHome = useWineStore(state => state.moveWineToHome)
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]))
   const [deliveriesByYear, setDeliveriesByYear] = useState<Record<number, DeliveryDate[]>>({})
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [lastRegenerated, setLastRegenerated] = useState<string>('')
+  const [isMoving, setIsMoving] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // Load cellar config and generate initial schedule
   useEffect(() => {
@@ -142,6 +145,25 @@ export default function DeliverySchedulePage() {
     return 'bg-surface-container-high text-on-surface-variant'
   }
 
+  const handleMarkDeliveryComplete = async (wineId: string, producerName: string, wineName: string) => {
+    setIsMoving(true)
+    try {
+      await moveWineToHome(wineId)
+      setMessage({
+        type: 'success',
+        text: `${producerName} ${wineName} delivered to home cellar`,
+      })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `Failed to complete delivery: ${(error as Error).message}`,
+      })
+    } finally {
+      setIsMoving(false)
+    }
+  }
+
   const availableSlots = cellarCapacity - totalBottlesAtHome
   const usedSlots = totalBottlesAtHome
   const years = Object.keys(deliveriesByYear)
@@ -150,6 +172,37 @@ export default function DeliverySchedulePage() {
 
   return (
     <div className="px-6 max-w-5xl mx-auto py-8">
+      {/* Message Notification */}
+      {message && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            className={`bg-surface rounded-lg shadow-lg p-8 max-w-md mx-4 ${
+              message.type === 'success'
+                ? 'border-l-4 border-l-[#00DCFF]'
+                : 'border-l-4 border-l-[#FF6B6B]'
+            }`}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`text-3xl ${message.type === 'success' ? 'text-[#00DCFF]' : 'text-[#FF6B6B]'}`}>
+                {message.type === 'success' ? '✓' : '✕'}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-headline text-lg font-bold text-on-surface mb-2">
+                  {message.type === 'success' ? 'Success' : 'Error'}
+                </h3>
+                <p className="text-on-surface text-sm">{message.text}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setMessage(null)}
+              className="mt-6 w-full bg-primary text-on-primary py-2 rounded font-medium hover:bg-primary/90 transition-colors"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="mb-12">
         <div className="flex items-start justify-between gap-6 mb-6">
@@ -294,8 +347,16 @@ export default function DeliverySchedulePage() {
                               </div>
                             </div>
 
-                            <div className="text-right flex items-center">
+                            <div className="flex flex-col items-end gap-3 ml-4">
                               <div className="text-2xl font-headline text-primary-container">{wine.quantity}x</div>
+                              <button
+                                onClick={() => handleMarkDeliveryComplete(wine.id, wine.producer, wine.name)}
+                                disabled={isMoving}
+                                className="px-3 py-2 bg-primary text-on-primary rounded text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                title="Move wine from storage to home cellar"
+                              >
+                                {isMoving ? 'Moving...' : 'Deliver'}
+                              </button>
                             </div>
                           </div>
                         ))}
