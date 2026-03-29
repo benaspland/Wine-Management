@@ -408,7 +408,33 @@ export async function deleteWine(id: string): Promise<void> {
   await executeQuery('DELETE FROM wines WHERE id = ?', [id])
 }
 
-export async function consumeWine(wineId: string, quantity: number = 1, notes?: string): Promise<void> {
+export async function isWineConsumedInPeriod(wineId: string, year: number, month: number): Promise<{ consumed: boolean; consumedDate?: string }> {
+  const result = await executeQuery(
+    'SELECT consumed_date FROM consumption_log WHERE wine_id = ? ORDER BY created_at DESC LIMIT 1',
+    [wineId]
+  )
+
+  if (!result.values?.length) {
+    return { consumed: false }
+  }
+
+  const logEntry = result.values[0]
+  const notes = logEntry.notes || ''
+
+  // Check if notes contain the schedule period this was consumed from
+  const schedulePattern = `Schedule: ${year}-${String(month).padStart(2, '0')}`
+  if (notes.includes(schedulePattern)) {
+    return { consumed: true, consumedDate: logEntry.consumed_date }
+  }
+
+  return { consumed: false }
+}
+  wineId: string,
+  quantity: number = 1,
+  notes?: string,
+  scheduleYear?: number,
+  scheduleMonth?: number
+): Promise<void> {
   const wine = await getWine(wineId)
   if (!wine) throw new Error(`Wine ${wineId} not found`)
   if (wine.quantity < quantity) throw new Error('Not enough bottles to consume')
@@ -416,12 +442,17 @@ export async function consumeWine(wineId: string, quantity: number = 1, notes?: 
   // Update wine quantity directly in database (more efficient than fetching full record)
   await executeQuery('UPDATE wines SET quantity = quantity - ? WHERE id = ?', [quantity, wineId])
 
-  // Log consumption
+  // Log consumption with optional schedule pinning info
   const logId = generateId()
   const now = new Date().toISOString()
+  const scheduleInfo = scheduleYear && scheduleMonth
+    ? `Schedule: ${scheduleYear}-${String(scheduleMonth).padStart(2, '0')}`
+    : null
+  const fullNotes = [notes, scheduleInfo].filter(Boolean).join(' | ')
+
   await executeQuery(
     'INSERT INTO consumption_log (id, wine_id, quantity, consumed_date, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [logId, wineId, quantity, now, notes || null, now]
+    [logId, wineId, quantity, now, fullNotes || null, now]
   )
 }
 

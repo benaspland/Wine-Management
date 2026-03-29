@@ -15,7 +15,14 @@ interface ScheduleEntry {
     region: string
     tier: number
     status: string
+    consumed?: boolean
+    consumedDate?: string
   }>
+}
+
+const MONTH_TO_NUMBER: Record<string, number> = {
+  January: 1, February: 2, March: 3, April: 4, May: 5, June: 6,
+  July: 7, August: 8, September: 9, October: 10, November: 11, December: 12
 }
 
 export default function DrinkingSchedulePage() {
@@ -32,17 +39,26 @@ export default function DrinkingSchedulePage() {
     generateDrinkingSchedule()
   }, [])
 
-  const handleMarkConsumed = async (wineId: string, producerName: string, wineName: string) => {
+  const handleMarkConsumed = async (
+    wineId: string,
+    producerName: string,
+    wineName: string,
+    scheduleYear: number,
+    scheduleMonth: number
+  ) => {
     setIsConsuming(true)
     try {
       const wine = wines.find(w => w.id === wineId)
       if (!wine) throw new Error('Wine not found')
 
-      // Consume 1 bottle of the wine
-      await db.consumeWine(wineId, 1, `Consumed from drinking schedule`)
+      // Consume 1 bottle of the wine with schedule pinning info
+      await db.consumeWine(wineId, 1, `Consumed from drinking schedule`, scheduleYear, scheduleMonth)
 
       // Reload wines to update quantities
       await loadWines()
+
+      // Regenerate schedule to show updated consumption status
+      await generateDrinkingSchedule()
 
       setMessage({
         type: 'success',
@@ -97,11 +113,23 @@ export default function DrinkingSchedulePage() {
       // Group schedule entries by year/month for timeline display
       const grouped: Record<string, ScheduleEntry['wines']> = {}
 
+      // Check consumption status for each wine entry
+      const consumptionStatus = new Map<string, { consumed: boolean; consumedDate?: string }>()
+
+      for (const entry of drinkingSchedule) {
+        const statusKey = `${entry.wineId}-${entry.suggestedYear}-${entry.suggestedMonth}`
+        const consumptionInfo = await db.isWineConsumedInPeriod(entry.wineId, entry.suggestedYear, entry.suggestedMonth)
+        consumptionStatus.set(statusKey, consumptionInfo)
+      }
+
       drinkingSchedule.forEach(entry => {
         const key = `${entry.suggestedYear}-${entry.suggestedMonth}`
         if (!grouped[key]) {
           grouped[key] = []
         }
+
+        const statusKey = `${entry.wineId}-${entry.suggestedYear}-${entry.suggestedMonth}`
+        const consumptionInfo = consumptionStatus.get(statusKey) || { consumed: false }
 
         grouped[key].push({
           id: entry.wineId,
@@ -111,6 +139,8 @@ export default function DrinkingSchedulePage() {
           region: entry.region,
           tier: entry.tier,
           status: entry.status,
+          consumed: consumptionInfo.consumed,
+          consumedDate: consumptionInfo.consumedDate,
         })
       })
 
@@ -153,12 +183,12 @@ export default function DrinkingSchedulePage() {
           <div
             className={`bg-surface rounded-lg shadow-lg p-8 max-w-md mx-4 ${
               message.type === 'success'
-                ? 'border-l-4 border-l-green-500'
-                : 'border-l-4 border-l-red-500'
+                ? 'border-l-4 border-l-[#00DCFF]'
+                : 'border-l-4 border-l-[#FF6B6B]'
             }`}
           >
             <div className="flex items-start gap-4">
-              <div className={`text-3xl ${message.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
+              <div className={`text-3xl ${message.type === 'success' ? 'text-[#00DCFF]' : 'text-[#FF6B6B]'}`}>
                 {message.type === 'success' ? '✓' : '✕'}
               </div>
               <div className="flex-1">
@@ -221,49 +251,72 @@ export default function DrinkingSchedulePage() {
           <div className="space-y-16">
             {schedule.map((entry, idx) => (
               <section key={`${entry.year}-${idx}`} className="relative">
-                {/* Timeline dot */}
+                {/* Timeline dot and month header */}
                 <div className="flex items-center mb-8">
                   <div
                     className={`w-4 h-4 rounded-full border-4 border-background z-10 mr-6 ${
                       idx === 0 ? 'bg-primary-container' : 'bg-surface-container-highest outline outline-1 outline-outline-variant/30'
                     }`}
                   ></div>
-                  <h3 className="font-headline text-2xl text-on-surface">{entry.month} {entry.year}</h3>
+                  <h3 className="font-headline text-2xl text-on-surface">{entry.month}</h3>
                 </div>
 
                 {/* Wines in this period */}
                 <div className="space-y-10 pl-10">
-                  {entry.wines.map((wine, idx) => (
-                    <div key={`${entry.year}-${entry.month}-${wine.id}-${idx}`} className="relative group">
-                      <div className="flex flex-col bg-surface-container-low p-4 rounded-lg">
-                        <span className={`text-xs font-bold tracking-widest uppercase mb-1 ${getTierColor(wine.tier)}`}>
-                          {wine.status}
-                        </span>
-                        <div className="mb-2">
-                          <WineInfo
-                            wine={wine}
-                            producerSize="lg"
-                            nameSize="sm"
-                            classificationSize="xs"
-                            showClassification={true}
-                            layout="vertical"
-                          />
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 mb-4">
-                          <span className="text-outline text-sm font-light">{wine.vintage} Vintage</span>
-                          <span className="h-1 w-1 rounded-full bg-outline-variant"></span>
-                          <span className="text-outline text-sm font-light">{wine.region}</span>
-                        </div>
-                        <button
-                          onClick={() => handleMarkConsumed(wine.id, wine.producer, wine.name)}
-                          disabled={isConsuming}
-                          className="w-full py-2 px-3 bg-primary text-on-primary rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  {entry.wines.map((wine, idx) => {
+                    const isConsumed = wine.consumed || false
+                    const consumedDate = wine.consumedDate ? new Date(wine.consumedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : null
+
+                    return (
+                      <div key={`${entry.year}-${entry.month}-${wine.id}-${idx}`} className="relative group">
+                        {/* Design system colors: consumed entries use darker neutral background (#0D0D0D) and dimmed text */}
+                        <div
+                          className={`flex flex-col p-4 rounded-lg transition-all ${
+                            isConsumed
+                              ? 'bg-[#0D0D0D] opacity-75'
+                              : 'bg-surface-container-low'
+                          }`}
                         >
-                          {isConsuming ? 'Marking...' : 'Mark as Consumed'}
-                        </button>
+                          <span className={`text-xs font-bold tracking-widest uppercase mb-1 ${getTierColor(wine.tier)}`}>
+                            {wine.status}
+                          </span>
+                          <div className="mb-2">
+                            <WineInfo
+                              wine={wine}
+                              producerSize="lg"
+                              nameSize="sm"
+                              classificationSize="xs"
+                              showClassification={true}
+                              layout="vertical"
+                            />
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 mb-4">
+                            <span className={`text-sm font-light ${isConsumed ? 'text-outline-variant' : 'text-outline'}`}>
+                              {wine.vintage} Vintage
+                            </span>
+                            <span className={`h-1 w-1 rounded-full ${isConsumed ? 'bg-outline-variant/50' : 'bg-outline-variant'}`}></span>
+                            <span className={`text-sm font-light ${isConsumed ? 'text-outline-variant' : 'text-outline'}`}>
+                              {wine.region}
+                            </span>
+                          </div>
+
+                          {isConsumed && consumedDate ? (
+                            <div className="w-full py-2 px-3 bg-[#1A1A1A] rounded text-sm font-medium text-outline-variant text-center border border-outline-variant/20">
+                              ✓ Consumed {consumedDate}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleMarkConsumed(wine.id, wine.producer, wine.name, entry.year, MONTH_TO_NUMBER[entry.month] || 1)}
+                              disabled={isConsuming}
+                              className="w-full py-2 px-3 bg-primary text-on-primary rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                            >
+                              {isConsuming ? 'Marking...' : 'Mark as Consumed'}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </section>
             ))}
