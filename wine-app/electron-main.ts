@@ -118,6 +118,13 @@ function initializeSchema(): void {
       created_at TEXT NOT NULL,
       FOREIGN KEY (wine_id) REFERENCES wines(id)
     )`,
+    `CREATE TABLE IF NOT EXISTS delivery_delays (
+      id TEXT PRIMARY KEY,
+      wine_id TEXT NOT NULL,
+      delivery_date TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (wine_id) REFERENCES wines(id)
+    )`,
   ]
 
   for (const stmt of statements) {

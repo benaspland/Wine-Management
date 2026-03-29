@@ -471,6 +471,36 @@ export async function moveWineLocation(wineId: string, toLocation: 'home' | 'sto
   ])
 }
 
+// Delivery delay management
+export async function delayWineFromDelivery(wineId: string, deliveryDate: string): Promise<void> {
+  const id = generateId()
+  const now = new Date().toISOString()
+  await executeQuery(
+    'INSERT INTO delivery_delays (id, wine_id, delivery_date, created_at) VALUES (?, ?, ?, ?)',
+    [id, wineId, deliveryDate, now]
+  )
+}
+
+export async function getDelayedWines(deliveryDate: string): Promise<string[]> {
+  const result = await executeQuery(
+    'SELECT wine_id FROM delivery_delays WHERE delivery_date = ?',
+    [deliveryDate]
+  )
+  return (result.values || []).map((row: any) => row.wine_id)
+}
+
+export async function clearDelayMarks(deliveryDate: string): Promise<void> {
+  await executeQuery('DELETE FROM delivery_delays WHERE delivery_date = ?', [deliveryDate])
+}
+
+export async function isWineDelayed(wineId: string, deliveryDate: string): Promise<boolean> {
+  const result = await executeQuery(
+    'SELECT id FROM delivery_delays WHERE wine_id = ? AND delivery_date = ?',
+    [wineId, deliveryDate]
+  )
+  return result.values?.length > 0
+}
+
 // Cellar config
 export async function getCellarConfig(): Promise<CellarConfig> {
   const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', ['default'])

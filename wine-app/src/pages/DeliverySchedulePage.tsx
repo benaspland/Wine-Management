@@ -24,13 +24,16 @@ export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
   const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
   const moveWineToHome = useWineStore(state => state.moveWineToHome)
+  const delayWineFromDelivery = useWineStore(state => state.delayWineFromDelivery)
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]))
   const [deliveriesByYear, setDeliveriesByYear] = useState<Record<number, DeliveryDate[]>>({})
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [lastRegenerated, setLastRegenerated] = useState<string>('')
   const [isMoving, setIsMoving] = useState(false)
+  const [isDelaying, setIsDelaying] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [delayedWines, setDelayedWines] = useState<string[]>([])
 
   // Load cellar config and generate initial schedule
   useEffect(() => {
@@ -79,7 +82,22 @@ export default function DeliverySchedulePage() {
         format: string
       }>> = {}
 
+      // Load delayed wines for the next delivery to filter them from display
+      const nextDeliveryDate = Object.entries(grouped)
+        .map(([date]) => date)
+        .sort()[0] // First date chronologically
+
+      const nextDelayedWines = nextDeliveryDate ? await db.getDelayedWines(nextDeliveryDate) : []
+
       deliverySchedule.forEach(entry => {
+        // Skip delayed wines in the current (next) delivery, but include them in future deliveries
+        const isCurrentDelivery = entry.scheduled_date === nextDeliveryDate
+        const isDelayed = nextDelayedWines.includes(entry.wine_id)
+
+        if (isCurrentDelivery && isDelayed) {
+          return // Skip this wine in current delivery
+        }
+
         if (!grouped[entry.scheduled_date]) {
           grouped[entry.scheduled_date] = []
         }
@@ -153,6 +171,9 @@ export default function DeliverySchedulePage() {
         await moveWineToHome(wine.id)
       }
 
+      // Clear delay marks for this delivery
+      await db.clearDelayMarks(deliveryGroup.date)
+
       const bottleCount = deliveryGroup.wines.reduce((sum, w) => sum + w.quantity, 0)
       setMessage({
         type: 'success',
@@ -168,6 +189,45 @@ export default function DeliverySchedulePage() {
       setIsMoving(false)
     }
   }
+
+  const handleDelayWine = async (wineId: string, wineName: string, deliveryDate: string) => {
+    setIsDelaying(true)
+    try {
+      await delayWineFromDelivery(wineId, deliveryDate)
+      setMessage({
+        type: 'success',
+        text: `${wineName} delayed - will be rescheduled to future delivery`,
+      })
+      setTimeout(() => setMessage(null), 3000)
+
+      // Load delayed wines for this delivery
+      const delayed = await db.getDelayedWines(deliveryDate)
+      setDelayedWines(delayed)
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `Failed to delay wine: ${(error as Error).message}`,
+      })
+    } finally {
+      setIsDelaying(false)
+    }
+  }
+
+  // Load delayed wines when next delivery changes
+  useEffect(() => {
+    const loadDelayedWines = async () => {
+      const allDeliveries = Object.values(deliveriesByYear).flat().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      const nextDelivery = allDeliveries.find(d => {
+        const wine = wines.find(w => w.id === d.wines[0].id)
+        return wine?.location === 'storage'
+      })
+      if (nextDelivery) {
+        const delayed = await db.getDelayedWines(nextDelivery.date)
+        setDelayedWines(delayed)
+      }
+    }
+    loadDelayedWines()
+  }, [deliveriesByYear])
 
   const availableSlots = cellarCapacity - totalBottlesAtHome
   const usedSlots = totalBottlesAtHome
@@ -375,8 +435,18 @@ export default function DeliverySchedulePage() {
                               </div>
                             </div>
 
-                            <div className="text-right flex items-center">
+                            <div className="flex flex-col items-end gap-2 ml-4">
                               <div className="text-2xl font-headline text-primary-container">{wine.quantity}x</div>
+                              {isNextDelivery && !delayedWines.includes(wine.id) && (
+                                <button
+                                  onClick={() => handleDelayWine(wine.id, wine.name, group.date)}
+                                  disabled={isDelaying}
+                                  className="px-2 py-1 bg-surface-container-high text-on-surface-variant rounded text-xs font-medium hover:bg-surface-container transition-colors disabled:opacity-50 whitespace-nowrap"
+                                  title="Delay this wine - will be rescheduled to a future delivery"
+                                >
+                                  {isDelaying ? 'Delaying...' : 'Delay'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
