@@ -9,6 +9,7 @@ interface WineStore {
   selectedWine: Wine | null
   loading: boolean
   error: string | null
+  scheduleUpdateTrigger: number // Timestamp for schedule regeneration triggers
 
   // Filters
   locationFilter: 'all' | 'home' | 'storage'
@@ -40,6 +41,7 @@ interface WineStore {
   setSortBy: (sort: 'vintage' | 'tier' | 'producer') => void
   applyFilters: () => void
   clearFilters: () => void
+  triggerScheduleUpdate: () => void // Notify schedules to regenerate
 
   getStats: () => Promise<any>
 }
@@ -50,6 +52,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
   selectedWine: null,
   loading: false,
   error: null,
+  scheduleUpdateTrigger: 0,
 
   locationFilter: 'all',
   tierFilter: null,
@@ -80,6 +83,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
     try {
       await db.createWine(wine)
       await get().loadWines()
+      get().triggerScheduleUpdate() // Regenerate schedules after adding wine
     } catch (error) {
       set({ error: (error as Error).message })
     } finally {
@@ -122,6 +126,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
     try {
       await db.consumeWine(wineId, quantity)
       await get().loadWines()
+      get().triggerScheduleUpdate() // Regenerate schedules after consumption
       if (get().selectedWine?.id === wineId) {
         set({ selectedWine: await db.getWine(wineId) })
       }
@@ -271,6 +276,10 @@ export const useWineStore = create<WineStore>((set, get) => ({
     }
 
     set({ filteredWines: filtered })
+  },
+
+  triggerScheduleUpdate: () => {
+    set({ scheduleUpdateTrigger: Date.now() })
   },
 
   getStats: async () => {

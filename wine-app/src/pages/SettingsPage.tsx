@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadWines = useWineStore(state => state.loadWines)
+  const triggerScheduleUpdate = useWineStore(state => state.triggerScheduleUpdate)
 
   // Load cellar config on mount
   useEffect(() => {
@@ -66,8 +67,9 @@ export default function SettingsPage() {
     try {
       const result = await ImportService.importFromCSV(file)
 
-      // Reload wines
+      // Reload wines and regenerate schedules
       await loadWines()
+      triggerScheduleUpdate()
 
       const successMsg = `Imported ${result.success} wines successfully`
       const errorMsg = result.failed > 0 ? ` (${result.failed} failed)` : ''

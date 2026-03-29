@@ -22,6 +22,7 @@ interface DeliveryDate {
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
+  const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]))
   const [deliveriesByYear, setDeliveriesByYear] = useState<Record<number, DeliveryDate[]>>({})
@@ -33,8 +34,12 @@ export default function DeliverySchedulePage() {
     db.getCellarConfig().then(config => {
       setCellarCapacity(config.max_slots)
     })
-    generateDeliverySchedule()
   }, [])
+
+  // Generate schedule on mount and when data changes
+  useEffect(() => {
+    generateDeliverySchedule()
+  }, [scheduleUpdateTrigger])
 
   // Generate delivery schedule
   const generateDeliverySchedule = async () => {

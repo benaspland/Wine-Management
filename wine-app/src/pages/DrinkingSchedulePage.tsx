@@ -28,16 +28,17 @@ const MONTH_TO_NUMBER: Record<string, number> = {
 export default function DrinkingSchedulePage() {
   const wines = useWineStore(state => state.wines)
   const loadWines = useWineStore(state => state.loadWines)
+  const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
   const [isConsuming, setIsConsuming] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([])
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [lastRegenerated, setLastRegenerated] = useState<string>('')
 
-  // Generate schedule on mount
+  // Generate schedule on mount and when data changes
   useEffect(() => {
     generateDrinkingSchedule()
-  }, [])
+  }, [scheduleUpdateTrigger])
 
   const handleMarkConsumed = async (
     wineId: string,
