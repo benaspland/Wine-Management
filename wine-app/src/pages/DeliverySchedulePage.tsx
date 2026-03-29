@@ -25,6 +25,7 @@ export default function DeliverySchedulePage() {
   const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
   const moveWineToHome = useWineStore(state => state.moveWineToHome)
   const delayWineFromDelivery = useWineStore(state => state.delayWineFromDelivery)
+  const promoteWineToCurrentDelivery = useWineStore(state => state.promoteWineToCurrentDelivery)
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]))
   const [deliveriesByYear, setDeliveriesByYear] = useState<Record<number, DeliveryDate[]>>({})
@@ -32,8 +33,10 @@ export default function DeliverySchedulePage() {
   const [lastRegenerated, setLastRegenerated] = useState<string>('')
   const [isMoving, setIsMoving] = useState(false)
   const [isDelaying, setIsDelaying] = useState(false)
+  const [isPromoting, setIsPromoting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [delayedWines, setDelayedWines] = useState<string[]>([])
+  const [promotionDialog, setPromotionDialog] = useState<{ show: boolean; wine?: any; fromDeliveryDate?: string; error?: string; projectedTotal?: number }>({ show: false })
 
   // Load cellar config and generate initial schedule
   useEffect(() => {
@@ -213,6 +216,68 @@ export default function DeliverySchedulePage() {
     }
   }
 
+  const handlePromoteWineClick = async (wine: any, fromDeliveryDate: string, currentDeliveryBottles: number) => {
+    try {
+      // Check capacity before promotion
+      const capacityCheck = await db.checkDeliveryCapacity(
+        wine.quantity,
+        totalBottlesAtHome,
+        currentDeliveryBottles,
+        cellarCapacity
+      )
+
+      if (!capacityCheck.canPromote) {
+        setPromotionDialog({
+          show: true,
+          wine,
+          fromDeliveryDate,
+          error: capacityCheck.message,
+          projectedTotal: capacityCheck.projectedTotal,
+        })
+      } else {
+        // Capacity OK - promote the wine
+        setPromotionDialog({
+          show: true,
+          wine,
+          fromDeliveryDate,
+          projectedTotal: capacityCheck.projectedTotal,
+        })
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `Failed to check capacity: ${(error as Error).message}`,
+      })
+    }
+  }
+
+  const confirmPromotion = async () => {
+    if (!promotionDialog.wine || promotionDialog.error) {
+      setPromotionDialog({ show: false })
+      return
+    }
+
+    setIsPromoting(true)
+    try {
+      if (promotionDialog.fromDeliveryDate) {
+        await promoteWineToCurrentDelivery(promotionDialog.wine.id, promotionDialog.fromDeliveryDate)
+        setMessage({
+          type: 'success',
+          text: `${promotionDialog.wine.name} promoted to current delivery`,
+        })
+        setTimeout(() => setMessage(null), 3000)
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `Failed to promote wine: ${(error as Error).message}`,
+      })
+    } finally {
+      setIsPromoting(false)
+      setPromotionDialog({ show: false })
+    }
+  }
+
   // Load delayed wines when next delivery changes
   useEffect(() => {
     const loadDelayedWines = async () => {
@@ -264,6 +329,55 @@ export default function DeliverySchedulePage() {
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Promotion Confirmation Dialog */}
+      {promotionDialog?.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={`bg-surface rounded-lg shadow-lg p-8 max-w-md mx-4 ${
+            promotionDialog.error ? 'border-l-4 border-l-[#FF6B6B]' : 'border-l-4 border-l-[#00DCFF]'
+          }`}>
+            <div className="flex items-start gap-4 mb-4">
+              <div className={`text-3xl ${promotionDialog.error ? 'text-[#FF6B6B]' : 'text-[#00DCFF]'}`}>
+                {promotionDialog.error ? '⚠' : '↑'}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-headline text-lg font-bold text-on-surface mb-2">
+                  {promotionDialog.error ? 'Cannot Promote' : 'Confirm Promotion'}
+                </h3>
+                {promotionDialog.wine && (
+                  <p className="text-on-surface text-sm mb-3">
+                    {promotionDialog.wine.name} ({promotionDialog.wine.quantity} bottles)
+                  </p>
+                )}
+                {promotionDialog.error ? (
+                  <p className="text-on-surface text-sm">{promotionDialog.error}</p>
+                ) : (
+                  <p className="text-on-surface text-sm">
+                    Projected total: {promotionDialog.projectedTotal} bottles (capacity: {cellarCapacity})
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPromotionDialog({ show: false })}
+                className="flex-1 px-4 py-2 bg-surface-container-low text-on-surface rounded font-medium hover:bg-surface-container transition-colors"
+              >
+                {promotionDialog.error ? 'OK' : 'Cancel'}
+              </button>
+              {!promotionDialog.error && (
+                <button
+                  onClick={confirmPromotion}
+                  disabled={isPromoting}
+                  className="flex-1 px-4 py-2 bg-primary text-on-primary rounded font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {isPromoting ? 'Promoting...' : 'Confirm'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -445,6 +559,16 @@ export default function DeliverySchedulePage() {
                                   title="Delay this wine - will be rescheduled to a future delivery"
                                 >
                                   {isDelaying ? 'Delaying...' : 'Delay'}
+                                </button>
+                              )}
+                              {!isNextDelivery && (
+                                <button
+                                  onClick={() => handlePromoteWineClick(wine, group.date, group.wines.reduce((sum, w) => sum + w.quantity, 0))}
+                                  disabled={isPromoting}
+                                  className="px-2 py-1 bg-primary text-on-primary rounded text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                  title="Promote to current delivery"
+                                >
+                                  {isPromoting ? 'Promoting...' : 'Promote'}
                                 </button>
                               )}
                             </div>

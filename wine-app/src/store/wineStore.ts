@@ -29,6 +29,7 @@ interface WineStore {
   consumeWine: (wineId: string, quantity?: number) => Promise<void>
   moveWineToHome: (wineId: string) => Promise<void>
   delayWineFromDelivery: (wineId: string, deliveryDate: string) => Promise<void>
+  promoteWineToCurrentDelivery: (wineId: string, fromDeliveryDate: string) => Promise<void>
   deduplicateWines: () => Promise<void>
 
   selectWine: (wine: Wine | null) => void
@@ -154,6 +155,18 @@ export const useWineStore = create<WineStore>((set, get) => ({
     try {
       await db.delayWineFromDelivery(wineId, deliveryDate)
       get().triggerScheduleUpdate() // Regenerate future deliveries with delayed wine
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  promoteWineToCurrentDelivery: async (wineId, fromDeliveryDate) => {
+    set({ error: null })
+    try {
+      // Mark as delayed from the original future delivery
+      // This will exclude it from that delivery when schedules are regenerated
+      await db.delayWineFromDelivery(wineId, fromDeliveryDate)
+      get().triggerScheduleUpdate() // Regenerate all deliveries
     } catch (error) {
       set({ error: (error as Error).message })
     }

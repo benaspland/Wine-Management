@@ -501,6 +501,29 @@ export async function isWineDelayed(wineId: string, deliveryDate: string): Promi
   return result.values?.length > 0
 }
 
+export async function checkDeliveryCapacity(
+  wineQuantity: number,
+  currentBottlesAtHome: number,
+  currentDeliveryBottles: number,
+  maxCapacity: number
+): Promise<{ canPromote: boolean; message: string; projectedTotal: number }> {
+  const projectedTotal = currentBottlesAtHome + currentDeliveryBottles + wineQuantity
+
+  if (projectedTotal > maxCapacity) {
+    return {
+      canPromote: false,
+      message: `Cannot promote: would exceed capacity. Current home: ${currentBottlesAtHome} + Current delivery: ${currentDeliveryBottles} + Wine: ${wineQuantity} = ${projectedTotal} (max: ${maxCapacity})`,
+      projectedTotal,
+    }
+  }
+
+  return {
+    canPromote: true,
+    message: `Promotion OK: total will be ${projectedTotal} bottles (capacity: ${maxCapacity})`,
+    projectedTotal,
+  }
+}
+
 // Cellar config
 export async function getCellarConfig(): Promise<CellarConfig> {
   const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', ['default'])
