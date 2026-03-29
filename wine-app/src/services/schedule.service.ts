@@ -1,5 +1,14 @@
 import type { Wine, DeliveryScheduleEntry } from '../types/index'
 
+// Debug logging helper - only logs in development
+const debugLog = (...args: any[]) => {
+  // Only log in development/Vite dev mode
+  // Suppress in production to keep logs clean
+  if (typeof window !== 'undefined' && (window as any).__DEV__) {
+    console.log(...args)
+  }
+}
+
 export interface DrinkingScheduleEntry {
   wineId: string
   producer: string
@@ -32,7 +41,7 @@ export class ScheduleService {
   ): DrinkingScheduleEntry[] {
     const schedule: DrinkingScheduleEntry[] = []
 
-    console.log('[ScheduleService] generateDrinkingSchedule called with', allWines.length, 'total wines')
+    debugLog('[ScheduleService] generateDrinkingSchedule called with', allWines.length, 'total wines')
 
     // Build availability map: wine ID -> earliest date it's available (YYYY-MM format for comparison)
     const wineAvailability: Record<string, string> = {} // wineId -> YYYY-MM when available
@@ -61,16 +70,16 @@ export class ScheduleService {
     const homeWines = allWines.filter(w => w.location === 'home')
     const storageWines = allWines.filter(w => w.location === 'storage')
 
-    console.log('[ScheduleService] Wine availability:', Object.entries(wineAvailability).map(([id, yearMonth]) => {
+    debugLog('[ScheduleService] Wine availability:', Object.entries(wineAvailability).map(([id, yearMonth]) => {
       const wine = allWines.find(w => w.id === id)
       return `${wine?.producer} ${wine?.name}: available ${yearMonth}`
     }))
     const deliverableWines = allWines.filter(w => wineAvailability[w.id] !== '9999-12').length
-    console.log(`[ScheduleService] Home wines: ${homeWines.length}, Storage wines: ${storageWines.length}, Deliverable: ${deliverableWines}`)
+    debugLog(`[ScheduleService] Home wines: ${homeWines.length}, Storage wines: ${storageWines.length}, Deliverable: ${deliverableWines}`)
 
     // Group wines by tier
     const winesByTier = this.groupWinesByTier(allWines)
-    console.log('[ScheduleService] Wines by tier:', Object.entries(winesByTier).reduce((acc, [tier, wines]) => {
+    debugLog('[ScheduleService] Wines by tier:', Object.entries(winesByTier).reduce((acc, [tier, wines]) => {
       acc[tier] = wines.length
       return acc
     }, {} as Record<string, number>))
@@ -102,7 +111,7 @@ export class ScheduleService {
       const yearsConsumption: DrinkingScheduleEntry[] = []
       const slotsPerMonth = Math.ceil(targetForYear / 12) // ~2-3 wines per month
 
-      console.log(`[ScheduleService] Processing year ${year}, target ${targetForYear} wines (${slotsPerMonth} per month)`)
+      debugLog(`[ScheduleService] Processing year ${year}, target ${targetForYear} wines (${slotsPerMonth} per month)`)
 
       // Distribute wines across 12 months with tier preference
       for (let month = 1; month <= 12; month++) {
@@ -217,7 +226,7 @@ export class ScheduleService {
       schedule.push(...yearsConsumption)
     }
 
-    console.log('[ScheduleService] Before final filter:', schedule.length, 'total drinking entries')
+    debugLog('[ScheduleService] Before final filter:', schedule.length, 'total drinking entries')
 
     const filtered = schedule
       .filter(e => {
@@ -239,8 +248,8 @@ export class ScheduleService {
     filtered.forEach(e => {
       byYear[e.suggestedYear] = (byYear[e.suggestedYear] || 0) + 1
     })
-    console.log('[ScheduleService] Drinking schedule by year:', byYear)
-    console.log('[ScheduleService] Final drinking schedule:', filtered.length, 'entries')
+    debugLog('[ScheduleService] Drinking schedule by year:', byYear)
+    debugLog('[ScheduleService] Final drinking schedule:', filtered.length, 'entries')
 
     return filtered
   }
@@ -280,10 +289,10 @@ export class ScheduleService {
     )
     const yearsToSchedule = Math.max(4, maxDrinkingWindowStart - currentYear + 2)
 
-    console.log(
+    debugLog(
       `[ScheduleService] Planning consumption-aware deliveries from ${currentYear} to ${currentYear + yearsToSchedule}`
     )
-    console.log(
+    debugLog(
       `[ScheduleService] Current inventory: ${currentBottlesAtHome} bottles, Target consumption: ${annualConsumptionTarget} bottles/year`
     )
 
@@ -315,7 +324,7 @@ export class ScheduleService {
         return aYearsToWindow - bYearsToWindow
       })
 
-    console.log(`[ScheduleService] ${candidateWines.length} candidate wines for delivery from ${storageWines.length} storage wines`)
+    debugLog(`[ScheduleService] ${candidateWines.length} candidate wines for delivery from ${storageWines.length} storage wines`)
 
     // Generate all valid delivery slots through planning horizon
     const deliverySlots: Array<[number, number]> = []
@@ -346,7 +355,7 @@ export class ScheduleService {
 
       // Only deliver if there's meaningful available capacity
       if (availableSlotsAtDelivery < minDeliveryBottles) {
-        console.log(
+        debugLog(
           `[ScheduleService] Skipping ${year}-${String(month).padStart(2, '0')}: projected inventory ${projectedAvailableAtDelivery} bottles, available slots ${availableSlotsAtDelivery}`
         )
         continue
@@ -433,7 +442,7 @@ export class ScheduleService {
 
         deliveriesPerYear[year]++
         projectedInventory += bottleCount // Update projected inventory with delivery
-        console.log(
+        debugLog(
           `[ScheduleService] Delivery ${year}-${String(month).padStart(2, '0')}: ${bottleCount} bottles (${wineCount} wines), projected inventory after: ${projectedInventory}`
         )
       }
@@ -444,7 +453,7 @@ export class ScheduleService {
       projectedInventory = Math.max(0, projectedInventory - estimatedConsumptionThisSlot)
     }
 
-    console.log(
+    debugLog(
       `[ScheduleService] Generated ${schedule.length} delivery entries across ${Object.values(deliveriesPerYear).reduce((a, b) => a + b, 0)} deliveries`
     )
 

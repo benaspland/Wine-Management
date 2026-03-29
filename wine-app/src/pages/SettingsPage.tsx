@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
 import * as db from '../services/database'
 import { ImportService } from '../services/import.service'
+import MessageModal from '../components/MessageModal'
 
 export default function SettingsPage() {
   const wines = useWineStore(state => state.wines)
@@ -75,7 +76,7 @@ export default function SettingsPage() {
       const errorMsg = result.failed > 0 ? ` (${result.failed} failed)` : ''
 
       setMessage({
-        type: result.failed > 0 ? 'success' : 'success',
+        type: result.failed > 0 ? 'error' : 'success',
         text: successMsg + errorMsg
       })
 
@@ -172,33 +173,11 @@ export default function SettingsPage() {
 
       {/* Modal notification for import/export feedback */}
       {message && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div
-            className={`bg-surface rounded-lg shadow-lg p-8 max-w-md mx-4 ${
-              message.type === 'success'
-                ? 'border-l-4 border-l-[#00DCFF]'
-                : 'border-l-4 border-l-[#FF6B6B]'
-            }`}
-          >
-            <div className="flex items-start gap-4">
-              <div className={`text-3xl ${message.type === 'success' ? 'text-[#00DCFF]' : 'text-[#FF6B6B]'}`}>
-                {message.type === 'success' ? '✓' : '✕'}
-              </div>
-              <div className="flex-1">
-                <h3 className="font-headline text-lg font-bold text-on-surface mb-2">
-                  {message.type === 'success' ? 'Success' : 'Error'}
-                </h3>
-                <p className="text-on-surface text-sm">{message.text}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setMessage(null)}
-              className="mt-6 w-full bg-primary text-on-primary py-2 rounded font-medium hover:bg-primary/90 transition-colors"
-            >
-              OK
-            </button>
-          </div>
-        </div>
+        <MessageModal
+          type={message.type}
+          text={message.text}
+          onClose={() => setMessage(null)}
+        />
       )}
 
       <div className="space-y-8">

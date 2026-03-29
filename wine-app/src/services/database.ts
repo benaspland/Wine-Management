@@ -562,10 +562,6 @@ export async function getCellarConfig(): Promise<CellarConfig> {
   )
 }
 
-export async function updateCellarCapacity(maxSlots: number): Promise<void> {
-  await executeQuery('UPDATE cellar_config SET max_slots = ? WHERE id = ?', [maxSlots, 'default'])
-}
-
 export async function updateCellarConfig(config: Partial<CellarConfig>): Promise<void> {
   const updates: string[] = []
   const values: (string | number)[] = []
