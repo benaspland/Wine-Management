@@ -63,12 +63,9 @@ export const useWineStore = create<WineStore>((set, get) => ({
   loadWines: async () => {
     set({ loading: true, error: null })
     try {
-      const wines = await WineService.getWines({
-        location: get().locationFilter,
-        tier: get().tierFilter || undefined,
-        searchTerm: get().searchTerm || undefined,
-        sortBy: get().sortBy,
-      })
+      // Always fetch ALL wines (no filters at service level)
+      // Filtering happens in applyFilters() for UI display
+      const wines = await WineService.getWines()
       set({ wines })
       get().applyFilters()
     } catch (error) {
