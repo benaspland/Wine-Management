@@ -174,12 +174,12 @@ export default function SettingsPage() {
           <div
             className={`bg-surface rounded-lg shadow-lg p-8 max-w-md mx-4 ${
               message.type === 'success'
-                ? 'border-l-4 border-l-green-500'
-                : 'border-l-4 border-l-red-500'
+                ? 'border-l-4 border-l-[#00DCFF]'
+                : 'border-l-4 border-l-[#FF6B6B]'
             }`}
           >
             <div className="flex items-start gap-4">
-              <div className={`text-3xl ${message.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
+              <div className={`text-3xl ${message.type === 'success' ? 'text-[#00DCFF]' : 'text-[#FF6B6B]'}`}>
                 {message.type === 'success' ? '✓' : '✕'}
               </div>
               <div className="flex-1">
@@ -322,13 +322,13 @@ export default function SettingsPage() {
             <div className="bg-surface-container-low p-4 rounded">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">At Home</p>
               <p className="font-headline text-3xl font-bold text-primary">
-                {wines.filter(w => w.location === 'home').length}
+                {wines.filter(w => w.location === 'home').reduce((sum, w) => sum + w.quantity, 0)}
               </p>
             </div>
             <div className="bg-surface-container-low p-4 rounded">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">In Storage</p>
               <p className="font-headline text-3xl font-bold text-primary">
-                {wines.filter(w => w.location === 'storage').length}
+                {wines.filter(w => w.location === 'storage').reduce((sum, w) => sum + w.quantity, 0)}
               </p>
             </div>
           </div>

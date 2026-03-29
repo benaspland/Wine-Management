@@ -116,8 +116,9 @@ export default function DeliverySchedulePage() {
     }
   }
 
-  // Calculate current home inventory
+  // Calculate current home inventory (in bottles, not wine count)
   const homeWines = wines.filter(w => w.location === 'home')
+  const totalBottlesAtHome = homeWines.reduce((sum, w) => sum + w.quantity, 0)
 
   const toggleYear = (year: number) => {
     const newExpanded = new Set(expandedYears)
@@ -136,8 +137,8 @@ export default function DeliverySchedulePage() {
     return 'bg-surface-container-high text-on-surface-variant'
   }
 
-  const availableSlots = cellarCapacity - homeWines.length
-  const usedSlots = homeWines.length
+  const availableSlots = cellarCapacity - totalBottlesAtHome
+  const usedSlots = totalBottlesAtHome
   const years = Object.keys(deliveriesByYear)
     .map(Number)
     .sort((a, b) => a - b)
