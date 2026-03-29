@@ -145,13 +145,18 @@ export default function DeliverySchedulePage() {
     return 'bg-surface-container-high text-on-surface-variant'
   }
 
-  const handleMarkDeliveryComplete = async (wineId: string, producerName: string, wineName: string) => {
+  const handleMarkGroupDeliveryComplete = async (deliveryGroup: DeliveryDate) => {
     setIsMoving(true)
     try {
-      await moveWineToHome(wineId)
+      // Move all wines in this delivery group from storage to home
+      for (const wine of deliveryGroup.wines) {
+        await moveWineToHome(wine.id)
+      }
+
+      const bottleCount = deliveryGroup.wines.reduce((sum, w) => sum + w.quantity, 0)
       setMessage({
         type: 'success',
-        text: `${producerName} ${wineName} delivered to home cellar`,
+        text: `Delivery of ${bottleCount} bottles (${deliveryGroup.wines.length} wines) completed`,
       })
       setTimeout(() => setMessage(null), 3000)
     } catch (error) {
@@ -297,16 +302,39 @@ export default function DeliverySchedulePage() {
                 {/* Deliveries for this year - Collapsible */}
                 {expandedYears.has(year) && (
                   <div className="border-t border-outline-variant/10 p-6 space-y-8">
-                    {deliveries.map((group, idx) => (
+                    {deliveries.map((group, idx) => {
+                      // Find next upcoming delivery (earliest by date)
+                      const allDeliveries = Object.values(deliveriesByYear).flat().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                      const nextDelivery = allDeliveries.find(d => {
+                        const wine = wines.find(w => w.id === d.wines[0].id)
+                        return wine?.location === 'storage' // Only consider undelivered wines
+                      })
+                      const isNextDelivery = nextDelivery?.date === group.date
+                      const groupBottles = group.wines.reduce((sum, w) => sum + w.quantity, 0)
+
+                      return (
                       <section key={`delivery-${year}-${idx}`}>
-                      <div className="mb-6 pb-4 border-b border-outline-variant/10">
-                        <h4 className="font-headline text-xl text-on-surface">
-                          {new Date(group.date).toLocaleDateString('en-US', {
-                            month: 'long',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </h4>
+                      <div className="mb-6 pb-4 border-b border-outline-variant/10 flex items-start justify-between gap-4">
+                        <div>
+                          <h4 className="font-headline text-xl text-on-surface">
+                            {new Date(group.date).toLocaleDateString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </h4>
+                          <p className="text-outline-variant text-sm mt-2">{groupBottles} bottles • {group.wines.length} wines</p>
+                        </div>
+                        {isNextDelivery && (
+                          <button
+                            onClick={() => handleMarkGroupDeliveryComplete(group)}
+                            disabled={isMoving}
+                            className="px-4 py-2 bg-primary text-on-primary rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap flex-shrink-0"
+                            title="Mark this entire delivery as received"
+                          >
+                            {isMoving ? 'Moving...' : 'Mark Delivered'}
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid gap-4">
@@ -347,22 +375,15 @@ export default function DeliverySchedulePage() {
                               </div>
                             </div>
 
-                            <div className="flex flex-col items-end gap-3 ml-4">
+                            <div className="text-right flex items-center">
                               <div className="text-2xl font-headline text-primary-container">{wine.quantity}x</div>
-                              <button
-                                onClick={() => handleMarkDeliveryComplete(wine.id, wine.producer, wine.name)}
-                                disabled={isMoving}
-                                className="px-3 py-2 bg-primary text-on-primary rounded text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap"
-                                title="Move wine from storage to home cellar"
-                              >
-                                {isMoving ? 'Moving...' : 'Deliver'}
-                              </button>
                             </div>
                           </div>
                         ))}
                       </div>
                     </section>
-                    ))}
+                    )
+                    })}
                   </div>
                 )}
               </div>
