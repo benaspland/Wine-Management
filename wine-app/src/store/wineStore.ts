@@ -29,7 +29,7 @@ interface WineStore {
   consumeWine: (wineId: string, quantity?: number) => Promise<void>
   moveWineToHome: (wineId: string) => Promise<void>
   delayWineFromDelivery: (wineId: string, deliveryDate: string) => Promise<void>
-  promoteWineToCurrentDelivery: (wineId: string, fromDeliveryDate: string, currentDeliveryDate?: string) => Promise<void>
+  promoteWineToCurrentDelivery: (wineId: string, currentDeliveryDate: string) => Promise<void>
   deduplicateWines: () => Promise<void>
 
   selectWine: (wine: Wine | null) => void
@@ -160,19 +160,13 @@ export const useWineStore = create<WineStore>((set, get) => ({
     }
   },
 
-  promoteWineToCurrentDelivery: async (wineId, fromDeliveryDate, currentDeliveryDate?) => {
+  promoteWineToCurrentDelivery: async (wineId, currentDeliveryDate) => {
     set({ error: null })
     try {
-      // Mark as delayed from the original future delivery
-      // This will exclude it from that delivery when schedules are regenerated
-      await db.delayWineFromDelivery(wineId, fromDeliveryDate)
-
       // Pin wine to current delivery to ensure it stays there even on regenerate
-      if (currentDeliveryDate) {
-        await db.pinWineToCurrentDelivery(wineId, currentDeliveryDate)
-      }
-
-      get().triggerScheduleUpdate() // Regenerate future deliveries only
+      // Pinning is the single source of truth - no redundant delay marking
+      await db.pinWineToCurrentDelivery(wineId, currentDeliveryDate)
+      get().triggerScheduleUpdate() // Regenerate schedule with pinned wine excluded from algorithm
     } catch (error) {
       set({ error: (error as Error).message })
     }
