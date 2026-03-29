@@ -1,4 +1,5 @@
 import type { Wine, DeliveryScheduleEntry } from '../types/index'
+import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 
 // Debug logging helper - only logs in development
 const debugLog = (...args: any[]) => {
@@ -85,9 +86,9 @@ export class ScheduleService {
     }, {} as Record<string, number>))
 
     // Calculate consumption targets
-    const targetPerYear = 30
+    const targetPerYear = DELIVERY_CONFIG.annualTarget
     const tolerance = 5 // ±5
-    const tier4_5MinSpacingYears = 3
+    const tier4_5MinSpacingYears = DELIVERY_CONFIG.tier45MinSpacingYears
 
     // Track consumption per year and per wine (for Tier 4-5 spacing)
     const yearlyConsumption: Record<number, number> = {}
@@ -281,7 +282,7 @@ export class ScheduleService {
     const now = new Date()
     const currentYear = now.getFullYear()
     const currentMonth = now.getMonth() + 1
-    const minDeliveryBottles = 24
+    const minDeliveryBottles = DELIVERY_CONFIG.minBottles
 
     // Calculate planning horizon based on maximum drinking window start date
     const maxDrinkingWindowStart = Math.max(
@@ -305,7 +306,7 @@ export class ScheduleService {
     const candidateWines = storageWines
       .filter(w => {
         // Tier 4-5 never before 2029
-        if (w.tier >= 4 && w.drinking_window_start < 2029) {
+        if (w.tier >= 4 && w.drinking_window_start < DELIVERY_CONFIG.tier45StartYear) {
           return false
         }
         // Can't deliver before drinking window starts
@@ -376,7 +377,7 @@ export class ScheduleService {
       const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
       let bottleCount = 0
       let wineCount = 0
-      const targetDeliverySize = Math.min(availableSlotsAtDelivery, Math.ceil(availableSlotsAtDelivery * 0.75)) // Fill 75% to avoid over-delivering
+      const targetDeliverySize = Math.min(availableSlotsAtDelivery, Math.ceil(availableSlotsAtDelivery * DELIVERY_CONFIG.deliveryFillRatio))
 
       // Sort by drinking window urgency (wines opening soonest first)
       // This naturally sequences lower tiers before higher tiers

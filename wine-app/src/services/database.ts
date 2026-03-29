@@ -65,6 +65,8 @@ async function initMemoryDatabase() {
   memoryStorage.set('cellar_config', [])
   memoryStorage.set('consumption_log', [])
   memoryStorage.set('delivery_schedule', [])
+  memoryStorage.set('delivery_delays', [])
+  memoryStorage.set('delivery_pins', [])
 }
 
 // Persist memory database to localStorage

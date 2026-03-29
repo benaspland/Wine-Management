@@ -6,6 +6,7 @@ import * as db from '../services/database'
 import { ScheduleService } from '../services/schedule.service'
 import WineInfo from '../components/WineInfo'
 import MessageModal from '../components/MessageModal'
+import { getNextDeliveryDate, formatDeliveryDate, DELIVERY_CONFIG } from '../config/deliveryConfig'
 
 interface DeliveryDate {
   date: string
@@ -60,19 +61,9 @@ export default function DeliverySchedulePage() {
         .filter(w => w.location === 'home')
         .reduce((sum, w) => sum + w.quantity, 0)
 
-      // Get the next delivery date first to determine which wines are pinned
-      // We need to know the current delivery month (earliest undelivered wines)
-      const now = new Date()
-      const currentYear = now.getFullYear()
-      const currentMonth = now.getMonth() + 1
-
-      // Next delivery slot is first undelivered month in [March, September]
-      let nextDeliveryYear = currentYear
-      let nextDeliveryMonth = currentMonth <= 3 ? 3 : (currentMonth <= 9 ? 9 : 3)
-      if (currentMonth > 9) {
-        nextDeliveryYear = currentYear + 1
-      }
-      const nextDeliveryDate = `${nextDeliveryYear}-${String(nextDeliveryMonth).padStart(2, '0')}-01`
+      // Get the next delivery date to determine which wines are pinned
+      const nextDeliveryInfo = getNextDeliveryDate()
+      const nextDeliveryDate = formatDeliveryDate(nextDeliveryInfo.year, nextDeliveryInfo.month)
 
       // Load pinned wines for current delivery upfront
       const pinnedWineIds = await db.getPinnedWines(nextDeliveryDate)
@@ -85,8 +76,8 @@ export default function DeliverySchedulePage() {
         winesForAlgorithm,
         config.max_slots,
         totalBottlesAtHome,
-        [3, 9], // Fixed delivery months: March and September
-        config.annual_consumption_target || 30
+        DELIVERY_CONFIG.months as [number, number],
+        config.annual_consumption_target || DELIVERY_CONFIG.annualTarget
       )
 
       // Group schedule entries by date
