@@ -128,8 +128,9 @@ async function createSchema() {
       id TEXT PRIMARY KEY,
       wine_id TEXT NOT NULL,
       quantity INTEGER NOT NULL,
-      consumed_at TEXT NOT NULL,
+      consumed_date TEXT NOT NULL,
       notes TEXT,
+      created_at TEXT NOT NULL,
       FOREIGN KEY (wine_id) REFERENCES wines(id)
     );
 
@@ -417,9 +418,10 @@ export async function consumeWine(wineId: string, quantity: number = 1, notes?: 
 
   // Log consumption
   const logId = generateId()
+  const now = new Date().toISOString()
   await executeQuery(
-    'INSERT INTO consumption_log (id, wine_id, quantity, consumed_at, notes) VALUES (?, ?, ?, ?, ?)',
-    [logId, wineId, quantity, new Date().toISOString(), notes || null]
+    'INSERT INTO consumption_log (id, wine_id, quantity, consumed_date, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [logId, wineId, quantity, now, notes || null, now]
   )
 }
 
