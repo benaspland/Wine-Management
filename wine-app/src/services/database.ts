@@ -429,6 +429,8 @@ export async function isWineConsumedInPeriod(wineId: string, year: number, month
 
   return { consumed: false }
 }
+
+export async function consumeWine(
   wineId: string,
   quantity: number = 1,
   notes?: string,
