@@ -438,7 +438,7 @@ export class ScheduleService {
         const bottlesAtHomeWhenDeliveryArrives = currentBottlesAtHome + pendingBottles - consumption
         const targetAvailableCapacity = Math.max(0, cellarCapacity - bottlesAtHomeWhenDeliveryArrives)
 
-        // DELIVER - only in case increments (or final batch edge case)
+        // DELIVER - only in case increments
         const cases: Array<{ wine: Wine; bottles: number }> = []
         let totalDelivered = 0
 
@@ -446,13 +446,9 @@ export class ScheduleService {
           if (totalDelivered >= targetAvailableCapacity) break
 
           const cs = caseSize(wine)
-          const totalRemainingBottles = Object.values(remaining).reduce((a, b) => a + b, 0)
-          const isEdgeCase = totalRemainingBottles < minDeliveryBottles && totalRemainingBottles > 0
 
-          // Only deliver if:
-          // 1. Can deliver a full case, OR
-          // 2. This is the final batch (edge case) and we have some bottles
-          if (remaining[wine.id] < cs && !isEdgeCase) continue
+          // Only deliver if this wine has at least one full case worth
+          if (remaining[wine.id] < cs) continue
 
           const deliverAmount = Math.min(cs, remaining[wine.id], targetAvailableCapacity - totalDelivered)
 
