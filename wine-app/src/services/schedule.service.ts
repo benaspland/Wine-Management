@@ -302,6 +302,7 @@ export class ScheduleService {
       if (wine.is_magnum || size.includes('magnum') || size.includes('1.5l')) return 3
       if (size === '75cl' || size === '750ml') return 6
       // Anything larger than magnum
+      debugLog(`[caseSize] Unknown size for ${wine.producer} ${wine.name}: "${wine.size}" (is_magnum: ${wine.is_magnum}), defaulting to 1`)
       return 1
     }
 
