@@ -438,7 +438,7 @@ export class ScheduleService {
         const bottlesAtHomeWhenDeliveryArrives = currentBottlesAtHome + pendingBottles - consumption
         const targetAvailableCapacity = Math.max(0, cellarCapacity - bottlesAtHomeWhenDeliveryArrives)
 
-        // DELIVER - only in case increments
+        // DELIVER - in case increments (6, 3, 12) or remainder if less than case size
         const cases: Array<{ wine: Wine; bottles: number }> = []
         let totalDelivered = 0
 
@@ -447,12 +447,13 @@ export class ScheduleService {
 
           const cs = caseSize(wine)
 
-          // Only deliver if this wine has at least one full case worth
-          if (remaining[wine.id] < cs) continue
+          // Skip if nothing left of this wine
+          if (remaining[wine.id] === 0) continue
 
-          const deliverAmount = Math.min(cs, remaining[wine.id], targetAvailableCapacity - totalDelivered)
+          // Deliver either a full case OR the remainder (if less than case size)
+          const deliverAmount = remaining[wine.id] >= cs ? cs : remaining[wine.id]
 
-          if (deliverAmount <= 0) continue
+          if (deliverAmount <= 0 || deliverAmount > targetAvailableCapacity - totalDelivered) continue
 
           cases.push({ wine, bottles: deliverAmount })
           remaining[wine.id] -= deliverAmount
