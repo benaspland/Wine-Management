@@ -297,16 +297,21 @@ export class ScheduleService {
 
     // Helper functions
     const caseSize = (wine: Wine): number => {
-      const size = wine.size?.toLowerCase() || ''
-      if (size.includes('half')) return 12
-      if (wine.is_magnum || size.includes('magnum') || size.includes('1.5l')) return 3
+      const size = wine.format?.toLowerCase() || ''
+      if (size.includes('half') || size === '375ml') return 12
+      if (size.includes('magnum') || size.includes('1.5l')) return 3
       if (size === '75cl' || size === '750ml') return 6
       // Anything larger than magnum
-      debugLog(`[caseSize] Unknown size for ${wine.producer} ${wine.name}: "${wine.size}" (is_magnum: ${wine.is_magnum}), defaulting to 1`)
+      debugLog(`[caseSize] Unknown size for ${wine.producer} ${wine.name}: "${wine.format}", defaulting to 1`)
       return 1
     }
 
-    const maxPerYear = (wine: Wine): number => (wine.is_magnum ? 1 : 2)
+    const isMagnum = (wine: Wine): boolean => {
+      const size = wine.format?.toLowerCase() || ''
+      return size.includes('magnum') || size.includes('1.5l')
+    }
+
+    const maxPerYear = (wine: Wine): number => (isMagnum(wine) ? 1 : 2)
 
     // State tracking
     const remaining: Record<string, number> = {}
