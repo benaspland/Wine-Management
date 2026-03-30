@@ -273,7 +273,7 @@ export class ScheduleService {
     allWines: Wine[],
     cellarCapacity: number,
     currentBottlesAtHome: number,
-    deliveryMonths: [number, number] = [3, 9], // March and September
+    deliveryMonths: [number, number] = [3, 9], // January (month 1) and July (month 7) in prototype, March (3) and September (9) here
     annualConsumptionTarget: number = 30
   ): DeliveryScheduleEntry[] {
     console.log('[ScheduleService] ✓ generateDeliverySchedule called')
@@ -292,238 +292,215 @@ export class ScheduleService {
     const tier45StartYear = DELIVERY_CONFIG.tier45StartYear
 
     console.log(
-      `[ScheduleService] ✓ Starting delivery schedule generation: ${storageWines.length} wines, ${currentBottlesAtHome} bottles at home`
+      `[ScheduleService] ✓ Starting delivery schedule generation: ${storageWines.length} wines, ${currentBottlesAtHome} bottles at home, capacity ${cellarCapacity}`
     )
 
-    // Track deliveries and scheduled wines
-    const deliveriesPerYear: Record<number, number> = {}
-    const scheduledWineIds = new Set<string>()
-    let capacityAtHome = currentBottlesAtHome
-    let year = currentYear
-    let monthIndex = 0
-    let lastDeliverySlot = { year: currentYear, monthIndex: 0 }
+    // Helper functions
+    const caseSize = (wine: Wine): number => {
+      const size = wine.size?.toLowerCase() || ''
+      if (size.includes('half')) return 12
+      if (wine.is_magnum || size.includes('magnum') || size.includes('1.5l')) return 3
+      if (size === '75cl' || size === '750ml') return 6
+      // Anything larger than magnum
+      return 1
+    }
 
-    // Filter candidate wines (basic constraints)
-    // NOTE: Tier 4-5 constraint is applied during eligible wine filtering per delivery slot,
-    // not here, so we don't eliminate wines from the entire schedule
-    const candidateWines = storageWines.filter(w => {
-      if (w.quantity === 0) return false
-      return true
+    const maxPerYear = (wine: Wine): number => (wine.is_magnum ? 1 : 2)
+
+    // State tracking
+    const remaining: Record<string, number> = {}
+    const home: Record<string, number> = {}
+    const lastDrunk: Record<string, number> = {}
+    const wineMap: Record<string, Wine> = {}
+
+    storageWines.forEach(w => {
+      remaining[w.id] = w.quantity
+      home[w.id] = 0
+      wineMap[w.id] = w
     })
 
-    debugLog(`[ScheduleService] ${candidateWines.length} candidate wines for delivery (after basic filtering)`)
+    const candidateWines = Object.values(wineMap).filter(w => w.quantity > 0)
+    const totalBottlesAvailable = candidateWines.reduce((sum, w) => sum + w.quantity, 0)
 
-    // Calculate tier distribution in inventory
-    const tierCounts: Record<number, number> = {}
-    for (let tier = 1; tier <= 5; tier++) {
-      tierCounts[tier] = candidateWines.filter(w => w.tier === tier).length
+    console.log(`[ScheduleService] ${candidateWines.length} wines available, ${totalBottlesAvailable} bottles total`)
+
+    // Calculate category counts
+    const categoryCounts: Record<number, number> = {}
+    for (let cat = 1; cat <= 5; cat++) {
+      categoryCounts[cat] = candidateWines.filter(w => w.tier === cat).length
     }
-    debugLog('[ScheduleService] Tier distribution:', tierCounts)
+    debugLog('[ScheduleService] Category distribution:', categoryCounts)
 
-    // Get wines currently at home for diversity calculation
-    const homeWines = allWines.filter(w => w.location === 'home')
-    const homeProducers = new Set(homeWines.map(w => w.producer))
-    const homeRegions = new Set(homeWines.map(w => w.region))
-
-    // MAIN LOOP: Continue until all wines scheduled or safety limit exceeded
-    let noProgressIterations = 0
+    const deliveriesPerYear: Record<number, number> = {}
     let loopIterations = 0
-    const maxLoopIterations = 1000 // Safety limit: 1000 delivery slots max (~500 years worth)
+    const maxLoopIterations = 1000
 
-    while (scheduledWineIds.size < candidateWines.length) {
-      loopIterations++
+    // MAIN DELIVERY LOOP
+    for (let year = currentYear; year < currentYear + 50 && loopIterations < maxLoopIterations; year++) {
+      if (Object.values(remaining).reduce((a, b) => a + b, 0) === 0) break
 
-      if (loopIterations > maxLoopIterations) {
-        debugLog('[ScheduleService] ERROR: Exceeded max loop iterations, stopping algorithm')
-        break
-      }
-      // Step 1-2: Skip past months in current year
-      const month = deliveryMonths[monthIndex]
+      for (let deliverySlot = 0; deliverySlot < 2; deliverySlot++) {
+        loopIterations++
+        if (loopIterations > maxLoopIterations) break
 
-      if (loopIterations % 10 === 0) {
-        console.log(`[Loop ${loopIterations}] Year ${year}, Month ${month}, Scheduled ${scheduledWineIds.size}/${candidateWines.length}`)
-      }
-      if (year === currentYear && month < currentMonth) {
-        monthIndex = (monthIndex + 1) % deliveryMonths.length
-        if (monthIndex === 0) year++
-        continue
-      }
+        const month = deliveryMonths[deliverySlot]
 
-      // Initialize deliveries per year tracker
-      if (!deliveriesPerYear[year]) {
-        deliveriesPerYear[year] = 0
-      }
+        // Skip past months in current year
+        if (year === currentYear && month < currentMonth) continue
 
-      // Max 2 deliveries per year
-      if (deliveriesPerYear[year] >= 2) {
-        monthIndex = (monthIndex + 1) % deliveryMonths.length
-        if (monthIndex === 0) year++
-        continue
-      }
+        // Max 2 deliveries per year
+        if (!deliveriesPerYear[year]) deliveriesPerYear[year] = 0
+        if (deliveriesPerYear[year] >= 2) continue
 
-      // Get unscheduled wines
-      const unscheduledWines = candidateWines.filter(w => !scheduledWineIds.has(w.id))
+        // Get unscheduled wines with remaining bottles
+        const unscheduledWines = candidateWines.filter(w => remaining[w.id] > 0)
+        if (unscheduledWines.length === 0) break
 
-      // Check if done
-      if (unscheduledWines.length === 0) {
-        break
-      }
+        // BUILD CANDIDATE LIST with priority scoring
+        const candidates: Array<{ wine: Wine; priority: number }> = []
 
-      // Build delivery batch with sophisticated wine selection
-      const deliveryBatch: Array<{ wine: Wine; quantity: number }> = []
-      let bottleCount = 0
+        unscheduledWines.forEach(wine => {
+          // Window constraints
+          const timeLeft = wine.drinking_window_end - year
+          if (timeLeft <= 0) return // Window closed
+          const timeToOpen = Math.max(0, wine.drinking_window_start - year)
 
-      // Constraint filtering
-      const eligibleWines = unscheduledWines.filter(w => {
-        // Tier 4-5 cannot be delivered before 2029
-        if (w.tier >= 4 && year < DELIVERY_CONFIG.tier45StartYear) return false
-        return true
-      })
+          // Lead-time constraints
+          const maxLead = wine.tier <= 2 ? 2 : 1
+          if (timeToOpen > maxLead) return // Too early
 
-      // DEADLOCK PREVENTION: If no eligible wines but unscheduled exist, jump to next eligible year
-      if (eligibleWines.length === 0 && unscheduledWines.length > 0) {
-        // Check if blocked wines are Tier 4-5
-        const blockedByTier45 = unscheduledWines.some(w => w.tier >= 4 && year < tier45StartYear)
-        if (blockedByTier45) {
-          year = tier45StartYear
-          monthIndex = 0 // Start from March of that year
-          debugLog(`[ScheduleService] No eligible wines (blocked by Tier 4-5), jumping to ${year}`)
-          continue
-        }
-        // No eligible wines for other reasons, skip to next slot
-        monthIndex = (monthIndex + 1) % deliveryMonths.length
-        if (monthIndex === 0) year++
-        continue
-      }
+          // Category 4-5 constraint
+          if (wine.tier >= 4 && year < tier45StartYear) return
 
-      if (eligibleWines.length === 0) {
-        // No unscheduled wines left
-        break
-      }
+          // Base priority
+          let priority = 500
 
-      // CONSUMPTION ACCOUNTING: Calculate consumption since last delivery
-      const monthsSinceLastDelivery = this.monthsBetweenSlots(lastDeliverySlot, { year, monthIndex }, deliveryMonths)
-      const consumed = Math.round((annualConsumptionTarget / 12) * monthsSinceLastDelivery)
-      capacityAtHome = Math.max(0, capacityAtHome - consumed)
+          // URGENCY: window closing soon
+          if (timeLeft <= 3) priority = 3000 - timeLeft
+          else if (timeLeft <= 6) priority = 2000 - timeLeft
+          else if (timeLeft <= 10) priority = 1000 - timeLeft
 
-      // Available capacity for this delivery
-      const availableCapacity = Math.max(0, cellarCapacity - capacityAtHome)
+          // DRINKABILITY: window already open?
+          if (wine.drinking_window_start <= year) {
+            priority += 1500 // Big bonus
+          } else {
+            priority -= timeToOpen * 300 // Penalty for early delivery
+          }
 
-      // Skip if not enough capacity
-      if (availableCapacity < minDeliveryBottles) {
-        debugLog(`[ScheduleService] Skipping ${year}-${String(month).padStart(2, '0')}: only ${availableCapacity}/${cellarCapacity} capacity (${capacityAtHome} at home)`)
-        monthIndex = (monthIndex + 1) % deliveryMonths.length
-        if (monthIndex === 0) year++
-        continue
-      }
+          // CATEGORY PREFERENCE
+          if (wine.tier === 1) {
+            priority += 600
+            if (year <= currentYear + 3) priority += 500 // Boost in first 4 years
+          } else if (wine.tier === 2) {
+            priority += 300
+            if (year <= currentYear + 2) priority += 200 // Boost in first 3 years
+          } else if (wine.tier === 3) {
+            if (year <= currentYear + 2 && timeLeft > 8) priority -= 400 // Defer in early years if window long
+          } else if (wine.tier >= 4) {
+            priority -= 100 * (wine.tier - 3) // Cat 4: -100, Cat 5: -200
+          }
 
-      if (loopIterations % 20 === 0) {
-        console.log(`  → Eligible wines: ${eligibleWines.length}, Available capacity: ${availableCapacity}`)
-      }
+          // HOME STOCK: avoid overdelivering one wine
+          if (home[wine.id] >= caseSize(wine)) {
+            priority -= 800
+          }
+          if (home[wine.id] === 0) {
+            priority += 100 // Variety bonus
+          }
 
-      // Calculate scores for each wine
-      const scoredWines = eligibleWines.map(wine => {
-        // Window urgency score (PRIMARY)
-        const yearsUntilWindowEnds = wine.drinking_window_end - year
-        const urgencyScore = 1000 / (yearsUntilWindowEnds + 1)
+          candidates.push({ wine, priority })
+        })
 
-        // Tier distribution score (SECONDARY)
-        const unscheduledOfTier = candidateWines.filter(
-          w => w.tier === wine.tier && !scheduledWineIds.has(w.id)
-        ).length
-        const percentageRemaining = unscheduledOfTier / Math.max(1, tierCounts[wine.tier])
-        const tierWeights = { 1: 200, 2: 170, 3: 140, 4: 110, 5: 80 }
-        const tierScore = (tierWeights[wine.tier as keyof typeof tierWeights] || 100) * percentageRemaining
+        if (candidates.length === 0) continue
 
-        // Diversity bonus (TERTIARY)
-        let diversityBonus = 0
-        if (!homeProducers.has(wine.producer)) diversityBonus += 50
-        if (!homeRegions.has(wine.region)) diversityBonus += 25
+        // Sort by priority descending
+        candidates.sort((a, b) => b.priority - a.priority)
 
-        // Total score - urgency is primary factor
-        const totalScore = urgencyScore * 100 + tierScore + diversityBonus
+        // CALCULATE CAPACITY
+        // Account for pending deliveries scheduled before this slot
+        const pendingDeliveriesBeforeThisSlot = schedule.filter(d => {
+          const dYear = parseInt(d.scheduled_date.split('-')[0])
+          const dMonth = parseInt(d.scheduled_date.split('-')[1])
+          if (dYear < year) return true
+          if (dYear === year) return dMonth < month
+          return false
+        })
+        const pendingBottles = pendingDeliveriesBeforeThisSlot.reduce((sum, d) => sum + d.quantity, 0)
 
-        return { wine, totalScore }
-      })
-
-      // Sort by score (highest first)
-      scoredWines.sort((a, b) => b.totalScore - a.totalScore)
-
-      // Add wines to batch until available capacity reached
-      for (const { wine } of scoredWines) {
-        if (bottleCount >= availableCapacity) break
-
-        const minThreshold = getMinDeliveryThreshold(wine.format)
-        const quantityToDeliver = Math.min(wine.quantity, minThreshold, availableCapacity - bottleCount)
-
-        if (quantityToDeliver > 0) {
-          deliveryBatch.push({ wine, quantity: quantityToDeliver })
-          bottleCount += quantityToDeliver
-        }
-      }
-
-      // Record delivery if it meets minimum, OR all remaining wines are in this batch and we have bottles
-      const remainingWines = candidateWines.filter(w => !scheduledWineIds.has(w.id))
-      const allRemainingInBatch = remainingWines.every(w => deliveryBatch.some(d => d.wine.id === w.id))
-      const shouldDeliver = bottleCount >= minDeliveryBottles || (allRemainingInBatch && bottleCount > 0)
-
-      if (shouldDeliver) {
-        const scheduledDate = new Date(year, month - 1, 1)
-        let wineCount = 0
-
-        for (const { wine, quantity } of deliveryBatch) {
-          schedule.push({
-            id: `delivery-${wine.id}-${year}-${month}`,
-            wine_id: wine.id,
-            quantity,
-            scheduled_date: scheduledDate.toISOString().split('T')[0],
-            from_location: 'storage',
-            to_location: 'home',
-            status: 'pending',
-            created_at: new Date().toISOString(),
-          })
-          scheduledWineIds.add(wine.id)
-          homeProducers.add(wine.producer)
-          homeRegions.add(wine.region)
-          wineCount++
-        }
-
-        deliveriesPerYear[year]++
-        capacityAtHome += bottleCount
-        lastDeliverySlot = { year, monthIndex }
-
-        debugLog(
-          `[ScheduleService] ${year}-${String(month).padStart(2, '0')}: Delivered ${bottleCount} bottles, capacity at home now: ${capacityAtHome}`
+        // Consumption from now until this delivery
+        const monthsBetween = this.monthsBetweenSlots(
+          { year: currentYear, monthIndex: currentMonth === 3 ? 0 : currentMonth === 9 ? 1 : 0 },
+          { year, monthIndex: deliverySlot },
+          deliveryMonths
         )
-      }
+        const consumption = Math.round((annualConsumptionTarget / 12) * monthsBetween)
 
-      // Advance to next delivery slot
-      monthIndex = (monthIndex + 1) % deliveryMonths.length
-      if (monthIndex === 0) {
-        year++
-      }
+        const bottlesAtHomeWhenDeliveryArrives = currentBottlesAtHome + pendingBottles - consumption
+        const targetAvailableCapacity = Math.max(0, cellarCapacity - bottlesAtHomeWhenDeliveryArrives)
 
-      // Safety limit: don't go beyond reasonable timeframe (50 years from now)
-      if (year > currentYear + 50) {
-        debugLog('[ScheduleService] WARNING: Exceeded year 2076, stopping delivery scheduling')
-        break
+        // DELIVER
+        const cases: Array<{ wine: Wine; bottles: number }> = []
+        let totalDelivered = 0
+
+        for (const { wine } of candidates) {
+          if (totalDelivered >= targetAvailableCapacity) break
+
+          const cs = caseSize(wine)
+          const deliverAmount = Math.min(cs, remaining[wine.id], targetAvailableCapacity - totalDelivered)
+
+          if (deliverAmount <= 0) continue
+
+          // Check if this is the final batch (fewer bottles left in storage)
+          const isEdgeCase = remaining[wine.id] < minDeliveryBottles && remaining[wine.id] > 0
+
+          cases.push({ wine, bottles: deliverAmount })
+          remaining[wine.id] -= deliverAmount
+          home[wine.id] += deliverAmount
+          totalDelivered += deliverAmount
+        }
+
+        // Record delivery
+        const totalRemaining = Object.values(remaining).reduce((a, b) => a + b, 0)
+        const shouldDeliver =
+          totalDelivered >= minDeliveryBottles || (totalRemaining === 0 && totalDelivered > 0)
+
+        if (shouldDeliver && cases.length > 0) {
+          const scheduledDate = new Date(year, month - 1, 1)
+
+          cases.forEach(({ wine, bottles }) => {
+            schedule.push({
+              id: `delivery-${wine.id}-${year}-${month}`,
+              wine_id: wine.id,
+              quantity: bottles,
+              scheduled_date: scheduledDate.toISOString().split('T')[0],
+              from_location: 'storage',
+              to_location: 'home',
+              status: 'pending',
+              created_at: new Date().toISOString(),
+            })
+          })
+
+          deliveriesPerYear[year]++
+
+          if (loopIterations % 20 === 0) {
+            console.log(
+              `  [${year}-${String(month).padStart(2, '0')}] Delivered ${totalDelivered} bottles (${cases.length} wines), capacity available: ${targetAvailableCapacity}`
+            )
+          }
+        }
       }
     }
 
     const totalBottlesScheduled = schedule.reduce((sum, d) => sum + d.quantity, 0)
-    const totalBottlesAvailable = candidateWines.reduce((sum, w) => sum + w.quantity, 0)
 
     console.log('[ScheduleService] ✓ Delivery scheduling complete:')
-    console.log(`  Wines scheduled: ${scheduledWineIds.size} / ${candidateWines.length}`)
+    console.log(`  Wines with deliveries: ${new Set(schedule.map(d => d.wine_id)).size} / ${candidateWines.length}`)
     console.log(`  Bottles scheduled: ${totalBottlesScheduled} / ${totalBottlesAvailable}`)
     console.log(`  Total deliveries: ${Object.values(deliveriesPerYear).reduce((a, b) => a + b, 0)}`)
     console.log(`  Loop iterations: ${loopIterations}`)
 
     debugLog('[ScheduleService] Delivery scheduling complete:')
-    debugLog(`  Wines scheduled: ${scheduledWineIds.size} / ${candidateWines.length}`)
     debugLog(`  Bottles scheduled: ${totalBottlesScheduled} / ${totalBottlesAvailable}`)
-    debugLog(`  Total deliveries: ${Object.values(deliveriesPerYear).reduce((a, b) => a + b, 0)}`)
-    debugLog(`  Loop iterations: ${loopIterations}`)
     debugLog(`  Deliveries by year:`, deliveriesPerYear)
 
     return schedule
