@@ -274,7 +274,7 @@ export class ScheduleService {
     cellarCapacity: number,
     currentBottlesAtHome: number,
     deliveryMonths: [number, number] = [3, 9], // March and September
-    annualConsumptionTarget: number = 30 // From config
+    annualConsumptionTarget: number = 30
   ): DeliveryScheduleEntry[] {
     console.log('[ScheduleService] ✓ generateDeliverySchedule called')
     const schedule: DeliveryScheduleEntry[] = []
@@ -289,19 +289,19 @@ export class ScheduleService {
     const currentYear = now.getFullYear()
     const currentMonth = now.getMonth() + 1
     const minDeliveryBottles = DELIVERY_CONFIG.minBottles
+    const tier45StartYear = DELIVERY_CONFIG.tier45StartYear
 
     console.log(
       `[ScheduleService] ✓ Starting delivery schedule generation: ${storageWines.length} wines, ${currentBottlesAtHome} bottles at home`
-    )
-    debugLog(
-      `[ScheduleService] Starting delivery schedule generation: ${storageWines.length} wines, ${currentBottlesAtHome} bottles at home`
     )
 
     // Track deliveries and scheduled wines
     const deliveriesPerYear: Record<number, number> = {}
     const scheduledWineIds = new Set<string>()
+    let capacityAtHome = currentBottlesAtHome
     let year = currentYear
     let monthIndex = 0
+    let lastDeliverySlot = { year: currentYear, monthIndex: 0 }
 
     // Filter candidate wines (basic constraints)
     // NOTE: Tier 4-5 constraint is applied during eligible wine filtering per delivery slot,
@@ -380,15 +380,45 @@ export class ScheduleService {
         return true
       })
 
+      // DEADLOCK PREVENTION: If no eligible wines but unscheduled exist, jump to next eligible year
+      if (eligibleWines.length === 0 && unscheduledWines.length > 0) {
+        // Check if blocked wines are Tier 4-5
+        const blockedByTier45 = unscheduledWines.some(w => w.tier >= 4 && year < tier45StartYear)
+        if (blockedByTier45) {
+          year = tier45StartYear
+          monthIndex = 0 // Start from March of that year
+          debugLog(`[ScheduleService] No eligible wines (blocked by Tier 4-5), jumping to ${year}`)
+          continue
+        }
+        // No eligible wines for other reasons, skip to next slot
+        monthIndex = (monthIndex + 1) % deliveryMonths.length
+        if (monthIndex === 0) year++
+        continue
+      }
+
       if (eligibleWines.length === 0) {
-        // No eligible wines this slot, try next
+        // No unscheduled wines left
+        break
+      }
+
+      // CONSUMPTION ACCOUNTING: Calculate consumption since last delivery
+      const monthsSinceLastDelivery = this.monthsBetweenSlots(lastDeliverySlot, { year, monthIndex }, deliveryMonths)
+      const consumed = Math.round((annualConsumptionTarget / 12) * monthsSinceLastDelivery)
+      capacityAtHome = Math.max(0, capacityAtHome - consumed)
+
+      // Available capacity for this delivery
+      const availableCapacity = Math.max(0, cellarCapacity - capacityAtHome)
+
+      // Skip if not enough capacity
+      if (availableCapacity < minDeliveryBottles) {
+        debugLog(`[ScheduleService] Skipping ${year}-${String(month).padStart(2, '0')}: only ${availableCapacity}/${cellarCapacity} capacity (${capacityAtHome} at home)`)
         monthIndex = (monthIndex + 1) % deliveryMonths.length
         if (monthIndex === 0) year++
         continue
       }
 
       if (loopIterations % 20 === 0) {
-        console.log(`  → Eligible wines: ${eligibleWines.length}`)
+        console.log(`  → Eligible wines: ${eligibleWines.length}, Available capacity: ${availableCapacity}`)
       }
 
       // Calculate scores for each wine
@@ -419,12 +449,12 @@ export class ScheduleService {
       // Sort by score (highest first)
       scoredWines.sort((a, b) => b.totalScore - a.totalScore)
 
-      // Add wines to batch until capacity reached
+      // Add wines to batch until available capacity reached
       for (const { wine } of scoredWines) {
-        if (bottleCount >= cellarCapacity) break
+        if (bottleCount >= availableCapacity) break
 
         const minThreshold = getMinDeliveryThreshold(wine.format)
-        const quantityToDeliver = Math.min(wine.quantity, minThreshold, cellarCapacity - bottleCount)
+        const quantityToDeliver = Math.min(wine.quantity, minThreshold, availableCapacity - bottleCount)
 
         if (quantityToDeliver > 0) {
           deliveryBatch.push({ wine, quantity: quantityToDeliver })
@@ -459,9 +489,11 @@ export class ScheduleService {
         }
 
         deliveriesPerYear[year]++
+        capacityAtHome += bottleCount
+        lastDeliverySlot = { year, monthIndex }
 
         debugLog(
-          `[ScheduleService] ${year}-${String(month).padStart(2, '0')}: Delivered ${bottleCount} bottles (${wineCount} wines), total scheduled: ${scheduledWineIds.size}`
+          `[ScheduleService] ${year}-${String(month).padStart(2, '0')}: Delivered ${bottleCount} bottles, capacity at home now: ${capacityAtHome}`
         )
       }
 
@@ -526,6 +558,27 @@ export class ScheduleService {
     // Return empty string - year/month already shown in timeline structure
     // Avoids "THIS YEAR" / "NEXT YEAR" clutter per user feedback
     return ''
+  }
+
+  /**
+   * Calculate months between two delivery slots
+   */
+  private static monthsBetweenSlots(
+    from: { year: number; monthIndex: number },
+    to: { year: number; monthIndex: number },
+    deliveryMonths: [number, number]
+  ): number {
+    const fromMonth = deliveryMonths[from.monthIndex]
+    const toMonth = deliveryMonths[to.monthIndex]
+    const yearDiff = to.year - from.year
+
+    if (yearDiff === 0) {
+      // Same year
+      return toMonth > fromMonth ? toMonth - fromMonth : 0
+    }
+
+    // Across years: months remaining in from year + months in to year
+    return (12 - fromMonth) + toMonth + (yearDiff - 1) * 12
   }
 
 }
