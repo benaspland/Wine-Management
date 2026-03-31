@@ -396,14 +396,14 @@ export class ScheduleService {
           } else if (wine.tier === 3) {
             if (year <= currentYear + 2 && timeLeft > 8) priority -= 400
           } else if (wine.tier >= 4) {
-            // Tier 4-5: boost priority if becoming drinkable soon (to spread consumption across window)
-            const yearsUntilDrinkable = Math.max(0, wine.drinking_window_start - year)
-            if (yearsUntilDrinkable <= 1) {
-              priority += 1000 // Strong boost - drinkable this year or next
-            } else if (yearsUntilDrinkable <= 3) {
-              priority += 500  // Moderate boost - drinkable within 3 years
+            // Tier 4-5: use deterministic selection (every 4th wine) for early priority boost
+            // This spreads premium wines naturally across schedule without over-clustering them
+            const wineIndex = candidateWines.findIndex(w => w.id === wine.id)
+            const isSelected = wineIndex % 4 === 0  // Every 4th wine gets boost
+            if (isSelected) {
+              priority += 300  // Moderate boost to pull selected wines forward
             } else {
-              priority -= 100 * (wine.tier - 3) // Penalty for distant wines
+              priority -= 100 * (wine.tier - 3)  // Normal penalty for others
             }
           }
 
