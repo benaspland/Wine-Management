@@ -396,7 +396,15 @@ export class ScheduleService {
           } else if (wine.tier === 3) {
             if (year <= currentYear + 2 && timeLeft > 8) priority -= 400
           } else if (wine.tier >= 4) {
-            priority -= 100 * (wine.tier - 3)
+            // Tier 4-5: boost priority if becoming drinkable soon (to spread consumption across window)
+            const yearsUntilDrinkable = Math.max(0, wine.drinking_window_start - year)
+            if (yearsUntilDrinkable <= 1) {
+              priority += 1000 // Strong boost - drinkable this year or next
+            } else if (yearsUntilDrinkable <= 3) {
+              priority += 500  // Moderate boost - drinkable within 3 years
+            } else {
+              priority -= 100 * (wine.tier - 3) // Penalty for distant wines
+            }
           }
 
           // HOME STOCK
