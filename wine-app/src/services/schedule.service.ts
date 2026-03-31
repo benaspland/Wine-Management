@@ -1,5 +1,5 @@
 import type { Wine, DeliveryScheduleEntry } from '../types/index'
-import { DELIVERY_CONFIG, getMinDeliveryThreshold } from '../config/deliveryConfig'
+import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 
 // Debug logging helper - logs in development and when explicitly enabled
 const debugLog = (...args: any[]) => {
@@ -311,12 +311,9 @@ export class ScheduleService {
       return size.includes('magnum') || size.includes('1.5l')
     }
 
-    const maxPerYear = (wine: Wine): number => (isMagnum(wine) ? 1 : 2)
-
     // State tracking
     const remaining: Record<string, number> = {}
     const home: Record<string, number> = {}
-    const lastDrunk: Record<string, number> = {}
     const wineMap: Record<string, Wine> = {}
 
     storageWines.forEach(w => {
@@ -420,7 +417,7 @@ export class ScheduleService {
 
           // DIVERSITY: prefer new producers/regions (slight bonus)
           const winesAtHome = Object.entries(home)
-            .filter(([id, qty]) => qty > 0)
+            .filter(([, qty]) => qty > 0)
             .map(([id]) => wineMap[id])
           const producersAtHome = new Set(winesAtHome.map(w => w.producer))
           const regionsAtHome = new Set(winesAtHome.map(w => w.region))

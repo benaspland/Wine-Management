@@ -6,9 +6,8 @@
  * where wines are being dropped from the schedule
  */
 
-import type { Wine, DeliveryScheduleEntry } from '../../types/index'
+import type { Wine, Tier } from '../../types/index'
 import { ScheduleService } from '../schedule.service'
-import { DELIVERY_CONFIG } from '../../config/deliveryConfig'
 
 // Test CSV data - will be parsed here
 const CSV_DATA = `Vintage,Country,Region,Wine,Quantity,Size,Peak Drinking Window,Classification,Wine Rating,Professional Critic Ratings,Wine Notes,Varietal,Alcohol Level,Flavour Profile,Recommended Service Temp
@@ -21,7 +20,6 @@ const CSV_DATA = `Vintage,Country,Region,Wine,Quantity,Size,Peak Drinking Window
 // Parse CSV to Wine objects
 function parseCSV(csv: string): Wine[] {
   const lines = csv.trim().split('\n')
-  const headers = lines[0].split(',').map(h => h.trim())
   const wines: Wine[] = []
   let wineId = 0
 
@@ -56,8 +54,8 @@ function parseCSV(csv: string): Wine[] {
     const windowRange = cells[6]
     const [windowStart, windowEnd] = windowRange.split('-').map(w => parseInt(w))
     const classification = cells[7]
-    const tier = parseInt(cells[8]) || 3 // Wine Rating maps to tier
-    const criticRatings = cells[9]
+    const tierNum = parseInt(cells[8]) || 3 // Wine Rating maps to tier
+    const tier = Math.max(1, Math.min(5, tierNum)) as Tier
     const notes = cells[10]
     const varietal = cells[11]
     const alcohol = parseFloat(cells[12].replace('%', ''))
@@ -105,7 +103,6 @@ function parseCSV(csv: string): Wine[] {
       notes,
       critic_ratings: {}, // Simplified for debug
       flavor_profile: flavorProfile,
-      image_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
