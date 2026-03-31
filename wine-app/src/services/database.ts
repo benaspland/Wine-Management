@@ -67,6 +67,7 @@ async function initMemoryDatabase() {
   memoryStorage.set('delivery_schedule', [])
   memoryStorage.set('delivery_delays', [])
   memoryStorage.set('delivery_pins', [])
+  memoryStorage.set('delivery_locks', [])
 }
 
 // Persist memory database to localStorage
@@ -145,6 +146,25 @@ async function createSchema() {
       to_location TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       created_at TEXT NOT NULL,
+      FOREIGN KEY (wine_id) REFERENCES wines(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS delivery_locks (
+      delivery_date TEXT PRIMARY KEY,
+      locked_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS delivery_delays (
+      wine_id TEXT NOT NULL,
+      delivery_date TEXT NOT NULL,
+      PRIMARY KEY (wine_id, delivery_date),
+      FOREIGN KEY (wine_id) REFERENCES wines(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS delivery_pins (
+      wine_id TEXT NOT NULL,
+      delivery_date TEXT NOT NULL,
+      PRIMARY KEY (wine_id, delivery_date),
       FOREIGN KEY (wine_id) REFERENCES wines(id)
     );
 
@@ -577,6 +597,49 @@ export async function getPinnedWines(deliveryDate: string): Promise<string[]> {
 
 export async function clearPinMarks(deliveryDate: string): Promise<void> {
   await clearDeliveryMarkers('delivery_pins', deliveryDate)
+}
+
+export async function lockDelivery(deliveryDate: string): Promise<void> {
+  if (dbType === 'memory') {
+    const locks = memoryStorage.get('delivery_locks') || []
+    // Remove existing lock for this date if any
+    const filtered = locks.filter((l: any) => l.delivery_date !== deliveryDate)
+    filtered.push({ delivery_date: deliveryDate, locked_at: new Date().toISOString() })
+    memoryStorage.set('delivery_locks', filtered)
+    persistMemoryDatabase()
+  } else {
+    await db.runAsync(
+      'INSERT OR REPLACE INTO delivery_locks (delivery_date) VALUES (?)',
+      [deliveryDate]
+    )
+  }
+}
+
+export async function unlockDelivery(deliveryDate: string): Promise<void> {
+  if (dbType === 'memory') {
+    const locks = memoryStorage.get('delivery_locks') || []
+    const filtered = locks.filter((l: any) => l.delivery_date !== deliveryDate)
+    memoryStorage.set('delivery_locks', filtered)
+    persistMemoryDatabase()
+  } else {
+    await db.runAsync(
+      'DELETE FROM delivery_locks WHERE delivery_date = ?',
+      [deliveryDate]
+    )
+  }
+}
+
+export async function isDeliveryLocked(deliveryDate: string): Promise<boolean> {
+  if (dbType === 'memory') {
+    const locks = memoryStorage.get('delivery_locks') || []
+    return locks.some((l: any) => l.delivery_date === deliveryDate)
+  } else {
+    const result = await db.allAsync(
+      'SELECT 1 FROM delivery_locks WHERE delivery_date = ?',
+      [deliveryDate]
+    )
+    return result.length > 0
+  }
 }
 
 export async function checkDeliveryCapacity(

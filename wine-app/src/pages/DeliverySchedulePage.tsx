@@ -39,6 +39,8 @@ export default function DeliverySchedulePage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [delayedWines, setDelayedWines] = useState<string[]>([])
   const [promotionDialog, setPromotionDialog] = useState<{ show: boolean; wine?: any; error?: string; projectedTotal?: number }>({ show: false })
+  const [currentDeliveryLocked, setCurrentDeliveryLocked] = useState(false)
+  const [isTogglingLock, setIsTogglingLock] = useState(false)
 
   // Load cellar config and generate initial schedule
   useEffect(() => {
@@ -69,8 +71,17 @@ export default function DeliverySchedulePage() {
       const pinnedWineIds = await db.getPinnedWines(nextDeliveryDate)
       const pinnedWineIdSet = new Set(pinnedWineIds)
 
-      // Exclude pinned wines from algorithm (they're already placed in current delivery)
-      const winesForAlgorithm = wines.filter(w => !pinnedWineIdSet.has(w.id))
+      // Check if current delivery is locked (user-controlled)
+      const isCurrentDeliveryLocked = await db.isDeliveryLocked(nextDeliveryDate)
+
+      // Build wines for algorithm
+      let winesForAlgorithm = wines.filter(w => !pinnedWineIdSet.has(w.id))
+
+      // If current delivery is locked, exclude its wines from algorithm
+      if (isCurrentDeliveryLocked) {
+        // Pinned wines are already excluded, which protects the locked delivery
+        // This prevents algorithm from modifying locked delivery
+      }
 
       const deliverySchedule = ScheduleService.generateDeliverySchedule(
         winesForAlgorithm,
@@ -177,8 +188,36 @@ export default function DeliverySchedulePage() {
 
       setDeliveriesByYear(byYear)
       setLastRegenerated(new Date().toLocaleTimeString())
+
+      // Load lock status for current delivery (using nextDeliveryDate from above)
+      const isLocked = await db.isDeliveryLocked(nextDeliveryDate)
+      setCurrentDeliveryLocked(isLocked)
     } finally {
       setIsRegenerating(false)
+    }
+  }
+
+  // Toggle lock on current delivery
+  const handleToggleLock = async () => {
+    setIsTogglingLock(true)
+    try {
+      const nextDeliveryInfo = getNextDeliveryDate()
+      const nextDeliveryDate = formatDeliveryDate(nextDeliveryInfo.year, nextDeliveryInfo.month)
+
+      if (currentDeliveryLocked) {
+        await db.unlockDelivery(nextDeliveryDate)
+        setCurrentDeliveryLocked(false)
+        setMessage({ type: 'success', text: 'Current delivery unlocked' })
+      } else {
+        await db.lockDelivery(nextDeliveryDate)
+        setCurrentDeliveryLocked(true)
+        setMessage({ type: 'success', text: 'Current delivery locked for manual curation' })
+      }
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      setMessage({ type: 'error', text: `Error: ${(error as Error).message}` })
+    } finally {
+      setIsTogglingLock(false)
     }
   }
 
@@ -523,14 +562,33 @@ export default function DeliverySchedulePage() {
                           <p className="text-outline-variant text-sm mt-2">{groupBottles} bottles • {group.wines.length} wines</p>
                         </div>
                         {isNextDelivery && (
-                          <button
-                            onClick={() => handleMarkGroupDeliveryComplete(group)}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleToggleLock}
+                              disabled={isTogglingLock}
+                              className={`px-4 py-2 rounded font-medium transition-colors flex items-center gap-2 ${
+                                currentDeliveryLocked
+                                  ? 'bg-amber-500/20 text-amber-700 hover:bg-amber-500/30'
+                                  : 'bg-surface-container-low text-on-surface hover:bg-surface-container'
+                              } disabled:opacity-50`}
+                              title={currentDeliveryLocked ? 'Unlock for automatic regeneration' : 'Lock for manual curation'}
+                            >
+                              <span className="material-symbols-outlined text-lg">
+                                {currentDeliveryLocked ? 'lock' : 'lock_open'}
+                              </span>
+                              <span className="hidden sm:inline text-sm">
+                                {currentDeliveryLocked ? 'Locked' : 'Lock'}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => handleMarkGroupDeliveryComplete(group)}
                             disabled={isMoving}
                             className="px-4 py-2 bg-primary text-on-primary rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap flex-shrink-0"
                             title="Mark this entire delivery as received"
                           >
                             {isMoving ? 'Moving...' : 'Mark Delivered'}
-                          </button>
+                            </button>
+                          </div>
                         )}
                       </div>
 
