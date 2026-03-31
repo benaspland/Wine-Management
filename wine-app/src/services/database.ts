@@ -608,9 +608,9 @@ export async function lockDelivery(deliveryDate: string): Promise<void> {
     memoryStorage.set('delivery_locks', filtered)
     persistMemoryDatabase()
   } else {
-    await db.runAsync(
-      'INSERT OR REPLACE INTO delivery_locks (delivery_date) VALUES (?)',
-      [deliveryDate]
+    await executeQuery(
+      'INSERT OR REPLACE INTO delivery_locks (delivery_date, locked_at) VALUES (?, ?)',
+      [deliveryDate, new Date().toISOString()]
     )
   }
 }
@@ -622,7 +622,7 @@ export async function unlockDelivery(deliveryDate: string): Promise<void> {
     memoryStorage.set('delivery_locks', filtered)
     persistMemoryDatabase()
   } else {
-    await db.runAsync(
+    await executeQuery(
       'DELETE FROM delivery_locks WHERE delivery_date = ?',
       [deliveryDate]
     )
@@ -634,11 +634,11 @@ export async function isDeliveryLocked(deliveryDate: string): Promise<boolean> {
     const locks = memoryStorage.get('delivery_locks') || []
     return locks.some((l: any) => l.delivery_date === deliveryDate)
   } else {
-    const result = await db.allAsync(
+    const result = await executeQuery(
       'SELECT 1 FROM delivery_locks WHERE delivery_date = ?',
       [deliveryDate]
     )
-    return result.length > 0
+    return (result.values?.length ?? 0) > 0
   }
 }
 
