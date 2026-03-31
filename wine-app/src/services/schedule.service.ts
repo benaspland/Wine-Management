@@ -286,7 +286,6 @@ export class ScheduleService {
 
     const currentYear = new Date().getFullYear()
     const currentMonth = new Date().getMonth() + 1
-    const minDeliveryBottles = DELIVERY_CONFIG.minBottles
     const tier45StartYear = DELIVERY_CONFIG.tier45StartYear
 
     console.log(
@@ -433,11 +432,9 @@ export class ScheduleService {
           totalDelivered += deliverAmount
         }
 
-        // Record delivery
-        const totalRemaining = Object.values(remaining).reduce((a, b) => a + b, 0)
-        const shouldDeliver = totalDelivered >= minDeliveryBottles || (totalRemaining === 0 && totalDelivered > 0)
-
-        if (shouldDeliver && cases.length > 0) {
+        // Record delivery - ALWAYS record if wines were moved to home
+        // (even if less than minDeliveryBottles, as these can be remainders grouped with others)
+        if (cases.length > 0) {
           const scheduledDate = new Date(year, month - 1, 1)
 
           cases.forEach(({ wine, bottles }) => {
