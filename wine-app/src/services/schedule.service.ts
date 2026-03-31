@@ -425,7 +425,11 @@ export class ScheduleService {
           candidates.push({ wine, priority })
         })
 
-        if (candidates.length === 0) continue
+        if (candidates.length === 0) {
+          // All unscheduled wines were filtered by constraints
+          // This is OK - just continue to next slot
+          continue
+        }
 
         // Sort by priority descending
         candidates.sort((a, b) => b.priority - a.priority)
@@ -559,22 +563,4 @@ export class ScheduleService {
   /**
    * Calculate months between two delivery slots
    */
-  private static monthsBetweenSlots(
-    from: { year: number; monthIndex: number },
-    to: { year: number; monthIndex: number },
-    deliveryMonths: [number, number]
-  ): number {
-    const fromMonth = deliveryMonths[from.monthIndex]
-    const toMonth = deliveryMonths[to.monthIndex]
-    const yearDiff = to.year - from.year
-
-    if (yearDiff === 0) {
-      // Same year
-      return toMonth > fromMonth ? toMonth - fromMonth : 0
-    }
-
-    // Across years: months remaining in from year + months in to year
-    return (12 - fromMonth) + toMonth + (yearDiff - 1) * 12
-  }
-
 }
