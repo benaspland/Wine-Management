@@ -332,13 +332,11 @@ export class ScheduleService {
     const deliveriesPerYear: Record<number, number> = {}
     let loopIterations = 0
     const maxLoopIterations = 5000 // Increased to handle full 50-year horizon with consumption cycles
-    let lastDeliveryYear = currentYear
-    let lastDeliveryMonthIndex = currentMonth === 3 ? 0 : currentMonth === 9 ? 1 : 0
 
     console.log(`[ScheduleService] 🔍 TRACE: Starting with maxLoopIterations=${maxLoopIterations}`)
 
     // MAIN DELIVERY LOOP
-    for (let year = currentYear; year < currentYear + 50 && loopIterations < maxLoopIterations; year++) {
+    for (let year = currentYear; year < currentYear + 100 && loopIterations < maxLoopIterations; year++) {
       if (Object.values(remaining).reduce((a, b) => a + b, 0) === 0) break
 
       for (let deliverySlot = 0; deliverySlot < 2; deliverySlot++) {
@@ -443,13 +441,10 @@ export class ScheduleService {
         })
         const pendingBottles = pendingDeliveriesBeforeThisSlot.reduce((sum, d) => sum + d.quantity, 0)
 
-        // Consumption from last delivery slot to this one
-        const monthsBetween = this.monthsBetweenSlots(
-          { year: lastDeliveryYear, monthIndex: lastDeliveryMonthIndex },
-          { year, monthIndex: deliverySlot },
-          deliveryMonths
-        )
-        const consumption = Math.round((annualConsumptionTarget / 12) * monthsBetween)
+        // Consumption from start of planning period until this delivery
+        // Using simpler model: months accumulate based on delivery slot position
+        const monthsFromStart = (year - currentYear) * 12 + (deliverySlot * 6)
+        const consumption = Math.round((annualConsumptionTarget / 12) * monthsFromStart)
 
         const bottlesAtHomeWhenDeliveryArrives = currentBottlesAtHome + pendingBottles - consumption
         const targetAvailableCapacity = Math.max(0, cellarCapacity - bottlesAtHomeWhenDeliveryArrives)
@@ -499,9 +494,6 @@ export class ScheduleService {
           })
 
           deliveriesPerYear[year]++
-          // Update tracking for next consumption calculation
-          lastDeliveryYear = year
-          lastDeliveryMonthIndex = deliverySlot
 
           if (loopIterations % 20 === 0) {
             console.log(
