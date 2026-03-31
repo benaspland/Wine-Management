@@ -453,6 +453,9 @@ export class ScheduleService {
         const bottlesAtHomeWhenDeliveryArrives = currentBottlesAtHome + pendingBottles - consumption
         const targetAvailableCapacity = Math.max(0, cellarCapacity - bottlesAtHomeWhenDeliveryArrives)
 
+        // Skip delivery if not enough capacity for minimum bottles
+        if (targetAvailableCapacity < minDeliveryBottles) continue
+
         // DELIVER - in case increments (6, 3, 12) or remainder if less than case size
         const cases: Array<{ wine: Wine; bottles: number }> = []
         let totalDelivered = 0
