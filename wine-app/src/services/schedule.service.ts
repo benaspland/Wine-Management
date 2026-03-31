@@ -331,7 +331,7 @@ export class ScheduleService {
 
     const deliveriesPerYear: Record<number, number> = {}
     let loopIterations = 0
-    const maxLoopIterations = 1000
+    const maxLoopIterations = 5000 // Increased to handle full 50-year horizon with consumption cycles
 
     // MAIN DELIVERY LOOP
     for (let year = currentYear; year < currentYear + 50 && loopIterations < maxLoopIterations; year++) {
