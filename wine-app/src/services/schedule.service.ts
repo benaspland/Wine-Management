@@ -411,7 +411,7 @@ export class ScheduleService {
 
         if (candidates.length === 0) continue
 
-        // 4.3 Sort and deliver
+        // 4.3 Sort and build delivery cases (without moving yet)
         candidates.sort((a, b) => b.priority - a.priority)
 
         const cases: Array<{ wine: Wine; bottles: number }> = []
@@ -427,17 +427,22 @@ export class ScheduleService {
           if (deliverAmount <= 0 || deliverAmount > space - totalDelivered) continue
 
           cases.push({ wine, bottles: deliverAmount })
-          remaining[wine.id] -= deliverAmount
-          home[wine.id] += deliverAmount
           totalDelivered += deliverAmount
         }
 
-        // Record delivery - ALWAYS record if wines were moved to home
-        // (even if less than minDeliveryBottles, as these can be remainders grouped with others)
-        if (cases.length > 0) {
+        // Check if this delivery should be recorded
+        // Only move wines to home if delivery meets criteria
+        const totalRemaining = Object.values(remaining).reduce((a, b) => a + b, 0)
+        const isFinalDelivery = totalRemaining > 0 && totalRemaining < 24
+        const shouldDeliver = (totalDelivered >= 24) || isFinalDelivery
+
+        if (shouldDeliver && cases.length > 0) {
           const scheduledDate = new Date(year, month - 1, 1)
 
+          // NOW move wines to home and record delivery
           cases.forEach(({ wine, bottles }) => {
+            remaining[wine.id] -= bottles
+            home[wine.id] += bottles
             deliveries.push({
               id: `delivery-${wine.id}-${year}-${month}`,
               wine_id: wine.id,
