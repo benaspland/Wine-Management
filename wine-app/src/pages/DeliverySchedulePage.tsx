@@ -542,6 +542,7 @@ export default function DeliverySchedulePage() {
                       })
                       const isNextDelivery = nextDelivery?.date === group.date
                       const groupBottles = group.wines.reduce((sum, w) => sum + w.quantity, 0)
+                      const currentDeliveryBottles = nextDelivery ? nextDelivery.wines.reduce((sum, w) => sum + w.quantity, 0) : 0
 
                       return (
                       <section key={`delivery-${year}-${idx}`}>
@@ -639,7 +640,7 @@ export default function DeliverySchedulePage() {
                               )}
                               {!isNextDelivery && (
                                 <button
-                                  onClick={() => handlePromoteWineClick(wine, group.wines.reduce((sum, w) => sum + w.quantity, 0))}
+                                  onClick={() => handlePromoteWineClick(wine, currentDeliveryBottles)}
                                   disabled={isPromoting}
                                   className="px-2 py-1 bg-primary text-on-primary rounded text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap"
                                   title="Promote to current delivery"
