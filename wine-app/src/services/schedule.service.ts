@@ -368,11 +368,11 @@ export class ScheduleService {
         unscheduledWines.forEach(wine => {
           // Window constraints
           const timeLeft = wine.drinking_window_end - year
-          if (timeLeft <= 0) return // Window closed
+          if (timeLeft <= 0) return // Window closed - MUST SKIP
           const timeToOpen = Math.max(0, wine.drinking_window_start - year)
 
-          // Lead-time constraints
-          const maxLead = wine.tier <= 2 ? 2 : 1
+          // Lead-time constraints: be more lenient to avoid missing windows
+          const maxLead = wine.tier <= 2 ? 3 : 2 // Increased from 2 and 1
           if (timeToOpen > maxLead) return // Too early
 
           // Category 4-5 constraint
@@ -381,38 +381,52 @@ export class ScheduleService {
           // Base priority
           let priority = 500
 
-          // URGENCY: window closing soon
-          if (timeLeft <= 3) priority = 3000 - timeLeft
-          else if (timeLeft <= 6) priority = 2000 - timeLeft
-          else if (timeLeft <= 10) priority = 1000 - timeLeft
+          // URGENCY: window closing soon (PRIMARY FACTOR)
+          if (timeLeft <= 1) priority = 5000 // Last year - MUST DELIVER
+          else if (timeLeft <= 2) priority = 3500 // Closing soon
+          else if (timeLeft <= 3) priority = 3000
+          else if (timeLeft <= 6) priority = 2000
+          else if (timeLeft <= 10) priority = 1000
 
           // DRINKABILITY: window already open?
           if (wine.drinking_window_start <= year) {
             priority += 1500 // Big bonus
           } else {
-            priority -= timeToOpen * 300 // Penalty for early delivery
+            // Less penalty for early delivery to ensure we capture wines
+            priority -= Math.min(300, timeToOpen * 100)
           }
 
-          // CATEGORY PREFERENCE
+          // CATEGORY PREFERENCE - simplified to avoid deprioritizing
           if (wine.tier === 1) {
             priority += 600
-            if (year <= currentYear + 3) priority += 500 // Boost in first 4 years
+            if (year <= currentYear + 5) priority += 200 // Extended boost
           } else if (wine.tier === 2) {
             priority += 300
-            if (year <= currentYear + 2) priority += 200 // Boost in first 3 years
+            if (year <= currentYear + 4) priority += 100 // Extended boost
           } else if (wine.tier === 3) {
-            if (year <= currentYear + 2 && timeLeft > 8) priority -= 400 // Defer in early years if window long
-          } else if (wine.tier >= 4) {
-            priority -= 100 * (wine.tier - 3) // Cat 4: -100, Cat 5: -200
+            priority += 150 // Give Tier 3 a baseline boost
+          } else if (wine.tier === 4) {
+            priority += 50 // Slight boost for Tier 4
+          } else if (wine.tier === 5) {
+            priority += 25 // Small boost for Tier 5
           }
 
-          // HOME STOCK: avoid overdelivering one wine
-          if (home[wine.id] >= caseSize(wine)) {
-            priority -= 800
+          // HOME STOCK: avoid overdelivering one wine, but be lenient
+          if (home[wine.id] >= caseSize(wine) * 2) {
+            priority -= 500 // Only penalize if we have 2+ cases at home
+          } else if (home[wine.id] === 0) {
+            priority += 150 // Variety bonus - higher to encourage first delivery
           }
-          if (home[wine.id] === 0) {
-            priority += 100 // Variety bonus
-          }
+
+          // DIVERSITY: prefer new producers/regions (slight bonus)
+          const winesAtHome = Object.entries(home)
+            .filter(([id, qty]) => qty > 0)
+            .map(([id]) => wineMap[id])
+          const producersAtHome = new Set(winesAtHome.map(w => w.producer))
+          const regionsAtHome = new Set(winesAtHome.map(w => w.region))
+
+          if (!producersAtHome.has(wine.producer)) priority += 75
+          if (!regionsAtHome.has(wine.region)) priority += 50
 
           candidates.push({ wine, priority })
         })
