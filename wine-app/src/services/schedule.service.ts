@@ -274,7 +274,7 @@ export class ScheduleService {
     cellarCapacity: number = 80,
     currentBottlesAtHome: number = 0,
     deliveryMonths: [number, number] = [3, 9],
-    _annualConsumptionTarget: number = 30
+    annualConsumptionTarget: number = 30
   ): DeliveryScheduleEntry[] {
     console.log('[ScheduleService] ✓ generateDeliverySchedule called')
     const storageWines = allWines.filter(w => w.location === 'storage')
@@ -497,10 +497,10 @@ export class ScheduleService {
       let drinkCount = 0
 
       // Pass 0: One of each (variety)
-      if (drinkCount < 30) {
+      if (drinkCount < annualConsumptionTarget) {
         const pool = getDrinkable()
         pool.forEach(({ id }) => {
-          if (drinkCount >= 30) return
+          if (drinkCount >= annualConsumptionTarget) return
           const drunk = drunkThisYear[id] || 0
           if (drunk >= 1) return
           if (home[id] <= 0) return
@@ -513,10 +513,10 @@ export class ScheduleService {
       }
 
       // Pass 1: Second bottles for Cat 1-3
-      if (drinkCount < 30) {
+      if (drinkCount < annualConsumptionTarget) {
         const pool = getDrinkable()
         pool.forEach(({ id, tier }) => {
-          if (drinkCount >= 30) return
+          if (drinkCount >= annualConsumptionTarget) return
           const wine = wineMap[id]
           if (wine.format?.toLowerCase().includes('magnum')) return
           const drunk = drunkThisYear[id] || 0
@@ -532,10 +532,10 @@ export class ScheduleService {
       }
 
       // Pass 2: Second bottles for Cat 4-5
-      if (drinkCount < 30) {
+      if (drinkCount < annualConsumptionTarget) {
         const pool = getDrinkable()
         pool.forEach(({ id }) => {
-          if (drinkCount >= 30) return
+          if (drinkCount >= annualConsumptionTarget) return
           const wine = wineMap[id]
           if (wine.format?.toLowerCase().includes('magnum')) return
           const drunk = drunkThisYear[id] || 0
