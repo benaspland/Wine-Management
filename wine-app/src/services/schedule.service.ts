@@ -333,6 +333,8 @@ export class ScheduleService {
     let loopIterations = 0
     const maxLoopIterations = 5000 // Increased to handle full 50-year horizon with consumption cycles
 
+    console.log(`[ScheduleService] 🔍 TRACE: Starting with maxLoopIterations=${maxLoopIterations}`)
+
     // MAIN DELIVERY LOOP
     for (let year = currentYear; year < currentYear + 50 && loopIterations < maxLoopIterations; year++) {
       if (Object.values(remaining).reduce((a, b) => a + b, 0) === 0) break
@@ -506,6 +508,12 @@ export class ScheduleService {
     }
 
     const totalBottlesScheduled = schedule.reduce((sum, d) => sum + d.quantity, 0)
+    const remainingBottles = Object.values(remaining).reduce((a, b) => a + b, 0)
+
+    console.log('[ScheduleService] 🔍 TRACE: Loop ended')
+    console.log(`  🔍 Loop iterations: ${loopIterations} (max: ${maxLoopIterations})`)
+    console.log(`  🔍 Remaining bottles: ${remainingBottles}`)
+    console.log(`  🔍 Loop ended because: ${remainingBottles === 0 ? 'ALL WINES SCHEDULED' : loopIterations >= maxLoopIterations ? 'MAX ITERATIONS HIT' : 'UNKNOWN'}`)
 
     console.log('[ScheduleService] ✓ Delivery scheduling complete:')
     console.log(`  Wines with deliveries: ${new Set(schedule.map(d => d.wine_id)).size} / ${candidateWines.length}`)
