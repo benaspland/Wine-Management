@@ -332,6 +332,8 @@ export class ScheduleService {
     const deliveriesPerYear: Record<number, number> = {}
     let loopIterations = 0
     const maxLoopIterations = 5000 // Increased to handle full 50-year horizon with consumption cycles
+    let lastDeliveryYear = currentYear
+    let lastDeliveryMonthIndex = currentMonth === 3 ? 0 : currentMonth === 9 ? 1 : 0
 
     console.log(`[ScheduleService] 🔍 TRACE: Starting with maxLoopIterations=${maxLoopIterations}`)
 
@@ -441,9 +443,9 @@ export class ScheduleService {
         })
         const pendingBottles = pendingDeliveriesBeforeThisSlot.reduce((sum, d) => sum + d.quantity, 0)
 
-        // Consumption from now until this delivery
+        // Consumption from last delivery slot to this one
         const monthsBetween = this.monthsBetweenSlots(
-          { year: currentYear, monthIndex: currentMonth === 3 ? 0 : currentMonth === 9 ? 1 : 0 },
+          { year: lastDeliveryYear, monthIndex: lastDeliveryMonthIndex },
           { year, monthIndex: deliverySlot },
           deliveryMonths
         )
@@ -478,7 +480,7 @@ export class ScheduleService {
         // Record delivery
         const totalRemaining = Object.values(remaining).reduce((a, b) => a + b, 0)
         const shouldDeliver =
-          totalDelivered >= minDeliveryBottles || (totalRemaining === 0 && totalDelivered > 0)
+          totalDelivered >= minDeliveryBottles || (totalRemaining === 0 && totalDelivered > 0) || (candidates.length === cases.length && cases.length > 0)
 
         if (shouldDeliver && cases.length > 0) {
           const scheduledDate = new Date(year, month - 1, 1)
@@ -497,6 +499,9 @@ export class ScheduleService {
           })
 
           deliveriesPerYear[year]++
+          // Update tracking for next consumption calculation
+          lastDeliveryYear = year
+          lastDeliveryMonthIndex = deliverySlot
 
           if (loopIterations % 20 === 0) {
             console.log(
