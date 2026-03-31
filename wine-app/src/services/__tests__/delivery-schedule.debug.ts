@@ -136,7 +136,6 @@ function debugDeliverySchedule() {
   console.log('Running delivery schedule algorithm...')
   console.log('='.repeat(80))
 
-  const currentYear = new Date().getFullYear()
   const cellarCapacity = 80
   const currentBottlesAtHome = 0
 

@@ -306,11 +306,6 @@ export class ScheduleService {
       return 1
     }
 
-    const isMagnum = (wine: Wine): boolean => {
-      const size = wine.format?.toLowerCase() || ''
-      return size.includes('magnum') || size.includes('1.5l')
-    }
-
     // State tracking
     const remaining: Record<string, number> = {}
     const home: Record<string, number> = {}
