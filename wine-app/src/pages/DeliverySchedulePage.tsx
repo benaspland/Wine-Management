@@ -71,20 +71,9 @@ export default function DeliverySchedulePage() {
       const pinnedWineIds = await db.getPinnedWines(nextDeliveryDate)
       const pinnedWineIdSet = new Set(pinnedWineIds)
 
-      // Check if current delivery is locked (user-controlled)
-      const isCurrentDeliveryLocked = await db.isDeliveryLocked(nextDeliveryDate)
-
-      // Build wines for algorithm
-      let winesForAlgorithm = wines.filter(w => !pinnedWineIdSet.has(w.id))
-
-      // If current delivery is locked, exclude its wines from algorithm
-      if (isCurrentDeliveryLocked) {
-        // Pinned wines are already excluded, which protects the locked delivery
-        // This prevents algorithm from modifying locked delivery
-      }
-
+      // Pass ALL wines to algorithm - it will handle both pinned and future deliveries
       const deliverySchedule = ScheduleService.generateDeliverySchedule(
-        winesForAlgorithm,
+        wines,
         config.max_slots,
         totalBottlesAtHome,
         DELIVERY_CONFIG.months as [number, number],
@@ -107,10 +96,16 @@ export default function DeliverySchedulePage() {
       const nextDelayedWines = await db.getDelayedWines(nextDeliveryDate)
 
       deliverySchedule.forEach(entry => {
-        // Skip delayed wines in the current (next) delivery, but include them in future deliveries
         const isCurrentDelivery = entry.scheduled_date === nextDeliveryDate
         const isDelayed = nextDelayedWines.includes(entry.wine_id)
+        const isPinned = pinnedWineIdSet.has(entry.wine_id)
 
+        // Skip pinned wines in non-current deliveries (they belong to current delivery only)
+        if (!isCurrentDelivery && isPinned) {
+          return
+        }
+
+        // Skip delayed wines in the current (next) delivery, but include them in future deliveries
         if (isCurrentDelivery && isDelayed) {
           return // Skip this wine in current delivery
         }
