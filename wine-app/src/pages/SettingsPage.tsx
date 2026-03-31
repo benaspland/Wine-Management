@@ -38,6 +38,19 @@ export default function SettingsPage() {
   }
 
   const handleSaveConfig = async () => {
+    // Validate cellar capacity against current wines at home
+    const winesAtHome = wines
+      .filter(w => w.location === 'home')
+      .reduce((sum, w) => sum + w.quantity, 0)
+
+    if (cellarCapacity < winesAtHome) {
+      setMessage({
+        type: 'error',
+        text: `Cellar capacity cannot be less than ${winesAtHome} bottles currently at home`
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
       await db.updateCellarConfig({
@@ -45,7 +58,9 @@ export default function SettingsPage() {
         min_delivery_bottles: minDeliveryBottles,
         annual_consumption_target: annualConsumptionTarget,
       })
-      setMessage({ type: 'success', text: 'Settings updated successfully' })
+      // Regenerate schedules with new parameters
+      triggerScheduleUpdate()
+      setMessage({ type: 'success', text: 'Settings updated successfully and schedules regenerated' })
       setTimeout(() => setMessage(null), 3000)
     } catch (error) {
       setMessage({ type: 'error', text: `Error: ${(error as Error).message}` })
