@@ -19,7 +19,22 @@ const mockDb = {
   }),
   getWineScheduledDeliveryDate: async (wineId: string): Promise<string | undefined> => {
     const schedules = memoryStorage.get('delivery_schedule') || []
-    const entry = schedules.find((s: any) => s.wine_id === wineId)
+    const delays = memoryStorage.get('delivery_delays') || []
+
+    // Get all dates this wine is delayed from
+    const delayedDates = new Set(
+      delays
+        .filter((d: any) => d.wine_id === wineId)
+        .map((d: any) => d.delivery_date)
+    )
+
+    // Find first scheduled date that is NOT delayed
+    // Must sort by date to ensure we get the earliest non-delayed date
+    const allEntries = schedules
+      .filter((s: any) => s.wine_id === wineId)
+      .sort((a: any, b: any) => a.scheduled_date.localeCompare(b.scheduled_date))
+
+    const entry = allEntries.find((s: any) => !delayedDates.has(s.scheduled_date))
     return entry?.scheduled_date
   }
 }
@@ -126,6 +141,116 @@ describe('Database - Scheduled Delivery Window', () => {
     expect(date3).toBe('2027-03-01')
     expect(date1).not.toBe(date2)
     expect(date2).not.toBe(date3)
+  })
+
+  it('should return next scheduled date when wine is delayed from current delivery', async () => {
+    // Setup: wine scheduled for both August (current) and September (future)
+    memoryStorage.set('delivery_schedule', [
+      {
+        id: 'sched-1',
+        wine_id: 'wine-delayed',
+        quantity: 6,
+        scheduled_date: '2026-08-01',  // Current delivery
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+      {
+        id: 'sched-2',
+        wine_id: 'wine-delayed',
+        quantity: 6,
+        scheduled_date: '2026-09-01',  // Future delivery
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+    ])
+
+    memoryStorage.set('delivery_delays', [])
+
+    // Before delay: should return August (first scheduled date)
+    const dateBeforeDelay = await mockDb.getWineScheduledDeliveryDate('wine-delayed')
+    expect(dateBeforeDelay).toBe('2026-08-01')
+
+    // Mark wine as delayed from August delivery
+    const delays = memoryStorage.get('delivery_delays') || []
+    delays.push({
+      wine_id: 'wine-delayed',
+      delivery_date: '2026-08-01',
+    })
+    memoryStorage.set('delivery_delays', delays)
+
+    // After delay: should return September (next non-delayed date)
+    const dateAfterDelay = await mockDb.getWineScheduledDeliveryDate('wine-delayed')
+    expect(dateAfterDelay).toBe('2026-09-01')
+  })
+
+  it('should return undefined when wine is delayed from all scheduled deliveries', async () => {
+    // Setup: wine scheduled for only August and we delay it from there
+    memoryStorage.set('delivery_schedule', [
+      {
+        id: 'sched-1',
+        wine_id: 'wine-fully-delayed',
+        quantity: 6,
+        scheduled_date: '2026-08-01',
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+    ])
+
+    memoryStorage.set('delivery_delays', [
+      {
+        wine_id: 'wine-fully-delayed',
+        delivery_date: '2026-08-01',
+      },
+    ])
+
+    // Should return undefined since all scheduled dates are delayed
+    const date = await mockDb.getWineScheduledDeliveryDate('wine-fully-delayed')
+    expect(date).toBeUndefined()
+  })
+
+  it('should handle wine with multiple future dates after being delayed from current', async () => {
+    // Wine scheduled for March, September, and December
+    memoryStorage.set('delivery_schedule', [
+      {
+        id: 'sched-1',
+        wine_id: 'wine-multi-future',
+        quantity: 6,
+        scheduled_date: '2026-03-01',
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+      {
+        id: 'sched-2',
+        wine_id: 'wine-multi-future',
+        quantity: 6,
+        scheduled_date: '2026-09-01',
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+      {
+        id: 'sched-3',
+        wine_id: 'wine-multi-future',
+        quantity: 6,
+        scheduled_date: '2026-12-01',
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+    ])
+
+    // Delay from March and September, should return December
+    memoryStorage.set('delivery_delays', [
+      { wine_id: 'wine-multi-future', delivery_date: '2026-03-01' },
+      { wine_id: 'wine-multi-future', delivery_date: '2026-09-01' },
+    ])
+
+    const date = await mockDb.getWineScheduledDeliveryDate('wine-multi-future')
+    expect(date).toBe('2026-12-01')
   })
 })
 

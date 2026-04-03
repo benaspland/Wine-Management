@@ -744,15 +744,45 @@ export async function checkDeliveryCapacity(
 export async function getWineScheduledDeliveryDate(wineId: string): Promise<string | undefined> {
   if (dbType === 'memory') {
     const schedules = memoryStorage.get('delivery_schedule') || []
-    const entry = schedules.find((s: any) => s.wine_id === wineId)
+    const delays = memoryStorage.get('delivery_delays') || []
+
+    // Get all dates this wine is delayed from
+    const delayedDates = new Set(
+      delays
+        .filter((d: any) => d.wine_id === wineId)
+        .map((d: any) => d.delivery_date)
+    )
+
+    // Find first scheduled date that is NOT delayed
+    const entry = schedules.find((s: any) =>
+      s.wine_id === wineId && !delayedDates.has(s.scheduled_date)
+    )
     return entry?.scheduled_date
   } else {
+    // Get all scheduled dates for this wine, ordered by date
     const result = await executeQuery(
-      'SELECT scheduled_date FROM delivery_schedule WHERE wine_id = ? ORDER BY scheduled_date ASC LIMIT 1',
+      'SELECT scheduled_date FROM delivery_schedule WHERE wine_id = ? ORDER BY scheduled_date ASC',
       [wineId]
     )
-    const scheduledDate = result.values?.[0]?.scheduled_date
-    console.log('[Database] getWineScheduledDeliveryDate:', { wineId, scheduledDate, allResults: result.values })
+
+    const allDates = result.values?.map((v: any) => v.scheduled_date) || []
+
+    // Get all dates this wine is delayed from
+    const delayedResult = await executeQuery(
+      'SELECT delivery_date FROM delivery_delays WHERE wine_id = ?',
+      [wineId]
+    )
+    const delayedDates = new Set(delayedResult.values?.map((v: any) => v.delivery_date) || [])
+
+    // Return first scheduled date that is NOT delayed
+    const scheduledDate = allDates.find((date: string) => !delayedDates.has(date))
+
+    console.log('[Database] getWineScheduledDeliveryDate:', {
+      wineId,
+      allScheduledDates: allDates,
+      delayedDates: Array.from(delayedDates),
+      scheduledDate
+    })
     return scheduledDate
   }
 }
