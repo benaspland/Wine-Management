@@ -188,7 +188,9 @@ export default function DeliverySchedulePage() {
       setLastRegenerated(new Date().toLocaleTimeString())
 
       // Load lock status for current delivery (using nextDeliveryDate from above)
+      console.log('[DeliverySchedulePage] Checking lock status for nextDeliveryDate:', nextDeliveryDate)
       const isLocked = await db.isDeliveryLocked(nextDeliveryDate)
+      console.log('[DeliverySchedulePage] Lock status loaded:', { nextDeliveryDate, isLocked })
       setCurrentDeliveryLocked(isLocked)
     } finally {
       setIsRegenerating(false)
@@ -296,7 +298,9 @@ export default function DeliverySchedulePage() {
       setDelayedWines(delayed)
 
       // Auto-lock current delivery when first wine is delayed (manual curation)
+      console.log('[DeliverySchedulePage] Wine delayed:', { wineId, deliveryDate, currentDeliveryLocked })
       if (!currentDeliveryLocked) {
+        console.log('[DeliverySchedulePage] Locking delivery:', deliveryDate)
         await db.lockDelivery(deliveryDate)
         setCurrentDeliveryLocked(true)
         setMessage({
@@ -312,6 +316,7 @@ export default function DeliverySchedulePage() {
       setTimeout(() => setMessage(null), 3000)
 
       // Regenerate schedule to show updated delayed wine in future deliveries
+      console.log('[DeliverySchedulePage] Regenerating schedule after delay')
       await generateDeliverySchedule()
     } catch (error) {
       setMessage({
