@@ -80,29 +80,32 @@ export default function DeliverySchedulePage() {
         config.annual_consumption_target || DELIVERY_CONFIG.annualTarget
       )
 
-      // Save the generated schedule to the database, excluding delayed wines
-      // Delayed wines should not appear in any delivery until they're rescheduled
-      const allDelayedWines = new Set<string>()
+      // Save the generated schedule to the database, excluding delayed wines only from their specific dates
+      // Delayed wines are excluded from the delivery date they're delayed from, but can be rescheduled for future dates
+      const delayedByDate = new Map<string, Set<string>>()
       const allDeliveryDates = new Set<string>()
 
-      // Collect all unique delivery dates and delayed wines
+      // Collect all unique delivery dates
       deliverySchedule.forEach(entry => {
         allDeliveryDates.add(entry.scheduled_date)
       })
 
+      // Load delayed wines for each specific date
       for (const date of allDeliveryDates) {
         const delayed = await db.getDelayedWines(date)
-        delayed.forEach(wineId => allDelayedWines.add(wineId))
+        delayedByDate.set(date, new Set(delayed))
       }
 
-      // Filter out delayed wines from the schedule before saving
-      const scheduleWithoutDelayed = deliverySchedule.filter(
-        entry => !allDelayedWines.has(entry.wine_id)
-      )
+      // Filter out delayed wines only from their specific delayed dates (allow in future deliveries)
+      const scheduleWithoutDelayed = deliverySchedule.filter(entry => {
+        const delayedWinesForThisDate = delayedByDate.get(entry.scheduled_date) || new Set<string>()
+        return !delayedWinesForThisDate.has(entry.wine_id)
+      })
 
-      console.log('[DeliverySchedulePage] Saving schedule: filtered', {
+      const delayedCount = Array.from(delayedByDate.values()).reduce((sum, set) => sum + set.size, 0)
+      console.log('[DeliverySchedulePage] Saving schedule: excluded delayed wines from specific dates', {
         before: deliverySchedule.length,
-        delayedCount: allDelayedWines.size,
+        delayedEntriesCount: delayedCount,
         after: scheduleWithoutDelayed.length,
       })
 
