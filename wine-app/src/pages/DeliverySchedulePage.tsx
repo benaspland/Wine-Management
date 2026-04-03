@@ -240,6 +240,17 @@ export default function DeliverySchedulePage() {
   const handleMarkGroupDeliveryComplete = async (deliveryGroup: DeliveryDate) => {
     setIsMoving(true)
     try {
+      const bottleCount = deliveryGroup.wines.reduce((sum, w) => sum + w.quantity, 0)
+
+      // Check if delivery would exceed home capacity
+      if (totalBottlesAtHome + bottleCount > cellarCapacity) {
+        setMessage({
+          type: 'error',
+          text: `Cannot complete delivery: would exceed home capacity. Current home: ${totalBottlesAtHome} + Delivery: ${bottleCount} = ${totalBottlesAtHome + bottleCount} (max: ${cellarCapacity})`,
+        })
+        return
+      }
+
       // Move all wines in this delivery group from storage to home
       for (const wine of deliveryGroup.wines) {
         await moveWineToHome(wine.id)
@@ -248,7 +259,12 @@ export default function DeliverySchedulePage() {
       // Clear delay marks for this delivery
       await db.clearDelayMarks(deliveryGroup.date)
 
-      const bottleCount = deliveryGroup.wines.reduce((sum, w) => sum + w.quantity, 0)
+      // Clear lock if this was the current locked delivery
+      if (currentDeliveryLocked) {
+        await db.unlockDelivery(deliveryGroup.date)
+        setCurrentDeliveryLocked(false)
+      }
+
       setMessage({
         type: 'success',
         text: `Delivery of ${bottleCount} bottles (${deliveryGroup.wines.length} wines) completed`,
@@ -589,7 +605,7 @@ export default function DeliverySchedulePage() {
                       </div>
 
                       <div className="grid gap-4">
-                        {group.wines.map((wine, wineIdx) => (
+                        {group.wines.filter(wine => !(isNextDelivery && delayedWines.includes(wine.id))).map((wine, wineIdx) => (
                           <div
                             key={`${group.date}-${wine.id}-${wineIdx}`}
                             className="bg-surface-container-low group hover:bg-surface-container transition-colors duration-300 flex items-center justify-between p-5 rounded-lg"
