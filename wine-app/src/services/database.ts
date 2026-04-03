@@ -575,6 +575,8 @@ async function clearDeliveryMarkers(table: 'delivery_delays' | 'delivery_pins', 
 // Delivery delay management
 export async function delayWineFromDelivery(wineId: string, deliveryDate: string): Promise<void> {
   await insertDeliveryMarker('delivery_delays', wineId, deliveryDate)
+  // Clear pin for this wine if it was previously promoted
+  await clearWinePinMark(wineId, deliveryDate)
 }
 
 export async function getDelayedWines(deliveryDate: string): Promise<string[]> {
@@ -606,6 +608,20 @@ export async function getPinnedWines(deliveryDate: string): Promise<string[]> {
 
 export async function clearPinMarks(deliveryDate: string): Promise<void> {
   await clearDeliveryMarkers('delivery_pins', deliveryDate)
+}
+
+export async function clearWinePinMark(wineId: string, deliveryDate: string): Promise<void> {
+  if (dbType === 'memory') {
+    const pins = memoryStorage.get('delivery_pins') || []
+    const filtered = pins.filter((p: any) => !(p.wine_id === wineId && p.delivery_date === deliveryDate))
+    memoryStorage.set('delivery_pins', filtered)
+    persistMemoryDatabase()
+  } else {
+    await executeQuery(
+      'DELETE FROM delivery_pins WHERE wine_id = ? AND delivery_date = ?',
+      [wineId, deliveryDate]
+    )
+  }
 }
 
 export async function lockDelivery(deliveryDate: string): Promise<void> {
