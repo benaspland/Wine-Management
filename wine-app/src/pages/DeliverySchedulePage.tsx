@@ -80,8 +80,33 @@ export default function DeliverySchedulePage() {
         config.annual_consumption_target || DELIVERY_CONFIG.annualTarget
       )
 
-      // Save the generated schedule to the database so it persists
-      await db.saveDeliverySchedule(deliverySchedule)
+      // Save the generated schedule to the database, excluding delayed wines
+      // Delayed wines should not appear in any delivery until they're rescheduled
+      const allDelayedWines = new Set<string>()
+      const allDeliveryDates = new Set<string>()
+
+      // Collect all unique delivery dates and delayed wines
+      deliverySchedule.forEach(entry => {
+        allDeliveryDates.add(entry.scheduled_date)
+      })
+
+      for (const date of allDeliveryDates) {
+        const delayed = await db.getDelayedWines(date)
+        delayed.forEach(wineId => allDelayedWines.add(wineId))
+      }
+
+      // Filter out delayed wines from the schedule before saving
+      const scheduleWithoutDelayed = deliverySchedule.filter(
+        entry => !allDelayedWines.has(entry.wine_id)
+      )
+
+      console.log('[DeliverySchedulePage] Saving schedule: filtered', {
+        before: deliverySchedule.length,
+        delayedCount: allDelayedWines.size,
+        after: scheduleWithoutDelayed.length,
+      })
+
+      await db.saveDeliverySchedule(scheduleWithoutDelayed)
 
       // Group schedule entries by date
       const grouped: Record<string, Array<{
