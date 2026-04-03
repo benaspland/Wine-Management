@@ -117,4 +117,42 @@ describe('Delivery Schedule Save - UNIQUE Constraint', () => {
     const ids = new Set(saved.map((s: any) => s.id))
     expect(ids.size).toBe(138) // All unique
   })
+
+  it('should delete all existing rows before saving new schedule (regression test)', () => {
+    // This test verifies the fix for the UNIQUE constraint error
+    // where DELETE was only removing 1 row instead of all rows
+
+    // First save: 50 entries
+    const firstEntries = Array.from({ length: 50 }, (_, i) => ({
+      id: `delivery-wine-${String(i).padStart(3, '0')}-2026-03`,
+      wine_id: `wine-${String(i).padStart(3, '0')}`,
+      scheduled_date: '2026-03-01',
+      quantity: 6,
+    }))
+    mockDb.saveDeliverySchedule(firstEntries)
+    let schedule = mockDb.getDeliverySchedule()
+    expect(schedule).toHaveLength(50)
+
+    // Second save: 138 entries (includes some IDs from first save)
+    // If deletion doesn't work properly, this would have duplicates
+    const secondEntries = Array.from({ length: 138 }, (_, i) => ({
+      id: `delivery-wine-${String(i).padStart(3, '0')}-${2026 + Math.floor(i / 12)}-03`,
+      wine_id: `wine-${String(i).padStart(3, '0')}`,
+      scheduled_date: `${2026 + Math.floor(i / 12)}-03-01`,
+      quantity: 6,
+    }))
+    mockDb.saveDeliverySchedule(secondEntries)
+    schedule = mockDb.getDeliverySchedule()
+
+    // CRITICAL: Should have exactly 138, not 50 + 138
+    expect(schedule).toHaveLength(138)
+
+    // All IDs should be unique (no duplicates from old entries)
+    const ids = new Set(schedule.map((s: any) => s.id))
+    expect(ids.size).toBe(138)
+
+    // Verify the old entries were actually replaced
+    expect(schedule.map((s: any) => s.id)).toContain('delivery-wine-000-2026-03')
+    expect(schedule.map((s: any) => s.id)).not.toContain('delivery-wine-049-2026-03') // Only 50 in first save
+  })
 })
