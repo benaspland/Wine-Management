@@ -8,7 +8,9 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: process.env.VITEST_INCLUDE
+      ? [process.env.VITEST_INCLUDE]
+      : ['src/**/*.{test,spec}.{ts,tsx}', '!src/**/*.integration.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

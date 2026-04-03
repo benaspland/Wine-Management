@@ -12,6 +12,8 @@
     "build:electron": "npm run build && npm run build:electron-main && electron-builder",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:integration": "VITEST_INCLUDE='src/**/*.integration.test.{ts,tsx}' vitest run",
+    "test:all": "VITEST_INCLUDE='src/**/*.{test,spec,integration.test}.{ts,tsx}' vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "preview": "vite preview"
