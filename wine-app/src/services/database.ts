@@ -762,37 +762,32 @@ export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntr
     memoryStorage.set('delivery_schedule', scheduleEntries)
     persistMemoryDatabase()
   } else {
-    // Clear existing schedule - use DELETE with no WHERE to ensure all rows are deleted
-    console.log('[Database] Clearing existing delivery_schedule entries...')
+    // Clear and recreate delivery_schedule table to avoid UNIQUE constraint issues
+    console.log('[Database] Clearing delivery_schedule by dropping and recreating table...')
 
-    // First, check how many rows exist
-    const countResult = await executeQuery('SELECT COUNT(*) as count FROM delivery_schedule', [])
-    const rowCount = countResult.values?.[0]?.count || 0
-    console.log(`[Database] Found ${rowCount} existing delivery_schedule entries`)
+    try {
+      // Drop the existing table
+      await executeQuery('DROP TABLE IF EXISTS delivery_schedule', [])
+      console.log('[Database] Dropped existing delivery_schedule table')
 
-    if (rowCount > 0) {
-      // SQLite DELETE without WHERE should delete all rows
-      // Use a loop to ensure all are deleted (in case of issues)
-      let deletedTotal = 0
-      for (let attempts = 0; attempts < 5; attempts++) {
-        const deleteResult = await executeQuery('DELETE FROM delivery_schedule WHERE id IS NOT NULL', [])
-        const deleted = deleteResult.changes || 0
-        deletedTotal += deleted
-        console.log(`[Database] Delete attempt ${attempts + 1}: deleted ${deleted} rows`)
-
-        if (deleted === 0) {
-          // No more rows to delete
-          break
-        }
-      }
-      console.log(`[Database] Total deleted: ${deletedTotal} rows`)
-    }
-
-    // Verify all rows are deleted
-    const verifyResult = await executeQuery('SELECT COUNT(*) as count FROM delivery_schedule', [])
-    const remainingCount = verifyResult.values?.[0]?.count || 0
-    if (remainingCount > 0) {
-      console.warn(`[Database] WARNING: ${remainingCount} rows still remain after deletion!`)
+      // Recreate the table with proper schema
+      await executeQuery(`
+        CREATE TABLE delivery_schedule (
+          id TEXT PRIMARY KEY,
+          wine_id TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          scheduled_date TEXT NOT NULL,
+          from_location TEXT NOT NULL,
+          to_location TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (wine_id) REFERENCES wines(id)
+        )
+      `, [])
+      console.log('[Database] Recreated delivery_schedule table')
+    } catch (error) {
+      console.error('[Database] Error dropping/recreating table:', error)
+      throw error
     }
 
     // Insert all schedule entries
