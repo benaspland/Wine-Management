@@ -153,12 +153,6 @@ export default function WineDetailPanel({
               </p>
             </div>
           )}
-          {wine.location === 'storage' && !scheduledDeliveryDate && (
-            <div>
-              <p className="text-[10px] text-outline uppercase tracking-wider">Status</p>
-              <p className="text-sm font-medium text-orange-400">Not Yet Scheduled</p>
-            </div>
-          )}
         </div>
 
         {/* Flavor Profile */}
