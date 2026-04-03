@@ -103,27 +103,120 @@ const wines = lines.slice(0, 126).map(parseCsvLine)
 - Include the scenario: `with pinned wine that was promoted then delayed`
 - Indicate expected outcome: `should remove from pinned list`
 
-## Before Committing
+## Commit Checklist (MANDATORY)
+
+**This checklist MUST be completed before EVERY commit. Skipping any item violates development standards.**
+
+### Pre-Commit Verification Steps
+
+Before running `git commit`, verify ALL of the following:
+
+```
+- [ ] Code change is complete and compiles without errors
+- [ ] Test file created or updated for this change
+  - Unit test (.test.ts) added OR updated with new cases
+  - Integration test (.integration.test.ts) added OR updated if applicable
+- [ ] All tests passing locally
+  - Run: npm run test:all
+  - Console output shows: "Test Files X passed"
+  - Console output shows: "Tests Y passed"
+  - Zero test failures
+- [ ] Test coverage documented
+  - Know exact number of tests added
+  - Know what scenarios each test covers
+  - Understand edge cases being validated
+- [ ] Commit message uses MANDATORY format (see below)
+```
+
+### Mandatory Commit Message Format
+
+**Every commit MUST follow this format exactly:**
+
+```
+[CHECKED] Feature/Fix: Clear description of what changed
+
+- Test file: src/services/feature.test.ts (X unit test cases)
+- Test file: src/services/feature.integration.test.ts (Y integration cases) [if applicable]
+- Coverage: scenario 1, scenario 2, edge case description
+- Total tests: X + Y = Z passing
+
+https://claude.ai/code/session_...
+```
+
+### Examples
+
+**✅ CORRECT Format:**
+```
+[CHECKED] Fix delivery schedule save error with DELETE loop
+
+- Test file: src/services/delivery-schedule-save.test.ts (5 unit cases)
+- Test file: src/services/delivery-schedule-save.integration.test.ts (3 cases)
+- Coverage: schedule recreation, large dataset handling, stale data cleanup
+- Total tests: 5 + 3 = 8 passing
+
+All tests verified passing before commit.
+
+https://claude.ai/code/session_...
+```
+
+**❌ INCORRECT Format (DO NOT USE):**
+```
+Fix delivery schedule  # Missing [CHECKED] prefix and test coverage details
+```
+
+```
+Fix delivery schedule  # Missing test file references
+- Added tests
+- All working
+```
+
+### What Triggers a Commit Checklist Violation
+
+❌ **VIOLATIONS** (commits will be rejected):
+1. Commit message lacks `[CHECKED]` prefix
+2. Test file not created/updated for the change
+3. Tests not run before committing (`npm run test:all` skipped)
+4. Test counts not documented in commit message
+5. Any test failures (even unrelated tests)
+6. Change made without understanding what tests cover it
+
+✅ **COMPLIANT** (commits accepted):
+1. `[CHECKED]` prefix present
+2. At least one test file (unit or integration) created/updated
+3. All tests passing (`npm run test:all` output shows 0 failures)
+4. Specific test counts listed (e.g., "3 unit + 2 integration = 5 total")
+5. Scenarios described briefly
+6. Full session link included
+
+### Enforcement
+
+This checklist is **non-negotiable**. It exists to:
+- Ensure code quality stays high
+- Prevent regressions before they reach the user
+- Maintain accountability for changes
+- Document test coverage for future review
+- Build confidence in the codebase
+
+**If a commit is made without following this checklist, development will pause until the standard is met.**
+
+## Before Committing (Quick Reference)
 
 ```bash
-# 1. Run all tests
+# 1. Write your code change
+# 2. Create or update test file(s)
+# 3. Run all tests
 npm run test:all
 
-# 2. Verify test counts increased (if feature added)
-# Expected output: Test Files 4 passed, Tests 42+ passed
+# 4. Verify output shows: Test Files X passed, Tests Y passed
+# 5. If any test fails, FIX IT before committing
+# 6. Count the test numbers: X unit tests, Y integration tests
+# 7. Commit with MANDATORY format
+git commit -m "[CHECKED] Feature/Fix: Clear description
 
-# 3. Check coverage in commit message
-# - List new test files created
-# - Mention number of test cases added
-# - Explain what scenarios are covered
-
-# 4. Commit with reference
-git commit -m "Feature/Fix: Description
-
-- Added unit tests in src/services/feature.test.ts (X cases)
-- Added integration tests in src/services/feature.integration.test.ts (Y cases)
-- Tests cover: scenario 1, scenario 2, edge case
-- All tests passing
+- Test file: src/services/feature.test.ts (X cases)
+- Test file: src/services/feature.integration.test.ts (Y cases)
+- Coverage: what scenarios tested
+- Total tests: X + Y = Z passing
 
 https://claude.ai/code/session_..."
 ```
