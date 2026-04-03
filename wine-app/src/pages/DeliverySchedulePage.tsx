@@ -80,6 +80,9 @@ export default function DeliverySchedulePage() {
         config.annual_consumption_target || DELIVERY_CONFIG.annualTarget
       )
 
+      // Save the generated schedule to the database so it persists
+      await db.saveDeliverySchedule(deliverySchedule)
+
       // Group schedule entries by date
       const grouped: Record<string, Array<{
         id: string

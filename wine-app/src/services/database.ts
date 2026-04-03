@@ -679,6 +679,33 @@ export async function getWineScheduledDeliveryDate(wineId: string): Promise<stri
   }
 }
 
+export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntry[]): Promise<void> {
+  if (dbType === 'memory') {
+    memoryStorage.set('delivery_schedule', scheduleEntries)
+    persistMemoryDatabase()
+  } else {
+    // Clear existing schedule first
+    await executeQuery('DELETE FROM delivery_schedule', [])
+    // Insert all schedule entries
+    for (const entry of scheduleEntries) {
+      await executeQuery(
+        `INSERT INTO delivery_schedule (id, wine_id, quantity, scheduled_date, from_location, to_location, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          entry.id || generateId(),
+          entry.wine_id,
+          entry.quantity,
+          entry.scheduled_date,
+          entry.from_location,
+          entry.to_location,
+          entry.status || 'pending',
+          new Date().toISOString(),
+        ]
+      )
+    }
+  }
+}
+
 // Cellar config
 export async function getCellarConfig(): Promise<CellarConfig> {
   const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', ['default'])
