@@ -760,13 +760,42 @@ export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntr
     memoryStorage.set('delivery_schedule', scheduleEntries)
     persistMemoryDatabase()
   } else {
-    // Clear existing schedule first
+    // Clear existing schedule - use DELETE with no WHERE to ensure all rows are deleted
     console.log('[Database] Clearing existing delivery_schedule entries...')
-    const deleteResult = await executeQuery('DELETE FROM delivery_schedule', [])
-    console.log('[Database] Deleted delivery_schedule entries:', deleteResult)
+
+    // First, check how many rows exist
+    const countResult = await executeQuery('SELECT COUNT(*) as count FROM delivery_schedule', [])
+    const rowCount = countResult.values?.[0]?.count || 0
+    console.log(`[Database] Found ${rowCount} existing delivery_schedule entries`)
+
+    if (rowCount > 0) {
+      // SQLite DELETE without WHERE should delete all rows
+      // Use a loop to ensure all are deleted (in case of issues)
+      let deletedTotal = 0
+      for (let attempts = 0; attempts < 5; attempts++) {
+        const deleteResult = await executeQuery('DELETE FROM delivery_schedule WHERE id IS NOT NULL', [])
+        const deleted = deleteResult.changes || 0
+        deletedTotal += deleted
+        console.log(`[Database] Delete attempt ${attempts + 1}: deleted ${deleted} rows`)
+
+        if (deleted === 0) {
+          // No more rows to delete
+          break
+        }
+      }
+      console.log(`[Database] Total deleted: ${deletedTotal} rows`)
+    }
+
+    // Verify all rows are deleted
+    const verifyResult = await executeQuery('SELECT COUNT(*) as count FROM delivery_schedule', [])
+    const remainingCount = verifyResult.values?.[0]?.count || 0
+    if (remainingCount > 0) {
+      console.warn(`[Database] WARNING: ${remainingCount} rows still remain after deletion!`)
+    }
 
     // Insert all schedule entries
     console.log(`[Database] Inserting ${scheduleEntries.length} new delivery_schedule entries...`)
+    let successCount = 0
     for (const entry of scheduleEntries) {
       try {
         await executeQuery(
@@ -783,12 +812,13 @@ export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntr
             new Date().toISOString(),
           ]
         )
+        successCount++
       } catch (error) {
         console.error('[Database] Failed to insert delivery_schedule entry:', { entry, error })
         throw error
       }
     }
-    console.log('[Database] Successfully saved all delivery_schedule entries')
+    console.log(`[Database] Successfully saved ${successCount}/${scheduleEntries.length} delivery_schedule entries`)
   }
 }
 
