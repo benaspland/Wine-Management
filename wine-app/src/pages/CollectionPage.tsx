@@ -4,6 +4,7 @@ import { useWineStore } from '../store/wineStore'
 import WineCard from '../components/WineCard'
 import WineDetailPanel from '../components/WineDetailPanel'
 import WineForm from '../components/WineForm'
+import * as db from '../services/database'
 
 export default function CollectionPage() {
   const wines = useWineStore(state => state.filteredWines)
@@ -18,6 +19,7 @@ export default function CollectionPage() {
   const [showForm, setShowForm] = useState(false)
   const [stats, setStats] = useState<any>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [selectedWineScheduledDate, setSelectedWineScheduledDate] = useState<string | undefined>()
 
   // Get filter state and actions from store
   const searchTerm = useWineStore(state => state.searchTerm)
@@ -49,8 +51,11 @@ export default function CollectionPage() {
     }
   }
 
-  const handleSelectWine = (wine: Wine) => {
+  const handleSelectWine = async (wine: Wine) => {
     setSelectedWine(wine)
+    // Fetch scheduled delivery date from database
+    const scheduledDate = await db.getWineScheduledDeliveryDate(wine.id)
+    setSelectedWineScheduledDate(scheduledDate)
   }
 
   const handleConsume = async (wineId: string) => {
@@ -240,6 +245,7 @@ export default function CollectionPage() {
           onMoveToHome={handleMoveToHome}
           onEdit={handleEditClick}
           isLoading={loading}
+          scheduledDeliveryDate={selectedWineScheduledDate}
         />
       )}
 

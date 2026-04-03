@@ -665,6 +665,20 @@ export async function checkDeliveryCapacity(
   }
 }
 
+export async function getWineScheduledDeliveryDate(wineId: string): Promise<string | undefined> {
+  if (dbType === 'memory') {
+    const schedules = memoryStorage.get('delivery_schedule') || []
+    const entry = schedules.find((s: any) => s.wine_id === wineId)
+    return entry?.scheduled_date
+  } else {
+    const result = await executeQuery(
+      'SELECT scheduled_date FROM delivery_schedule WHERE wine_id = ? ORDER BY scheduled_date ASC LIMIT 1',
+      [wineId]
+    )
+    return result.values?.[0]?.scheduled_date
+  }
+}
+
 // Cellar config
 export async function getCellarConfig(): Promise<CellarConfig> {
   const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', ['default'])
