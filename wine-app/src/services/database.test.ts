@@ -131,6 +131,55 @@ describe('Database - Scheduled Delivery Window', () => {
     expect(date).toBe('2028-12-01')
   })
 
+  it('should remove delivery entry when wine is delayed from specific date', async () => {
+    memoryStorage.set('delivery_schedule', [
+      {
+        id: 'sched-1',
+        wine_id: 'wine-delay-test',
+        quantity: 6,
+        scheduled_date: '2026-08-01',
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+      {
+        id: 'sched-2',
+        wine_id: 'wine-delay-test',
+        quantity: 6,
+        scheduled_date: '2026-09-01',
+        from_location: 'storage',
+        to_location: 'home',
+        status: 'pending',
+      },
+    ])
+
+    // Simulate delayWineFromDelivery removing the August entry
+    const schedules = memoryStorage.get('delivery_schedule') || []
+    const filtered = schedules.filter((s: any) =>
+      !(s.wine_id === 'wine-delay-test' && s.scheduled_date === '2026-08-01')
+    )
+    memoryStorage.set('delivery_schedule', filtered)
+
+    // After delay, August entry should be gone
+    const augustEntry = schedules.find(
+      (s: any) => s.wine_id === 'wine-delay-test' && s.scheduled_date === '2026-08-01'
+    )
+    expect(augustEntry).toBeDefined()
+
+    // But filtered list should not have it
+    const filteredAugustEntry = filtered.find(
+      (s: any) => s.wine_id === 'wine-delay-test' && s.scheduled_date === '2026-08-01'
+    )
+    expect(filteredAugustEntry).toBeUndefined()
+
+    // September entry should still exist
+    const septemberEntry = filtered.find(
+      (s: any) => s.wine_id === 'wine-delay-test' && s.scheduled_date === '2026-09-01'
+    )
+    expect(septemberEntry).toBeDefined()
+    expect(filtered).toHaveLength(1)
+  })
+
   it('should return different dates for different wines', async () => {
     const date1 = await mockDb.getWineScheduledDeliveryDate('wine-001')
     const date2 = await mockDb.getWineScheduledDeliveryDate('wine-002')

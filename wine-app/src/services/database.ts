@@ -625,7 +625,36 @@ async function clearDeliveryMarkers(table: 'delivery_delays' | 'delivery_pins', 
 
 // Delivery delay management
 export async function delayWineFromDelivery(wineId: string, deliveryDate: string): Promise<void> {
+  // Mark wine as delayed for this delivery date
   await insertDeliveryMarker('delivery_delays', wineId, deliveryDate)
+
+  // Remove this wine from the delivery_schedule for this specific date
+  // This makes the wine's quantity available for rescheduling in future deliveries
+  if (dbType === 'memory') {
+    const schedules = memoryStorage.get('delivery_schedule') || []
+    const filtered = schedules.filter((s: any) =>
+      !(s.wine_id === wineId && s.scheduled_date === deliveryDate)
+    )
+    memoryStorage.set('delivery_schedule', filtered)
+    persistMemoryDatabase()
+    console.log('[Database] delayWineFromDelivery: removed from schedule', {
+      wineId,
+      deliveryDate,
+      beforeCount: schedules.length,
+      afterCount: filtered.length,
+    })
+  } else {
+    // For SQLite: delete the specific delivery entry
+    await executeQuery(
+      'DELETE FROM delivery_schedule WHERE wine_id = ? AND scheduled_date = ?',
+      [wineId, deliveryDate]
+    )
+    console.log('[Database] delayWineFromDelivery: removed from schedule', {
+      wineId,
+      deliveryDate,
+    })
+  }
+
   // Clear pin for this wine if it was previously promoted
   await clearWinePinMark(wineId, deliveryDate)
 }
