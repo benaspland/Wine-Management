@@ -133,7 +133,9 @@ async function createSchema() {
     CREATE TABLE IF NOT EXISTS cellar_config (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       max_slots INTEGER NOT NULL DEFAULT 80,
-      current_slots INTEGER NOT NULL DEFAULT 0
+      current_slots INTEGER NOT NULL DEFAULT 0,
+      min_delivery_bottles INTEGER NOT NULL DEFAULT 24,
+      annual_consumption_target INTEGER NOT NULL DEFAULT 30
     );
 
     CREATE TABLE IF NOT EXISTS consumption_log (
@@ -196,7 +198,7 @@ async function createSchema() {
   const config = await executeQuery('SELECT COUNT(*) as count FROM cellar_config')
   if (config.values?.length === 0 || config.values?.[0]?.count === 0) {
     await executeQuery(
-      'INSERT INTO cellar_config (id, max_slots, current_slots) VALUES (1, 80, 0)'
+      'INSERT INTO cellar_config (id, max_slots, current_slots, min_delivery_bottles, annual_consumption_target) VALUES (1, 80, 0, 24, 30)'
     )
   }
 }
