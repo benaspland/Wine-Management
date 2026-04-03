@@ -207,6 +207,7 @@ async function executeQuery(sql: string, params: any[] = []): Promise<any> {
     // Persist to localStorage after write operations
     const upperSql = sql.trim().toUpperCase()
     if (upperSql.startsWith('INSERT') || upperSql.startsWith('UPDATE') || upperSql.startsWith('DELETE')) {
+      console.log('[Database] Memory mode query:', { sql, params, result })
       persistMemoryDatabase()
     }
     return result
@@ -284,19 +285,26 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
   } else if (upperSql.startsWith('UPDATE')) {
     const table = extractTableName(sql)
     let rows = memoryStorage.get(table) || []
+    const originalRows = JSON.parse(JSON.stringify(rows)) // Deep copy for logging
 
     // Extract SET clause to count how many parameters are for the SET
     const setMatch = sql.match(/SET\s+(.*?)\s+WHERE/is)
     const setFieldCount = setMatch ? setMatch[1].split(',').length : 0
 
+    console.log('[Database] UPDATE before:', { table, originalRows, params, setFieldCount })
+
     // Very simple update handling
+    let changedCount = 0
     rows = rows.map(row => {
       if (evaluateWhere(row, sql, params, setFieldCount)) {
+        console.log('[Database] Row matched WHERE clause:', row)
+        changedCount++
         // Extract SET values - simplified
         if (setMatch) {
           const setParts = setMatch[1].split(',')
           setParts.forEach((setPart, idx) => {
             const [field] = setPart.split('=').map(p => p.trim())
+            console.log(`[Database] Setting ${field} = ${params[idx]}`)
             row[field] = params[idx]
           })
         }
@@ -304,8 +312,9 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
       return row
     })
 
+    console.log('[Database] UPDATE after:', { table, rows, changedCount })
     memoryStorage.set(table, rows)
-    return { changes: rows.length }
+    return { changes: changedCount }
   } else if (upperSql.startsWith('DELETE')) {
     const table = extractTableName(sql)
     const originalLength = memoryStorage.get(table)?.length || 0
@@ -337,7 +346,9 @@ function evaluateWhere(row: any, sql: string, params: any[] = [], paramOffset: n
     // For UPDATE statements, WHERE params come after SET params
     // For other statements, they come first (paramOffset = 0)
     const expectedValue = params[paramOffset]
-    return row[fieldName] === expectedValue
+    const matches = row[fieldName] === expectedValue
+    console.log('[Database] evaluateWhere:', { fieldName, rowValue: row[fieldName], expectedValue, paramOffset, params, matches })
+    return matches
   }
 
   return true
