@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 // Mock database for testing delayed wine rescheduling
 const mockDb = {
   delayedByDate: new Map<string, Set<string>>(),
+  deliverySchedule: [] as any[],
 
   markWineDelayedForDate: (wineId: string, date: string) => {
     if (!mockDb.delayedByDate.has(date)) {
@@ -34,12 +35,33 @@ const mockDb = {
       const delayedWinesForThisDate = delayedByDate.get(entry.scheduled_date) || new Set<string>()
       return !delayedWinesForThisDate.has(entry.wine_id)
     })
+  },
+
+  // Mock implementation of getWineScheduledDeliveryDate with delay checking
+  getWineScheduledDeliveryDate: (wineId: string): string | undefined => {
+    // Get all scheduled dates for this wine, sorted
+    const allEntries = mockDb.deliverySchedule
+      .filter((s: any) => s.wine_id === wineId)
+      .sort((a: any, b: any) => a.scheduled_date.localeCompare(b.scheduled_date))
+
+    // Get all dates this wine is delayed from
+    const delayedDates = new Set<string>()
+    for (const [date, wineIds] of mockDb.delayedByDate.entries()) {
+      if (wineIds.has(wineId)) {
+        delayedDates.add(date)
+      }
+    }
+
+    // Return first scheduled date that is NOT delayed
+    const entry = allEntries.find((s: any) => !delayedDates.has(s.scheduled_date))
+    return entry?.scheduled_date
   }
 }
 
 describe('Delayed Wine Rescheduling - Per-Date Filtering', () => {
   beforeEach(() => {
     mockDb.delayedByDate.clear()
+    mockDb.deliverySchedule = []
   })
 
   it('should exclude delayed wine from specific delivery date only, not from future dates', () => {
@@ -199,5 +221,103 @@ describe('Delayed Wine Rescheduling - Per-Date Filtering', () => {
     // wine-001 should appear in March, September, December but not June
     expect(filtered).toHaveLength(3)
     expect(filtered.map(e => e.scheduled_date)).toEqual(['2026-03-01', '2026-09-01', '2026-12-01'])
+  })
+})
+
+describe('Delayed Wine Rescheduling - Query with Delay Awareness', () => {
+  beforeEach(() => {
+    mockDb.delayedByDate.clear()
+    mockDb.deliverySchedule = []
+  })
+
+  it('should return next delivery date when wine is delayed from current delivery', () => {
+    // Setup: wine scheduled for August (current) and September (future)
+    mockDb.deliverySchedule = [
+      { id: 'entry-1', wine_id: 'wine-delayed-001', scheduled_date: '2026-08-01', quantity: 6 },
+      { id: 'entry-2', wine_id: 'wine-delayed-001', scheduled_date: '2026-09-01', quantity: 6 },
+    ]
+
+    // Before delay: should return August
+    let date = mockDb.getWineScheduledDeliveryDate('wine-delayed-001')
+    expect(date).toBe('2026-08-01')
+
+    // Mark wine as delayed from August
+    mockDb.markWineDelayedForDate('wine-delayed-001', '2026-08-01')
+
+    // After delay: should return September (next non-delayed date)
+    date = mockDb.getWineScheduledDeliveryDate('wine-delayed-001')
+    expect(date).toBe('2026-09-01')
+  })
+
+  it('should return undefined when wine is delayed from all scheduled dates', () => {
+    mockDb.deliverySchedule = [
+      { id: 'entry-1', wine_id: 'wine-fully-delayed', scheduled_date: '2026-08-01', quantity: 6 },
+    ]
+
+    mockDb.markWineDelayedForDate('wine-fully-delayed', '2026-08-01')
+
+    const date = mockDb.getWineScheduledDeliveryDate('wine-fully-delayed')
+    expect(date).toBeUndefined()
+  })
+
+  it('should skip over delayed dates and return the next available date', () => {
+    // Wine scheduled for March, June, September, December
+    mockDb.deliverySchedule = [
+      { id: 'entry-1', wine_id: 'wine-multi-delay', scheduled_date: '2026-03-01', quantity: 6 },
+      { id: 'entry-2', wine_id: 'wine-multi-delay', scheduled_date: '2026-06-01', quantity: 6 },
+      { id: 'entry-3', wine_id: 'wine-multi-delay', scheduled_date: '2026-09-01', quantity: 6 },
+      { id: 'entry-4', wine_id: 'wine-multi-delay', scheduled_date: '2026-12-01', quantity: 6 },
+    ]
+
+    // Delay from March and June
+    mockDb.markWineDelayedForDate('wine-multi-delay', '2026-03-01')
+    mockDb.markWineDelayedForDate('wine-multi-delay', '2026-06-01')
+
+    // Should return September (first non-delayed date)
+    const date = mockDb.getWineScheduledDeliveryDate('wine-multi-delay')
+    expect(date).toBe('2026-09-01')
+  })
+
+  it('should handle wine delayed from early delivery but available in later ones', () => {
+    mockDb.deliverySchedule = [
+      { id: 'entry-1', wine_id: 'wine-early-delay', scheduled_date: '2026-03-01', quantity: 6 },
+      { id: 'entry-2', wine_id: 'wine-early-delay', scheduled_date: '2026-06-01', quantity: 6 },
+      { id: 'entry-3', wine_id: 'wine-early-delay', scheduled_date: '2026-09-01', quantity: 6 },
+    ]
+
+    // Delay from March only
+    mockDb.markWineDelayedForDate('wine-early-delay', '2026-03-01')
+
+    // Should return June (next available date after March)
+    const date = mockDb.getWineScheduledDeliveryDate('wine-early-delay')
+    expect(date).toBe('2026-06-01')
+  })
+
+  it('should return earliest scheduled date when no delays are set', () => {
+    mockDb.deliverySchedule = [
+      { id: 'entry-1', wine_id: 'wine-no-delay', scheduled_date: '2026-09-01', quantity: 6 },
+      { id: 'entry-2', wine_id: 'wine-no-delay', scheduled_date: '2026-03-01', quantity: 6 },
+      { id: 'entry-3', wine_id: 'wine-no-delay', scheduled_date: '2026-12-01', quantity: 6 },
+    ]
+
+    // No delays set
+    const date = mockDb.getWineScheduledDeliveryDate('wine-no-delay')
+    // Should return earliest date (March) even though added in different order
+    expect(date).toBe('2026-03-01')
+  })
+
+  it('should correctly handle wine with single scheduled date that is NOT delayed', () => {
+    mockDb.deliverySchedule = [
+      { id: 'entry-1', wine_id: 'wine-single', scheduled_date: '2026-08-01', quantity: 6 },
+    ]
+
+    // No delays
+    let date = mockDb.getWineScheduledDeliveryDate('wine-single')
+    expect(date).toBe('2026-08-01')
+
+    // Delay the single date
+    mockDb.markWineDelayedForDate('wine-single', '2026-08-01')
+    date = mockDb.getWineScheduledDeliveryDate('wine-single')
+    expect(date).toBeUndefined()
   })
 })
