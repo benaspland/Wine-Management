@@ -285,11 +285,14 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
     const table = extractTableName(sql)
     let rows = memoryStorage.get(table) || []
 
+    // Extract SET clause to count how many parameters are for the SET
+    const setMatch = sql.match(/SET\s+(.*?)\s+WHERE/is)
+    const setFieldCount = setMatch ? setMatch[1].split(',').length : 0
+
     // Very simple update handling
     rows = rows.map(row => {
-      if (evaluateWhere(row, sql, params)) {
+      if (evaluateWhere(row, sql, params, setFieldCount)) {
         // Extract SET values - simplified
-        const setMatch = sql.match(/SET\s+(.*?)\s+WHERE/is)
         if (setMatch) {
           const setParts = setMatch[1].split(',')
           setParts.forEach((setPart, idx) => {
@@ -322,7 +325,7 @@ function extractTableName(sql: string): string {
   return (match?.[1] || 'wines').toLowerCase()
 }
 
-function evaluateWhere(row: any, sql: string, params: any[] = []): boolean {
+function evaluateWhere(row: any, sql: string, params: any[] = [], paramOffset: number = 0): boolean {
   const whereMatch = sql.match(/WHERE\s+(.*?)(?:ORDER BY|LIMIT|$)/is)
   if (!whereMatch) return true
 
@@ -331,7 +334,9 @@ function evaluateWhere(row: any, sql: string, params: any[] = []): boolean {
   const conditionMatch = whereClause.match(/(\w+)\s*=\s*\?/)
   if (conditionMatch) {
     const fieldName = conditionMatch[1]
-    const expectedValue = params[0] // WHERE clause typically uses first parameter
+    // For UPDATE statements, WHERE params come after SET params
+    // For other statements, they come first (paramOffset = 0)
+    const expectedValue = params[paramOffset]
     return row[fieldName] === expectedValue
   }
 
