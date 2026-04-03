@@ -143,12 +143,20 @@ function initializeSchema(): void {
 
   // Ensure default config exists
   try {
+    console.log('[Database] Initializing default cellar_config...')
     db.run(
       `INSERT OR IGNORE INTO cellar_config (id, max_slots, current_slots, min_delivery_bottles, annual_consumption_target)
        VALUES (1, 80, 0, 24, 30)`
     )
+
+    // Verify it was created
+    const checkStmt = db.prepare('SELECT COUNT(*) as count FROM cellar_config')
+    checkStmt.step()
+    const result = checkStmt.getAsObject()
+    checkStmt.free()
+    console.log('[Database] Cellar config rows after insert:', result)
   } catch (error) {
-    // Might already exist
+    console.error('[Database] Error initializing cellar_config:', error)
   }
 
   saveDatabase()
