@@ -304,6 +304,9 @@ export default function DeliverySchedulePage() {
         })
       }
       setTimeout(() => setMessage(null), 3000)
+
+      // Regenerate schedule to show updated delayed wine in future deliveries
+      await generateDeliverySchedule()
     } catch (error) {
       setMessage({
         type: 'error',
@@ -383,6 +386,9 @@ export default function DeliverySchedulePage() {
           })
         }
         setTimeout(() => setMessage(null), 3000)
+
+        // Regenerate schedule to show updated delivery composition
+        await generateDeliverySchedule()
       }
     } catch (error) {
       setMessage({
@@ -541,8 +547,30 @@ export default function DeliverySchedulePage() {
         <div className="space-y-6">
           {years.map(year => {
             const deliveries = deliveriesByYear[year] || []
-            const totalBottles = deliveries.reduce((sum, d) => sum + d.wines.reduce((s, w) => s + w.quantity, 0), 0)
-            const totalWines = new Set(deliveries.flatMap(d => d.wines.map(w => w.id))).size
+
+            // Get current (next) delivery to identify which one to exclude delayed wines from
+            const allDeliveries = Object.values(deliveriesByYear).flat().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            const nextDelivery = allDeliveries.find(d => {
+              const wine = wines.find(w => w.id === d.wines[0].id)
+              return wine?.location === 'storage'
+            })
+
+            // Calculate totals, excluding delayed wines from current delivery only
+            const totalBottles = deliveries.reduce((sum, d) => {
+              const isCurrentDelivery = nextDelivery?.date === d.date
+              const displayWines = isCurrentDelivery
+                ? d.wines.filter(w => !delayedWines.includes(w.id))
+                : d.wines
+              return sum + displayWines.reduce((s, w) => s + w.quantity, 0)
+            }, 0)
+
+            const totalWines = new Set(deliveries.flatMap(d => {
+              const isCurrentDelivery = nextDelivery?.date === d.date
+              const displayWines = isCurrentDelivery
+                ? d.wines.filter(w => !delayedWines.includes(w.id))
+                : d.wines
+              return displayWines.map(w => w.id)
+            })).size
 
             return (
               <div key={year} className="border border-outline-variant/20 rounded-lg overflow-hidden">
