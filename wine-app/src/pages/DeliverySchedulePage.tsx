@@ -284,15 +284,26 @@ export default function DeliverySchedulePage() {
     setIsDelaying(true)
     try {
       await delayWineFromDelivery(wineId, deliveryDate)
-      setMessage({
-        type: 'success',
-        text: `${wineName} delayed - will be rescheduled to future delivery`,
-      })
-      setTimeout(() => setMessage(null), 3000)
 
       // Load delayed wines for this delivery
       const delayed = await db.getDelayedWines(deliveryDate)
       setDelayedWines(delayed)
+
+      // Auto-lock current delivery when first wine is delayed (manual curation)
+      if (!currentDeliveryLocked) {
+        await db.lockDelivery(deliveryDate)
+        setCurrentDeliveryLocked(true)
+        setMessage({
+          type: 'success',
+          text: `${wineName} delayed - current delivery locked to prevent automatic rescheduling`,
+        })
+      } else {
+        setMessage({
+          type: 'success',
+          text: `${wineName} delayed - will be rescheduled to future delivery`,
+        })
+      }
+      setTimeout(() => setMessage(null), 3000)
     } catch (error) {
       setMessage({
         type: 'error',
@@ -356,10 +367,21 @@ export default function DeliverySchedulePage() {
           promotionDialog.wine.id,
           currentDeliveryDate
         )
-        setMessage({
-          type: 'success',
-          text: `${promotionDialog.wine.name} promoted to current delivery`,
-        })
+
+        // Auto-lock current delivery when wine is promoted (manual curation)
+        if (!currentDeliveryLocked) {
+          await db.lockDelivery(currentDeliveryDate)
+          setCurrentDeliveryLocked(true)
+          setMessage({
+            type: 'success',
+            text: `${promotionDialog.wine.name} promoted - current delivery locked to prevent automatic rescheduling`,
+          })
+        } else {
+          setMessage({
+            type: 'success',
+            text: `${promotionDialog.wine.name} promoted to current delivery`,
+          })
+        }
         setTimeout(() => setMessage(null), 3000)
       }
     } catch (error) {
@@ -557,7 +579,12 @@ export default function DeliverySchedulePage() {
                         return wine?.location === 'storage' // Only consider undelivered wines
                       })
                       const isNextDelivery = nextDelivery?.date === group.date
-                      const groupBottles = group.wines.reduce((sum, w) => sum + w.quantity, 0)
+
+                      // For current delivery, exclude delayed wines from counts
+                      const displayWines = isNextDelivery
+                        ? group.wines.filter(w => !delayedWines.includes(w.id))
+                        : group.wines
+                      const groupBottles = displayWines.reduce((sum, w) => sum + w.quantity, 0)
                       const currentDeliveryBottles = nextDelivery ? nextDelivery.wines.reduce((sum, w) => sum + w.quantity, 0) : 0
 
                       return (
@@ -571,7 +598,7 @@ export default function DeliverySchedulePage() {
                               year: 'numeric',
                             })}
                           </h4>
-                          <p className="text-outline-variant text-sm mt-2">{groupBottles} bottles • {group.wines.length} wines</p>
+                          <p className="text-outline-variant text-sm mt-2">{groupBottles} bottles • {displayWines.length} wines</p>
                         </div>
                         {isNextDelivery && (
                           <div className="flex gap-2">
