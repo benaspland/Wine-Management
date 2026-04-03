@@ -9,6 +9,7 @@ interface WineDetailPanelProps {
   onMoveToHome: (wineId: string) => Promise<void>
   onEdit: (wine: Wine) => void
   isLoading?: boolean
+  scheduledDeliveryDate?: string
 }
 
 export default function WineDetailPanel({
@@ -18,6 +19,7 @@ export default function WineDetailPanel({
   onMoveToHome,
   onEdit,
   isLoading,
+  scheduledDeliveryDate,
 }: WineDetailPanelProps) {
   const tierLabel = TIER_LABELS[wine.tier]
   const criticRatings = wine.critic_ratings || {}
@@ -140,6 +142,23 @@ export default function WineDetailPanel({
             <p className="text-[10px] text-outline uppercase tracking-wider">Alcohol</p>
             <p className="text-sm font-medium">{wine.alcohol_percent}% ABV</p>
           </div>
+          {scheduledDeliveryDate && (
+            <div>
+              <p className="text-[10px] text-outline uppercase tracking-wider">Scheduled Delivery</p>
+              <p className="text-sm font-medium">
+                {new Date(scheduledDeliveryDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </p>
+            </div>
+          )}
+          {wine.location === 'storage' && !scheduledDeliveryDate && (
+            <div>
+              <p className="text-[10px] text-outline uppercase tracking-wider">Status</p>
+              <p className="text-sm font-medium text-orange-400">Not Yet Scheduled</p>
+            </div>
+          )}
         </div>
 
         {/* Flavor Profile */}
