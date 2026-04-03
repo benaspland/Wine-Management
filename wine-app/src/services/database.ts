@@ -766,11 +766,11 @@ export async function getConsumptionLog(wineId?: string, year?: number): Promise
 
   if (year) {
     sql += wineId ? ' AND' : ' WHERE'
-    sql += ' strftime("%Y", consumed_at) = ?'
+    sql += ' strftime("%Y", consumed_date) = ?'
     params.push(year.toString())
   }
 
-  sql += ' ORDER BY consumed_at DESC'
+  sql += ' ORDER BY consumed_date DESC'
 
   const result = await executeQuery(sql, params)
   return result.values || []
