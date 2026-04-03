@@ -62,7 +62,16 @@ async function initMemoryDatabase() {
   // Initialize with empty tables
   memoryStorage = new Map()
   memoryStorage.set('wines', [])
-  memoryStorage.set('cellar_config', [])
+  // Initialize cellar_config with defaults
+  memoryStorage.set('cellar_config', [
+    {
+      id: 1,
+      max_slots: 80,
+      current_slots: 0,
+      min_delivery_bottles: 24,
+      annual_consumption_target: 30,
+    }
+  ])
   memoryStorage.set('consumption_log', [])
   memoryStorage.set('delivery_schedule', [])
   memoryStorage.set('delivery_delays', [])
@@ -708,10 +717,11 @@ export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntr
 
 // Cellar config
 export async function getCellarConfig(): Promise<CellarConfig> {
-  const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', ['default'])
+  const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', [1])
   const row = result.values?.[0]
   return (
     row || {
+      id: 1,
       max_slots: 80,
       current_slots: 0,
       min_delivery_bottles: 24,
@@ -739,7 +749,7 @@ export async function updateCellarConfig(config: Partial<CellarConfig>): Promise
 
   if (updates.length === 0) return
 
-  values.push('default')
+  values.push(1)
   const sql = `UPDATE cellar_config SET ${updates.join(', ')} WHERE id = ?`
   await executeQuery(sql, values)
 }
