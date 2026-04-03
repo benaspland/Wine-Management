@@ -273,6 +273,9 @@ export default function DeliverySchedulePage() {
         text: `Delivery of ${bottleCount} bottles (${deliveryGroup.wines.length} wines) completed`,
       })
       setTimeout(() => setMessage(null), 3000)
+
+      // Regenerate schedule to show next delivery with correct lock status
+      await generateDeliverySchedule()
     } catch (error) {
       setMessage({
         type: 'error',
