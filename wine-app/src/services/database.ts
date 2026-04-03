@@ -751,7 +751,9 @@ export async function getWineScheduledDeliveryDate(wineId: string): Promise<stri
       'SELECT scheduled_date FROM delivery_schedule WHERE wine_id = ? ORDER BY scheduled_date ASC LIMIT 1',
       [wineId]
     )
-    return result.values?.[0]?.scheduled_date
+    const scheduledDate = result.values?.[0]?.scheduled_date
+    console.log('[Database] getWineScheduledDeliveryDate:', { wineId, scheduledDate, allResults: result.values })
+    return scheduledDate
   }
 }
 
