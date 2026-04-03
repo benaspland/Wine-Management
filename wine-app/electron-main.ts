@@ -91,12 +91,11 @@ function initializeSchema(): void {
       updated_at TEXT NOT NULL
     )`,
     `CREATE TABLE IF NOT EXISTS cellar_config (
-      id TEXT PRIMARY KEY DEFAULT 'default',
-      max_slots INTEGER DEFAULT 80,
-      min_delivery_bottles INTEGER DEFAULT 24,
-      annual_consumption_target INTEGER DEFAULT 30,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      max_slots INTEGER NOT NULL DEFAULT 80,
+      current_slots INTEGER NOT NULL DEFAULT 0,
+      min_delivery_bottles INTEGER NOT NULL DEFAULT 24,
+      annual_consumption_target INTEGER NOT NULL DEFAULT 30
     )`,
     `CREATE TABLE IF NOT EXISTS consumption_log (
       id TEXT PRIMARY KEY,
@@ -145,9 +144,8 @@ function initializeSchema(): void {
   // Ensure default config exists
   try {
     db.run(
-      `INSERT OR IGNORE INTO cellar_config (id, max_slots, created_at, updated_at)
-       VALUES (?, ?, datetime('now'), datetime('now'))`,
-      ['default', 80]
+      `INSERT OR IGNORE INTO cellar_config (id, max_slots, current_slots, min_delivery_bottles, annual_consumption_target)
+       VALUES (1, 80, 0, 24, 30)`
     )
   } catch (error) {
     // Might already exist
