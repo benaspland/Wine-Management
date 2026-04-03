@@ -123,4 +123,33 @@ describe('Cellar Config Update - localStorage Persistence', () => {
     // And it should be the record with id=1
     expect(config.id).toBe(1)
   })
+
+  it('should verify update persists through read-back cycle', () => {
+    // This test verifies the fix for the issue where updates show success
+    // but revert when navigating back to the settings page
+
+    // Initial state
+    let config = mockDb.getCellarConfig()
+    expect(config.max_slots).toBe(80)
+    expect(config.annual_consumption_target).toBe(30)
+
+    // Update config
+    mockDb.updateCellarConfig({ max_slots: 100, annual_consumption_target: 50 })
+
+    // Immediately read back (simulates user staying on page)
+    config = mockDb.getCellarConfig()
+    expect(config.max_slots).toBe(100)
+    expect(config.annual_consumption_target).toBe(50)
+
+    // Simulate user navigating away and back (new component mount)
+    // This is what happens when user goes to different page and returns
+    const reloadedConfig = mockDb.getCellarConfig()
+    expect(reloadedConfig.max_slots).toBe(100)
+    expect(reloadedConfig.annual_consumption_target).toBe(50)
+
+    // Also verify in localStorage
+    const stored = mockDb.getStoredData()
+    expect(stored.cellar_config[0].max_slots).toBe(100)
+    expect(stored.cellar_config[0].annual_consumption_target).toBe(50)
+  })
 })

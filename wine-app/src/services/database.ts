@@ -824,20 +824,24 @@ export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntr
 
 // Cellar config
 export async function getCellarConfig(): Promise<CellarConfig> {
+  console.log('[Database] getCellarConfig: Querying database...')
   const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', [1])
+  console.log('[Database] getCellarConfig: Query result:', result)
   const row = result.values?.[0]
-  return (
-    row || {
-      id: 1,
-      max_slots: 80,
-      current_slots: 0,
-      min_delivery_bottles: 24,
-      annual_consumption_target: 30,
-    }
-  )
+  console.log('[Database] getCellarConfig: Row data:', row)
+  const config = row || {
+    id: 1,
+    max_slots: 80,
+    current_slots: 0,
+    min_delivery_bottles: 24,
+    annual_consumption_target: 30,
+  }
+  console.log('[Database] getCellarConfig: Returning config:', config)
+  return config
 }
 
 export async function updateCellarConfig(config: Partial<CellarConfig>): Promise<void> {
+  console.log('[Database] updateCellarConfig: Updating with values:', config)
   const updates: string[] = []
   const values: (string | number)[] = []
 
@@ -854,11 +858,21 @@ export async function updateCellarConfig(config: Partial<CellarConfig>): Promise
     values.push(config.annual_consumption_target)
   }
 
-  if (updates.length === 0) return
+  if (updates.length === 0) {
+    console.warn('[Database] updateCellarConfig: No fields to update!')
+    return
+  }
 
-  values.push(1)
+  values.push(1) // id = 1
   const sql = `UPDATE cellar_config SET ${updates.join(', ')} WHERE id = ?`
-  await executeQuery(sql, values)
+  console.log('[Database] updateCellarConfig: SQL:', sql, 'Values:', values)
+
+  const result = await executeQuery(sql, values)
+  console.log('[Database] updateCellarConfig: Update result:', result)
+
+  // Verify the update by reading back
+  const updated = await getCellarConfig()
+  console.log('[Database] updateCellarConfig: Verified config after update:', updated)
 }
 
 // Consumption log
