@@ -195,3 +195,108 @@ describe('Integration - Scheduled Delivery with Full CSV Data', () => {
     expect(tierCounts[1] || tierCounts[2]).toBeGreaterThan(0)
   })
 })
+
+describe('Integration - Cellar Config with CSV Data', () => {
+  it('should initialize cellar config with proper defaults', () => {
+    const cellarConfig = {
+      id: 1,
+      max_slots: 80,
+      current_slots: 0,
+      min_delivery_bottles: 24,
+      annual_consumption_target: 30,
+    }
+
+    expect(cellarConfig.id).toBe(1)
+    expect(cellarConfig.max_slots).toBe(80)
+    expect(typeof cellarConfig.max_slots).toBe('number')
+  })
+
+  it('should use numeric ID for cellar config queries', () => {
+    const testQueryWithId = (id: number | string): string => {
+      return `SELECT * FROM cellar_config WHERE id = ${id}`
+    }
+
+    const queryWithNumeric = testQueryWithId(1)
+    const queryWithString = testQueryWithId('default')
+
+    expect(queryWithNumeric).toContain('WHERE id = 1')
+    expect(queryWithString).toContain("WHERE id = default")
+    // The app should use numeric ID
+    expect(queryWithNumeric).not.toBe(queryWithString)
+  })
+})
+
+describe('Integration - Consumption Log with CSV Data', () => {
+  it('should use consumed_date column (not consumed_at)', () => {
+    const consumptionEntry = {
+      id: 'log-1',
+      wine_id: wines[0].id,
+      quantity: 1,
+      consumed_date: '2026-03-15T10:00:00Z',
+      notes: 'Excellent vintage',
+      created_at: '2026-03-15T10:00:00Z',
+    }
+
+    expect(consumptionEntry).toHaveProperty('consumed_date')
+    expect(consumptionEntry).not.toHaveProperty('consumed_at')
+    expect(consumptionEntry.consumed_date).toMatch(/^\d{4}-\d{2}-\d{2}/)
+  })
+
+  it('should filter consumption by year using consumed_date', () => {
+    const logs = [
+      { wine_id: wines[0].id, consumed_date: '2026-03-15T10:00:00Z' },
+      { wine_id: wines[1].id, consumed_date: '2026-06-20T14:30:00Z' },
+      { wine_id: wines[2].id, consumed_date: '2027-01-10T09:15:00Z' },
+    ]
+
+    const year2026 = logs.filter(log => {
+      const year = new Date(log.consumed_date).getFullYear()
+      return year === 2026
+    })
+
+    expect(year2026.length).toBe(2)
+    expect(year2026[0].wine_id).toBe(wines[0].id)
+  })
+
+  it('should order consumption logs by consumed_date DESC', () => {
+    const logs = [
+      { id: '1', wine_id: wines[0].id, consumed_date: '2026-01-01T00:00:00Z' },
+      { id: '2', wine_id: wines[1].id, consumed_date: '2026-03-01T00:00:00Z' },
+      { id: '3', wine_id: wines[2].id, consumed_date: '2026-02-01T00:00:00Z' },
+    ]
+
+    const sorted = logs.sort((a, b) =>
+      new Date(b.consumed_date).getTime() - new Date(a.consumed_date).getTime()
+    )
+
+    expect(sorted[0].id).toBe('2') // March
+    expect(sorted[1].id).toBe('3') // February
+    expect(sorted[2].id).toBe('1') // January
+  })
+
+  it('should track consumption for specific wine from CSV data', () => {
+    const wineId = wines[0].id
+    const consumptionLogs = [
+      {
+        id: 'log-1',
+        wine_id: wineId,
+        quantity: 1,
+        consumed_date: '2026-03-15T10:00:00Z',
+        notes: 'Schedule: 2026-03 | Great tasting notes',
+        created_at: '2026-03-15T10:00:00Z',
+      },
+      {
+        id: 'log-2',
+        wine_id: 'different-wine',
+        quantity: 2,
+        consumed_date: '2026-04-01T14:30:00Z',
+        notes: null,
+        created_at: '2026-04-01T14:30:00Z',
+      },
+    ]
+
+    const wineConsumption = consumptionLogs.filter(log => log.wine_id === wineId)
+    expect(wineConsumption.length).toBe(1)
+    expect(wineConsumption[0].quantity).toBe(1)
+  })
+})

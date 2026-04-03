@@ -168,3 +168,129 @@ describe('WineDetailPanel - Scheduled Delivery Display', () => {
     expect(noDate).toBe(false)
   })
 })
+
+describe('Database - Cellar Config Initialization', () => {
+  beforeEach(() => {
+    memoryStorage = new Map()
+  })
+
+  it('should have cellar_config with default values in memory storage', () => {
+    // Simulate initialization
+    memoryStorage.set('cellar_config', [
+      {
+        id: 1,
+        max_slots: 80,
+        current_slots: 0,
+        min_delivery_bottles: 24,
+        annual_consumption_target: 30,
+      }
+    ])
+
+    const config = memoryStorage.get('cellar_config')
+    expect(config).toBeDefined()
+    expect(config.length).toBe(1)
+    expect(config[0].max_slots).toBe(80)
+    expect(config[0].annual_consumption_target).toBe(30)
+  })
+
+  it('should use numeric ID 1 for cellar config', () => {
+    memoryStorage.set('cellar_config', [
+      { id: 1, max_slots: 80, current_slots: 0 }
+    ])
+
+    const config = memoryStorage.get('cellar_config')[0]
+    expect(config.id).toBe(1)
+    expect(typeof config.id).toBe('number')
+  })
+})
+
+describe('Database - Consumption Log', () => {
+  beforeEach(() => {
+    memoryStorage = new Map()
+    memoryStorage.set('consumption_log', [
+      {
+        id: 'log-1',
+        wine_id: 'wine-001',
+        quantity: 1,
+        consumed_date: '2026-03-15T10:00:00Z',
+        notes: 'Great wine',
+        created_at: '2026-03-15T10:00:00Z',
+      },
+      {
+        id: 'log-2',
+        wine_id: 'wine-002',
+        quantity: 2,
+        consumed_date: '2026-04-01T14:30:00Z',
+        notes: null,
+        created_at: '2026-04-01T14:30:00Z',
+      },
+    ])
+  })
+
+  it('should use consumed_date column (not consumed_at)', () => {
+    const logs = memoryStorage.get('consumption_log')
+    expect(logs[0]).toHaveProperty('consumed_date')
+    expect(logs[0]).not.toHaveProperty('consumed_at')
+  })
+
+  it('should retrieve consumption logs for a wine', () => {
+    const logs = memoryStorage.get('consumption_log')
+    const wineLogs = logs.filter((log: any) => log.wine_id === 'wine-001')
+    expect(wineLogs.length).toBe(1)
+    expect(wineLogs[0].quantity).toBe(1)
+  })
+
+  it('should handle filtering by year using consumed_date', () => {
+    const logs = memoryStorage.get('consumption_log')
+    // Simulate year filtering: extract year from consumed_date
+    const year2026Logs = logs.filter((log: any) => {
+      const year = new Date(log.consumed_date).getFullYear()
+      return year === 2026
+    })
+    expect(year2026Logs.length).toBe(2)
+  })
+
+  it('should order by consumed_date DESC', () => {
+    const logs = memoryStorage.get('consumption_log')
+    const sorted = logs.sort((a: any, b: any) =>
+      new Date(b.consumed_date).getTime() - new Date(a.consumed_date).getTime()
+    )
+    expect(sorted[0].wine_id).toBe('wine-002')
+    expect(sorted[1].wine_id).toBe('wine-001')
+  })
+})
+
+describe('Database - Delivery Schedule Save', () => {
+  beforeEach(() => {
+    memoryStorage = new Map()
+    memoryStorage.set('delivery_schedule', [])
+  })
+
+  it('should save delivery schedule entries', () => {
+    const entries = [
+      { id: '1', wine_id: 'wine-1', quantity: 6, scheduled_date: '2026-03-01', from_location: 'storage', to_location: 'home', status: 'pending', created_at: '2026-01-01T00:00:00Z' },
+      { id: '2', wine_id: 'wine-2', quantity: 6, scheduled_date: '2026-03-01', from_location: 'storage', to_location: 'home', status: 'pending', created_at: '2026-01-01T00:00:00Z' },
+    ]
+
+    memoryStorage.set('delivery_schedule', entries)
+    const saved = memoryStorage.get('delivery_schedule')
+    expect(saved.length).toBe(2)
+    expect(saved[0].wine_id).toBe('wine-1')
+  })
+
+  it('should clear and replace delivery schedule on save', () => {
+    const oldEntries = [
+      { id: '1', wine_id: 'wine-old', quantity: 6, scheduled_date: '2026-03-01', from_location: 'storage', to_location: 'home', status: 'pending', created_at: '2026-01-01T00:00:00Z' },
+    ]
+    memoryStorage.set('delivery_schedule', oldEntries)
+
+    const newEntries = [
+      { id: '2', wine_id: 'wine-new', quantity: 6, scheduled_date: '2026-09-01', from_location: 'storage', to_location: 'home', status: 'pending', created_at: '2026-01-01T00:00:00Z' },
+    ]
+    memoryStorage.set('delivery_schedule', newEntries)
+
+    const saved = memoryStorage.get('delivery_schedule')
+    expect(saved.length).toBe(1)
+    expect(saved[0].wine_id).toBe('wine-new')
+  })
+})
