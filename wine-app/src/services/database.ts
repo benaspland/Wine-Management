@@ -194,12 +194,45 @@ async function createSchema() {
     }
   }
 
+  // Run migrations for existing databases
+  if (dbType === 'electron') {
+    await runMigrations()
+  }
+
   // Initialize cellar_config if empty
   const config = await executeQuery('SELECT COUNT(*) as count FROM cellar_config')
   if (config.values?.length === 0 || config.values?.[0]?.count === 0) {
     await executeQuery(
       'INSERT INTO cellar_config (id, max_slots, current_slots, min_delivery_bottles, annual_consumption_target) VALUES (1, 80, 0, 24, 30)'
     )
+  }
+}
+
+async function runMigrations() {
+  try {
+    // Check if cellar_config has the missing columns and add them if needed
+    console.log('[Database] Running migrations for existing databases...')
+
+    // Try to select from the new columns to see if they exist
+    try {
+      await executeQuery('SELECT min_delivery_bottles, annual_consumption_target FROM cellar_config LIMIT 1', [])
+      console.log('[Database] cellar_config schema is up to date')
+    } catch (error) {
+      console.log('[Database] Adding missing columns to cellar_config...')
+
+      // Add missing columns
+      await executeQuery(
+        'ALTER TABLE cellar_config ADD COLUMN min_delivery_bottles INTEGER NOT NULL DEFAULT 24',
+        []
+      )
+      await executeQuery(
+        'ALTER TABLE cellar_config ADD COLUMN annual_consumption_target INTEGER NOT NULL DEFAULT 30',
+        []
+      )
+      console.log('[Database] Successfully added missing columns to cellar_config')
+    }
+  } catch (error) {
+    console.warn('[Database] Migration error (may be expected if schema is already up to date):', error)
   }
 }
 
