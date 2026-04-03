@@ -728,24 +728,34 @@ export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntr
     persistMemoryDatabase()
   } else {
     // Clear existing schedule first
-    await executeQuery('DELETE FROM delivery_schedule', [])
+    console.log('[Database] Clearing existing delivery_schedule entries...')
+    const deleteResult = await executeQuery('DELETE FROM delivery_schedule', [])
+    console.log('[Database] Deleted delivery_schedule entries:', deleteResult)
+
     // Insert all schedule entries
+    console.log(`[Database] Inserting ${scheduleEntries.length} new delivery_schedule entries...`)
     for (const entry of scheduleEntries) {
-      await executeQuery(
-        `INSERT INTO delivery_schedule (id, wine_id, quantity, scheduled_date, from_location, to_location, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          entry.id || generateId(),
-          entry.wine_id,
-          entry.quantity,
-          entry.scheduled_date,
-          entry.from_location,
-          entry.to_location,
-          entry.status || 'pending',
-          new Date().toISOString(),
-        ]
-      )
+      try {
+        await executeQuery(
+          `INSERT INTO delivery_schedule (id, wine_id, quantity, scheduled_date, from_location, to_location, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            entry.id || generateId(),
+            entry.wine_id,
+            entry.quantity,
+            entry.scheduled_date,
+            entry.from_location,
+            entry.to_location,
+            entry.status || 'pending',
+            new Date().toISOString(),
+          ]
+        )
+      } catch (error) {
+        console.error('[Database] Failed to insert delivery_schedule entry:', { entry, error })
+        throw error
+      }
     }
+    console.log('[Database] Successfully saved all delivery_schedule entries')
   }
 }
 
