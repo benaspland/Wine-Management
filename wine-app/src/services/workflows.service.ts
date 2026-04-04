@@ -7,15 +7,13 @@
 import type {
   Wine,
   CellarConfig,
-  DeliveryWindow,
-  DeliveryWindowWine,
-  ConsumptionLogEntry,
   DeliveryScheduleEntry,
   ConsumptionScheduleEntry,
+  DeliveryWindowWine,
   Tier,
+  WineType,
 } from '../types/index'
 import * as db from './database'
-import { v4 as uuidv4 } from 'uuid'
 
 // ============================================================================
 // WORKFLOW 1: LOAD WINE COLLECTION
@@ -28,10 +26,15 @@ export interface ImportWineRow {
   region: string
   producer?: string
   classification?: string
-  wine_type?: string
+  wine_type?: WineType
   varietal?: string
   country?: string
   alcohol_percent?: number
+  serving_temp_min?: number
+  serving_temp_max?: number
+  flavor_profile?: string
+  critic_ratings?: string | Record<string, number>
+  format?: string
   drinking_window_start: number
   drinking_window_end: number
   quantity_in_storage: number
@@ -380,7 +383,6 @@ export async function generateDeliverySchedule(): Promise<DeliveryScheduleEntry[
   }
 
   // Simple distribution: assign wines to windows in batches of 6-8 bottles
-  const monthlyQuota = 20
   let windowDate = new Date()
   windowDate.setDate(windowDate.getDate() + 30) // First window in 30 days
 
@@ -638,7 +640,7 @@ export async function markDeliveryComplete(windowId: string): Promise<void> {
         delivery_window_id: windowId,
         quantity_delivered: deliveryWine.quantity,
         delivered_date: today,
-        status: 'completed',
+        status: 'delivered',
       })
 
       // Update window wine status
@@ -681,9 +683,6 @@ export async function generateConsumptionSchedule(): Promise<ConsumptionSchedule
   const monthlyTarget = annualTarget / 12
 
   // Get consumption log to exclude already-consumed wines
-  const consumptionLog = await db.getAuditLog(1000)
-  const consumedWines = new Set<string>()
-
   // Simple scheduling: distribute wines monthly
   let currentDate = new Date()
   const wineIndex: Record<string, number> = {}

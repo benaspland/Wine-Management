@@ -45,11 +45,13 @@ export async function initializeDatabase() {
 async function initMemoryDatabase() {
   // Load from localStorage if available
   const stored = localStorage.getItem('wine-app-db')
+  console.log('[Database] initMemoryDatabase: localStorage data exists =', !!stored)
+
   if (stored) {
     try {
       const data = JSON.parse(stored)
       memoryStorage = new Map(Object.entries(data))
-      console.log('[Database] Loaded database from localStorage')
+      console.log('[Database] Loaded database from localStorage, wines count =', memoryStorage.get('wines')?.length)
       return
     } catch (error) {
       console.warn('[Database] Failed to load from localStorage, starting fresh:', error)
@@ -57,6 +59,7 @@ async function initMemoryDatabase() {
   }
 
   // Initialize with empty tables
+  console.log('[Database] Initializing fresh memory storage')
   memoryStorage = new Map()
   memoryStorage.set('wines', [])
   memoryStorage.set('cellar_config', [
@@ -109,6 +112,7 @@ async function createSchema() {
       drinking_window_start INTEGER NOT NULL,
       drinking_window_end INTEGER NOT NULL,
       image_url TEXT,
+      format TEXT,
       quantity_in_storage INTEGER NOT NULL DEFAULT 0 CHECK(quantity_in_storage >= 0),
       quantity_at_home INTEGER NOT NULL DEFAULT 0 CHECK(quantity_at_home >= 0),
       notes TEXT,
@@ -277,12 +281,20 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
   } else if (upperSql.startsWith('INSERT')) {
     const table = extractTableName(sql)
     const data = parseInsertValues(sql, params)
-    const rows = memoryStorage.get(table) || []
+    let rows = memoryStorage.get(table) || []
+
+    console.log(`[DB] INSERT into ${table}: data =`, Object.keys(data).slice(0, 5))
+
     rows.push(data)
     memoryStorage.set(table, rows)
+
+    console.log(`[DB] ${table} now has ${rows.length} rows`)
+
     return { changes: 1 }
   } else if (upperSql.startsWith('UPDATE')) {
     const table = extractTableName(sql)
+    console.log(`[DB] UPDATE: memoryStorage keys =`, Array.from(memoryStorage.keys()))
+    console.log(`[DB] UPDATE: memoryStorage.get('${table}') =`, memoryStorage.get(table))
     const rows = memoryStorage.get(table) || []
     let updated = 0
 
@@ -291,19 +303,33 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
     const setClause = setMatch ? setMatch[1] : ''
     const numSetFields = setClause.split('=').length - 1
 
-    const updates = parseUpdateValues(sql, params.slice(0, numSetFields))
+    const setParams = params.slice(0, numSetFields)
+    const whereParams = params.slice(numSetFields)
+    const updates = parseUpdateValues(sql, setParams)
+
     const whereIndex = findWhereIndex(sql)
     const whereClause = sql.substring(whereIndex)
-    const whereParams = params.slice(numSetFields) // Parameters after SET values
+
+    console.log(`[DB] UPDATE ${table}: numSetFields=${numSetFields}, setParams=${JSON.stringify(setParams)}, whereParams=${JSON.stringify(whereParams)}`)
+    console.log(`[DB] Updates to apply:`, updates)
+    console.log(`[DB] Looking for rows where:`, whereClause)
+    console.log(`[DB] Total rows in table: ${rows.length}`)
 
     for (let i = 0; i < rows.length; i++) {
-      if (evaluateWhere(rows[i], whereClause, whereParams)) {
+      const matches = evaluateWhere(rows[i], whereClause, whereParams)
+      console.log(`[DB] Row ${i}: matches=${matches}, row.id=${rows[i].id}`)
+      if (matches) {
+        console.log(`[DB] Updating row ${i} from:`, rows[i])
         rows[i] = { ...rows[i], ...updates }
+        console.log(`[DB] Updated row ${i} to:`, rows[i])
         updated++
       }
     }
 
-    memoryStorage.set(table, rows)
+    if (updated > 0) {
+      memoryStorage.set(table, rows)
+    }
+    console.log(`[DB] Total updated: ${updated}`)
     return { changes: updated }
   } else if (upperSql.startsWith('DELETE')) {
     const table = extractTableName(sql)
@@ -322,8 +348,23 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
 }
 
 function extractTableName(sql: string): string {
-  const match = sql.match(/(?:FROM|INTO|TABLE)\s+(\w+)/i)
-  return match ? match[1] : ''
+  // Handle UPDATE table_name SET ...
+  let match = sql.match(/UPDATE\s+(\w+)/i)
+  if (match) return match[1]
+
+  // Handle DELETE FROM table_name
+  match = sql.match(/DELETE\s+FROM\s+(\w+)/i)
+  if (match) return match[1]
+
+  // Handle INSERT INTO table_name
+  match = sql.match(/INSERT\s+INTO\s+(\w+)/i)
+  if (match) return match[1]
+
+  // Handle SELECT FROM table_name
+  match = sql.match(/FROM\s+(\w+)/i)
+  if (match) return match[1]
+
+  return ''
 }
 
 function evaluateWhere(row: any, sql: string, params: any[]): boolean {
@@ -332,44 +373,57 @@ function evaluateWhere(row: any, sql: string, params: any[]): boolean {
   if (!whereMatch) return true
 
   const whereClause = whereMatch[1].trim()
+
+  // Handle multiple conditions with AND
+  const conditions = whereClause.split(/\s+AND\s+/i)
   let paramIndex = 0
 
-  // Handle simple equality: "id = ?" or "id = 1"
-  if (whereClause.includes('=')) {
-    const parts = whereClause.split('=')
-    const field = parts[0].trim().split(' ').pop()
+  for (const condition of conditions) {
+    // Handle simple equality: "id = ?" or "id = 1"
+    if (condition.includes('=') && !condition.includes('<>') && !condition.includes('!=')) {
+      const parts = condition.split('=')
+      const field = parts[0].trim().split(' ').pop()
+      if (!field) continue
 
-    // Check if the right side is a placeholder (?)
-    if (parts[1].trim() === '?') {
-      const value = params[paramIndex]
-      return row[field] === value
-    } else {
-      // Handle literal values like "id = 1"
-      const literalValue = parts[1].trim()
-      // Try to parse as number
-      const numValue = parseInt(literalValue)
-      if (!isNaN(numValue)) {
-        return row[field] === numValue
+      // Check if the right side is a placeholder (?)
+      if (parts[1].trim() === '?') {
+        const value = params[paramIndex++]
+        if (row[field] !== value) return false
+      } else {
+        // Handle literal values like "id = 1"
+        const literalValue = parts[1].trim()
+        // Try to parse as number
+        const numValue = parseInt(literalValue)
+        if (!isNaN(numValue)) {
+          if (row[field] !== numValue) return false
+        } else {
+          if (row[field] !== literalValue) return false
+        }
       }
-      return row[field] === literalValue
-    }
-  }
+    } else if (condition.includes('IN')) {
+      const match = condition.match(/(\w+)\s+IN\s+\(([^)]+)\)/i)
+      if (match) {
+        const field = match[1].trim()
+        const values = match[2].split(',').map((v) => v.trim().replace(/'/g, ''))
+        if (!values.includes(String(row[field]))) return false
+      }
+    } else if (condition.includes('<>') || condition.includes('!=')) {
+      const match = condition.match(/(\w+)\s*(<>|!=)\s*(.+)/i)
+      if (match) {
+        const field = match[1].trim()
+        const rightSide = match[3].trim()
 
-  if (whereClause.includes('IN')) {
-    const match = whereClause.match(/(\w+)\s+IN\s+\(([^)]+)\)/i)
-    if (match) {
-      const field = match[1].trim()
-      const values = match[2].split(',').map((v) => v.trim().replace(/'/g, ''))
-      return values.includes(String(row[field]))
-    }
-  }
+        // Check if it's a placeholder or literal value
+        let value
+        if (rightSide === '?') {
+          value = params[paramIndex++]
+        } else {
+          // Remove quotes from string literals
+          value = rightSide.replace(/^['"]|['"]$/g, '')
+        }
 
-  if (whereClause.includes('<>') || whereClause.includes('!=')) {
-    const match = whereClause.match(/(\w+)\s*(<>|!=)\s*(.+)/i)
-    if (match) {
-      const field = match[1].trim()
-      const value = params[paramIndex]
-      return row[field] !== value
+        if (row[field] === value) return false
+      }
     }
   }
 
@@ -446,9 +500,9 @@ export async function createWine(wine: Omit<Wine, 'id' | 'created_at' | 'updated
     `INSERT INTO wines (
       id, name, vintage, tier, region, producer, classification, wine_type, varietal,
       country, alcohol_percent, serving_temp_min, serving_temp_max, flavor_profile,
-      critic_ratings, drinking_window_start, drinking_window_end, image_url,
+      critic_ratings, drinking_window_start, drinking_window_end, image_url, format,
       quantity_in_storage, quantity_at_home, notes, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       wine.name,
@@ -468,6 +522,7 @@ export async function createWine(wine: Omit<Wine, 'id' | 'created_at' | 'updated
       wine.drinking_window_start,
       wine.drinking_window_end,
       wine.image_url || null,
+      wine.format || null,
       wine.quantity_in_storage,
       wine.quantity_at_home,
       wine.notes || null,
@@ -594,10 +649,12 @@ export async function getConsumptionLogByWineId(wineId: string): Promise<Consump
 }
 
 export async function getConsumptionLogByYear(year: number): Promise<ConsumptionLogEntry[]> {
-  return queryAll(
-    `SELECT * FROM consumption_log WHERE strftime('%Y', consumed_date) = ? ORDER BY consumed_date DESC`,
-    [String(year)]
-  )
+  // Get all consumption logs and filter by year in memory
+  const allLogs = await queryAll('SELECT * FROM consumption_log ORDER BY consumed_date DESC')
+  return allLogs.filter(log => {
+    const logYear = new Date(log.consumed_date).getFullYear()
+    return logYear === year
+  })
 }
 
 // DELIVERY WINDOW OPERATIONS
@@ -762,11 +819,12 @@ export async function getDeliveryCompletionByWineId(wineId: string): Promise<Del
 }
 
 export async function getFirstDeliveryDateForWine(wineId: string): Promise<string | null> {
-  const result = await queryOne(
-    'SELECT MIN(delivered_date) as earliest_date FROM delivery_completion_log WHERE wine_id = ?',
+  // Get all deliveries for the wine and find the earliest
+  const deliveries = await queryAll(
+    'SELECT delivered_date FROM delivery_completion_log WHERE wine_id = ? ORDER BY delivered_date ASC',
     [wineId]
   )
-  return result?.earliest_date || null
+  return deliveries.length > 0 ? deliveries[0].delivered_date : null
 }
 
 // AUDIT LOG OPERATIONS

@@ -15,10 +15,10 @@ const debugLog = (...args: any[]) => {
 
 export interface DrinkingScheduleEntry {
   wineId: string
-  producer: string
+  producer?: string
   name: string
   vintage: number
-  region: string
+  region?: string
   tier: number
   classification?: string
   suggestedMonth: number // 1-12
@@ -56,9 +56,9 @@ export class ScheduleService {
 
     allWines.forEach(w => {
       // Wine is available immediately if at home
-      if (w.location === 'home') {
+      if (w.quantity_at_home > 0) {
         wineAvailability[w.id] = currentYearMonth
-      } else if (w.location === 'storage') {
+      } else if (w.quantity_in_storage > 0) {
         // Otherwise, check delivery schedule
         const delivery = deliveryScheduleEntries?.find(d => d.wine_id === w.id && d.status === 'pending')
         if (delivery) {
@@ -71,8 +71,8 @@ export class ScheduleService {
       }
     })
 
-    const homeWines = allWines.filter(w => w.location === 'home')
-    const storageWines = allWines.filter(w => w.location === 'storage')
+    const homeWines = allWines.filter(w => w.quantity_at_home > 0)
+    const storageWines = allWines.filter(w => w.quantity_in_storage > 0)
 
     debugLog('[ScheduleService] Wine availability:', Object.entries(wineAvailability).map(([id, yearMonth]) => {
       const wine = allWines.find(w => w.id === id)
@@ -277,7 +277,7 @@ export class ScheduleService {
     annualConsumptionTarget: number = 30
   ): DeliveryScheduleEntry[] {
     console.log('[ScheduleService] ✓ generateDeliverySchedule called')
-    const storageWines = allWines.filter(w => w.location === 'storage')
+    const storageWines = allWines.filter(w => w.quantity_in_storage > 0)
 
     if (storageWines.length === 0) {
       console.log('[ScheduleService] ✓ No storage wines, returning empty schedule')
@@ -294,12 +294,12 @@ export class ScheduleService {
 
     // Helper functions
     const caseSize = (wine: Wine): number => {
-      const size = wine.format?.toLowerCase() || ''
+      const size = wine.format?.toLowerCase() || '750ml'
       if (size.includes('half') || size === '375ml') return 12
       if (size.includes('magnum') || size.includes('1.5l')) return 3
       if (size === '75cl' || size === '750ml') return 6
-      debugLog(`[caseSize] Unknown size for ${wine.producer} ${wine.name}: "${wine.format}", defaulting to 1`)
-      return 1
+      debugLog(`[caseSize] Unknown size for ${wine.producer} ${wine.name}: "${wine.format}", defaulting to 6`)
+      return 6
     }
 
     const maxPerYear = (wine: Wine): number => (wine.format?.toLowerCase().includes('magnum') ? 1 : 2)
@@ -311,13 +311,13 @@ export class ScheduleService {
     const lastDrunk: Record<string, number> = {}
 
     storageWines.forEach(w => {
-      remaining[w.id] = w.quantity
+      remaining[w.id] = w.quantity_in_storage
       home[w.id] = 0
       wineMap[w.id] = w
     })
 
-    const candidateWines = Object.values(wineMap).filter(w => w.quantity > 0)
-    const totalBottlesAvailable = candidateWines.reduce((sum, w) => sum + w.quantity, 0)
+    const candidateWines = Object.values(wineMap).filter(w => w.quantity_in_storage > 0)
+    const totalBottlesAvailable = candidateWines.reduce((sum, w) => sum + w.quantity_in_storage, 0)
 
     console.log(`[ScheduleService] ${candidateWines.length} wines available, ${totalBottlesAvailable} bottles total`)
 
@@ -452,14 +452,12 @@ export class ScheduleService {
             remaining[wine.id] -= bottles
             home[wine.id] += bottles
             deliveries.push({
-              id: `delivery-${wine.id}-${year}-${month}`,
               wine_id: wine.id,
               quantity: bottles,
               scheduled_date: scheduledDate.toISOString().split('T')[0],
-              from_location: 'storage',
-              to_location: 'home',
+              tier: wine.tier,
+              region: wine.region,
               status: 'pending',
-              created_at: new Date().toISOString(),
             })
           })
 

@@ -19,8 +19,7 @@ export default function SettingsPage() {
   // Load cellar config on mount
   useEffect(() => {
     db.getCellarConfig().then(config => {
-      setCellarCapacity(config.max_slots)
-      setMinDeliveryBottles(config.min_delivery_bottles || 24)
+      setCellarCapacity(config.max_home_capacity)
       setAnnualConsumptionTarget(config.annual_consumption_target || 30)
     })
   }, [])
@@ -40,8 +39,8 @@ export default function SettingsPage() {
   const handleSaveConfig = async () => {
     // Validate cellar capacity against current wines at home
     const winesAtHome = wines
-      .filter(w => w.location === 'home')
-      .reduce((sum, w) => sum + w.quantity, 0)
+      .filter(w => w.quantity_at_home > 0)
+      .reduce((sum, w) => sum + w.quantity_at_home, 0)
 
     if (cellarCapacity < winesAtHome) {
       setMessage({
@@ -54,8 +53,7 @@ export default function SettingsPage() {
     setIsLoading(true)
     try {
       await db.updateCellarConfig({
-        max_slots: cellarCapacity,
-        min_delivery_bottles: minDeliveryBottles,
+        max_home_capacity: cellarCapacity,
         annual_consumption_target: annualConsumptionTarget,
       })
       // Regenerate schedules with new parameters
@@ -146,7 +144,7 @@ export default function SettingsPage() {
           wine.country,
           wine.region,
           `"${fullName}"`,
-          wine.quantity,
+          wine.quantity_in_storage + wine.quantity_at_home,
           wine.format,
           peakWindow,
           wine.classification,
@@ -312,19 +310,19 @@ export default function SettingsPage() {
             <div className="bg-surface-container-low p-4 rounded">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">Total Bottles</p>
               <p className="font-headline text-3xl font-bold text-primary">
-                {wines.reduce((sum, w) => sum + w.quantity, 0)}
+                {wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)}
               </p>
             </div>
             <div className="bg-surface-container-low p-4 rounded">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">At Home</p>
               <p className="font-headline text-3xl font-bold text-primary">
-                {wines.filter(w => w.location === 'home').reduce((sum, w) => sum + w.quantity, 0)}
+                {wines.filter(w => w.quantity_at_home > 0).reduce((sum, w) => sum + w.quantity_at_home, 0)}
               </p>
             </div>
             <div className="bg-surface-container-low p-4 rounded">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">In Storage</p>
               <p className="font-headline text-3xl font-bold text-primary">
-                {wines.filter(w => w.location === 'storage').reduce((sum, w) => sum + w.quantity, 0)}
+                {wines.filter(w => w.quantity_in_storage > 0).reduce((sum, w) => sum + w.quantity_in_storage, 0)}
               </p>
             </div>
           </div>

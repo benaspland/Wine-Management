@@ -3,7 +3,7 @@
  * Tests all database operations in isolation using in-memory storage
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import * as db from '../database'
 import type { Wine, CellarConfig, DeliveryWindow } from '../../types/index'
 
@@ -472,7 +472,7 @@ describe('Database Layer - Unit Tests', () => {
         delivery_window_id: window.id,
         quantity_delivered: 5,
         delivered_date: '2026-05-04',
-        status: 'completed',
+        status: 'delivered',
       })
 
       expect(completion.id).toBeDefined()
@@ -504,7 +504,7 @@ describe('Database Layer - Unit Tests', () => {
         delivery_window_id: window.id,
         quantity_delivered: 5,
         delivered_date: '2026-05-04',
-        status: 'completed',
+        status: 'delivered',
       })
 
       const firstDate = await db.getFirstDeliveryDateForWine(wine.id)

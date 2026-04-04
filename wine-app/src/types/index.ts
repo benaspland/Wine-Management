@@ -31,10 +31,11 @@ export interface Wine {
   serving_temp_min?: number;
   serving_temp_max?: number;
   flavor_profile?: string;
-  critic_ratings?: string;
+  critic_ratings?: string | Record<string, number>; // "JS 97 : RP 96" or {js: 97, rp: 96}
   drinking_window_start: number;
   drinking_window_end: number;
   image_url?: string;
+  format?: string; // e.g., "750ml", "1.5L", "375ml", "3L"
   quantity_in_storage: number; // Bottles at cellar/storage
   quantity_at_home: number; // Bottles at home, ready to drink
   notes?: string;

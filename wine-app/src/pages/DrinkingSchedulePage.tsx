@@ -270,7 +270,7 @@ export default function DrinkingSchedulePage() {
                     const isConsumed = wine.consumed || false
                     const consumedDate = wine.consumedDate ? new Date(wine.consumedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : null
                     const wineData = wines.find(w => w.id === wine.id)
-                    const isAtHome = wineData?.location === 'home'
+                    const isAtHome = (wineData?.quantity_at_home || 0) > 0
 
                     return (
                       <div key={`${entry.year}-${entry.month}-${wine.id}-${idx}`} className="relative group">
