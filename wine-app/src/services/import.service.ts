@@ -1,5 +1,6 @@
-import type { Wine, Tier } from '../types/index'
-import * as db from './database'
+import type { Tier } from '../types/index'
+import type { ImportWineRow } from './workflows.service'
+import * as workflows from './workflows.service'
 
 interface CSVRow {
   Vintage: string
@@ -28,8 +29,8 @@ export class ImportService {
       throw new Error('CSV file is empty or has no data rows')
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-    const requiredHeaders = ['Vintage', 'Country', 'Region', 'Wine', 'Quantity', 'Size']
+    const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''))
+    const requiredHeaders = ['Vintage', 'Country', 'Region', 'Wine', 'Quantity']
 
     for (const header of requiredHeaders) {
       if (!headers.includes(header)) {
@@ -37,8 +38,7 @@ export class ImportService {
       }
     }
 
-    let success = 0
-    let failed = 0
+    const winestoImport: ImportWineRow[] = []
     const errors: string[] = []
 
     for (let i = 1; i < lines.length; i++) {
@@ -48,15 +48,16 @@ export class ImportService {
       try {
         const row = this.parseCsvLine(line, headers)
         const wine = this.csvRowToWine(row)
-        await db.createWine(wine)
-        success++
+        winestoImport.push(wine)
       } catch (error) {
-        failed++
         errors.push(`Row ${i + 1}: ${(error as Error).message}`)
       }
     }
 
-    return { success, failed, errors }
+    // Use workflow to import all wines at once
+    const result = await workflows.importWineCollection(winestoImport)
+
+    return { success: result.imported, failed: result.failed.length, errors: errors.concat(result.failed.map(f => `Row ${f.rowNumber}: ${f.field} - ${f.error}`)) }
   }
 
   private static parseCsvLine(line: string, headers: string[]): CSVRow {
@@ -93,7 +94,7 @@ export class ImportService {
     return row as CSVRow
   }
 
-  private static csvRowToWine(row: CSVRow): Omit<Wine, 'id' | 'created_at' | 'updated_at'> {
+  private static csvRowToWine(row: CSVRow): ImportWineRow {
     // Parse wine name into producer + name
     let { producer, name } = this.parseWineName(row.Wine)
 
@@ -101,7 +102,8 @@ export class ImportService {
     let classification = row.Classification?.trim() || ''
 
     // Check if wine name contains classification keywords and extract them
-    const classificationKeywords = /\b(Grand Cru|1er Cru|Premier Cru|Village|Appellation|AOC|DOCG|DOC|Classico|Riserva|Superiore)\b/gi
+    const classificationKeywords =
+      /\b(Grand Cru|1er Cru|Premier Cru|Village|Appellation|AOC|DOCG|DOC|Classico|Riserva|Superiore)\b/gi
     const matches = name.match(classificationKeywords)
 
     if (matches && matches.length > 0) {
@@ -138,27 +140,24 @@ export class ImportService {
     const tier = Math.max(1, Math.min(5, parseInt(row['Wine Rating']) || 1)) as Tier
 
     return {
-      producer,
       name,
       vintage: parseInt(row.Vintage),
-      country: row.Country.trim(),
+      tier,
       region: row.Region.trim(),
-      classification: classification || '-',
+      producer: producer,
+      classification: classification || undefined,
       wine_type: this.detectWineType(row.Varietal),
       varietal: row.Varietal.trim(),
-      tier,
-      location: 'storage',
-      quantity: parseInt(row.Quantity),
-      format: row.Size.trim(),
-      drinking_window_start: start,
-      drinking_window_end: end,
-      alcohol_percent: isNaN(alcoholPercent) ? 0 : alcoholPercent,
+      country: row.Country.trim(),
+      alcohol_percent: isNaN(alcoholPercent) ? undefined : alcoholPercent,
       serving_temp_min: tempMin,
       serving_temp_max: tempMax,
-      notes: row['Wine Notes'].trim(),
-      critic_ratings: criticRatings,
-      flavor_profile: row['Flavour Profile'].trim(),
-      image_url: undefined,
+      flavor_profile: row['Flavour Profile'].trim() || undefined,
+      critic_ratings: JSON.stringify(criticRatings),
+      drinking_window_start: start,
+      drinking_window_end: end,
+      quantity_in_storage: parseInt(row.Quantity) || 0,
+      quantity_at_home: 0, // Imported wines go to storage
     }
   }
 
