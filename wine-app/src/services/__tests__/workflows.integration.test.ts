@@ -174,12 +174,11 @@ describe('Workflows - Integration/Regression Tests', () => {
         quantity_at_home: 0,
       })
 
-      expect(
-        async () =>
-          await workflows.editWineDetails(wine.id, {
-            drinking_window_start: 2050,
-            drinking_window_end: 2045,
-          })
+      await expect(
+        workflows.editWineDetails(wine.id, {
+          drinking_window_start: 2050,
+          drinking_window_end: 2045,
+        })
       ).rejects.toThrow()
     })
 
@@ -195,7 +194,7 @@ describe('Workflows - Integration/Regression Tests', () => {
         quantity_at_home: 0,
       })
 
-      expect(async () => await workflows.editWineDetails(wine.id, { tier: 6 as any })).rejects.toThrow()
+      await expect(workflows.editWineDetails(wine.id, { tier: 6 as any })).rejects.toThrow()
     })
   })
 
@@ -261,7 +260,7 @@ describe('Workflows - Integration/Regression Tests', () => {
       })
 
       // Should fail: 15 + 10 = 25 > 20
-      expect(async () => await workflows.addBottles(wine.id, 10, 'home')).rejects.toThrow()
+      await expect(workflows.addBottles(wine.id, 10, 'home')).rejects.toThrow()
     })
   })
 
@@ -335,7 +334,7 @@ describe('Workflows - Integration/Regression Tests', () => {
         status: 'completed',
       })
 
-      expect(async () => await workflows.consumeWine(wine.id, '2026-02-01')).rejects.toThrow()
+      await expect(workflows.consumeWine(wine.id, '2026-02-01')).rejects.toThrow()
     })
 
     it('should reject consumption of wine at home count zero', async () => {
@@ -352,7 +351,7 @@ describe('Workflows - Integration/Regression Tests', () => {
 
       const today = new Date().toISOString().split('T')[0]
 
-      expect(async () => await workflows.consumeWine(wine.id, today)).rejects.toThrow()
+      await expect(workflows.consumeWine(wine.id, today)).rejects.toThrow()
     })
   })
 
@@ -393,7 +392,7 @@ describe('Workflows - Integration/Regression Tests', () => {
         quantity_at_home: 5,
       })
 
-      expect(async () => await workflows.moveToHome(wine.id, 1)).rejects.toThrow()
+      await expect(workflows.moveToHome(wine.id, 1)).rejects.toThrow()
     })
 
     it('should reject move if exceeds home capacity', async () => {
@@ -410,7 +409,7 @@ describe('Workflows - Integration/Regression Tests', () => {
         quantity_at_home: 8,
       })
 
-      expect(async () => await workflows.moveToHome(wine.id, 5)).rejects.toThrow()
+      await expect(workflows.moveToHome(wine.id, 5)).rejects.toThrow()
     })
   })
 
@@ -432,14 +431,14 @@ describe('Workflows - Integration/Regression Tests', () => {
     })
 
     it('should reject invalid capacity', async () => {
-      expect(async () =>
-        await workflows.updateCellarConfig({ max_home_capacity: 0 })
+      await expect(
+        workflows.updateCellarConfig({ max_home_capacity: 0 })
       ).rejects.toThrow()
     })
 
     it('should reject invalid consumption target', async () => {
-      expect(async () =>
-        await workflows.updateCellarConfig({ annual_consumption_target: -10 })
+      await expect(
+        workflows.updateCellarConfig({ annual_consumption_target: -10 })
       ).rejects.toThrow()
     })
   })
@@ -599,7 +598,7 @@ describe('Workflows - Integration/Regression Tests', () => {
         quantity_at_home: 5,
       })
 
-      expect(async () => await workflows.promoteWineToDelivery(wine.id, 1)).rejects.toThrow()
+      await expect(workflows.promoteWineToDelivery(wine.id, 1)).rejects.toThrow()
     })
   })
 
@@ -695,7 +694,7 @@ describe('Workflows - Integration/Regression Tests', () => {
 
       await db.addWineToDeliveryWindow(window.id, wine.id, 5)
 
-      expect(async () => await workflows.markDeliveryComplete(window.id)).rejects.toThrow()
+      await expect(workflows.markDeliveryComplete(window.id)).rejects.toThrow()
     })
   })
 

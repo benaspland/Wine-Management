@@ -237,12 +237,12 @@ async function executeQuery(sql: string, params: any[] = []): Promise<any> {
   }
 }
 
-async function queryOne(sql: string, params: any[] = []): Promise<any> {
+export async function queryOne(sql: string, params: any[] = []): Promise<any> {
   const result = await executeQuery(sql, params)
   return result?.values?.[0] || null
 }
 
-async function queryAll(sql: string, params: any[] = []): Promise<any[]> {
+export async function queryAll(sql: string, params: any[] = []): Promise<any[]> {
   const result = await executeQuery(sql, params)
   return result?.values || []
 }
@@ -286,17 +286,24 @@ function handleMemoryQuery(sql: string, params: any[] = []): any {
     const rows = memoryStorage.get(table) || []
     let updated = 0
 
-    const updates = parseUpdateValues(sql, params)
+    // Count SET fields to split params correctly
+    const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i)
+    const setClause = setMatch ? setMatch[1] : ''
+    const numSetFields = setClause.split('=').length - 1
+
+    const updates = parseUpdateValues(sql, params.slice(0, numSetFields))
     const whereIndex = findWhereIndex(sql)
     const whereClause = sql.substring(whereIndex)
+    const whereParams = params.slice(numSetFields) // Parameters after SET values
 
     for (let i = 0; i < rows.length; i++) {
-      if (evaluateWhere(rows[i], whereClause, params)) {
+      if (evaluateWhere(rows[i], whereClause, whereParams)) {
         rows[i] = { ...rows[i], ...updates }
         updated++
       }
     }
 
+    memoryStorage.set(table, rows)
     return { changes: updated }
   } else if (upperSql.startsWith('DELETE')) {
     const table = extractTableName(sql)
@@ -327,12 +334,25 @@ function evaluateWhere(row: any, sql: string, params: any[]): boolean {
   const whereClause = whereMatch[1].trim()
   let paramIndex = 0
 
-  // Handle simple equality: "id = ?" or "status IN ('pending', 'completed')"
+  // Handle simple equality: "id = ?" or "id = 1"
   if (whereClause.includes('=')) {
     const parts = whereClause.split('=')
     const field = parts[0].trim().split(' ').pop()
-    const value = params[paramIndex]
-    return row[field] === value
+
+    // Check if the right side is a placeholder (?)
+    if (parts[1].trim() === '?') {
+      const value = params[paramIndex]
+      return row[field] === value
+    } else {
+      // Handle literal values like "id = 1"
+      const literalValue = parts[1].trim()
+      // Try to parse as number
+      const numValue = parseInt(literalValue)
+      if (!isNaN(numValue)) {
+        return row[field] === numValue
+      }
+      return row[field] === literalValue
+    }
   }
 
   if (whereClause.includes('IN')) {
@@ -602,17 +622,26 @@ export async function createDeliveryWindow(data: Omit<DeliveryWindow, 'id' | 'cr
 }
 
 export async function getDeliveryWindowById(id: string): Promise<DeliveryWindow | null> {
-  return queryOne('SELECT * FROM delivery_window WHERE id = ?', [id])
+  const result = await queryOne('SELECT * FROM delivery_window WHERE id = ?', [id])
+  if (result) {
+    result.locked = Boolean(result.locked)
+  }
+  return result
 }
 
 export async function getCurrentDeliveryWindow(): Promise<DeliveryWindow | null> {
-  return queryOne(
+  const result = await queryOne(
     `SELECT * FROM delivery_window WHERE status != 'completed' ORDER BY scheduled_date ASC LIMIT 1`
   )
+  if (result) {
+    result.locked = Boolean(result.locked)
+  }
+  return result
 }
 
 export async function getAllDeliveryWindows(): Promise<DeliveryWindow[]> {
-  return queryAll('SELECT * FROM delivery_window ORDER BY scheduled_date ASC')
+  const results = await queryAll('SELECT * FROM delivery_window ORDER BY scheduled_date ASC')
+  return results.map(r => ({ ...r, locked: Boolean(r.locked) }))
 }
 
 export async function updateDeliveryWindow(id: string, updates: Partial<DeliveryWindow>): Promise<void> {
