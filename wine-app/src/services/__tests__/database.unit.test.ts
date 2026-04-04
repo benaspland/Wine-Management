@@ -478,7 +478,7 @@ describe('Database Layer - Unit Tests', () => {
       expect(completion.id).toBeDefined()
       expect(completion.wine_id).toBe(wine.id)
       expect(completion.quantity_delivered).toBe(5)
-      expect(completion.status).toBe('completed')
+      expect(completion.status).toBe('delivered')
     })
 
     it('should get first delivery date for wine', async () => {
