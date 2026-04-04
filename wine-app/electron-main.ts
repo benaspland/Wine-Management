@@ -84,6 +84,7 @@ function initializeSchema(): void {
       drinking_window_start INTEGER NOT NULL,
       drinking_window_end INTEGER NOT NULL,
       image_url TEXT,
+      format TEXT,
       quantity_in_storage INTEGER NOT NULL DEFAULT 0 CHECK(quantity_in_storage >= 0),
       quantity_at_home INTEGER NOT NULL DEFAULT 0 CHECK(quantity_at_home >= 0),
       notes TEXT,
@@ -136,7 +137,7 @@ function initializeSchema(): void {
       delivery_window_id TEXT NOT NULL,
       quantity_delivered INTEGER NOT NULL CHECK(quantity_delivered > 0),
       delivered_date TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('completed', 'failed', 'partial')),
+      status TEXT NOT NULL DEFAULT 'delivered' CHECK(status IN ('pending', 'delivered', 'failed')),
       created_at TEXT NOT NULL,
       FOREIGN KEY (wine_id) REFERENCES wines(id),
       FOREIGN KEY (delivery_window_id) REFERENCES delivery_window(id)

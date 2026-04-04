@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { ScheduleService } from '../services/schedule.service'
 import * as db from '../services/database'
+import * as workflows from '../services/workflows.service'
 import WineInfo from '../components/WineInfo'
 import MessageModal from '../components/MessageModal'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
@@ -54,8 +55,9 @@ export default function DrinkingSchedulePage() {
       const wine = wines.find(w => w.id === wineId)
       if (!wine) throw new Error('Wine not found')
 
-      // Consume 1 bottle of the wine with schedule pinning info
-      await db.consumeWine(wineId, 1, `Consumed from drinking schedule`, scheduleYear, scheduleMonth)
+      // Consume 1 bottle of the wine using workflow
+      const consumeDate = new Date().toISOString().split('T')[0]
+      await workflows.consumeWine(wineId, consumeDate, `Scheduled for ${scheduleMonth}/${scheduleYear}`)
 
       // Reload wines to update quantities
       await loadWines()
@@ -83,10 +85,10 @@ export default function DrinkingSchedulePage() {
     setIsRegenerating(true)
     try {
       const config = await db.getCellarConfig()
-      const cellarCapacity = config.max_slots
+      const cellarCapacity = config.max_home_capacity
       const totalBottlesAtHome = wines
-        .filter(w => w.location === 'home')
-        .reduce((sum, w) => sum + w.quantity, 0)
+        .filter(w => w.quantity_at_home > 0)
+        .reduce((sum, w) => sum + w.quantity_at_home, 0)
       const deliverySchedule = ScheduleService.generateDeliverySchedule(
         wines,
         cellarCapacity,
@@ -135,14 +137,18 @@ export default function DrinkingSchedulePage() {
         }
       })
 
-      // Load consumption status for each period's wines in batch
+      // Load consumption status for each period's wines
       const consumptionStatus = new Map<string, { consumed: boolean; consumedDate?: string }>()
 
       for (const [_, period] of periodMap) {
-        const batchStatus = await db.getConsumptionStatusBatch(period.wineIds, period.year, period.month)
-        for (const [wineId, status] of batchStatus) {
-          const statusKey = `${wineId}-${period.year}-${period.month}`
-          consumptionStatus.set(statusKey, status)
+        // Get consumption logs for each year represented in period wines
+        const logs = await db.getConsumptionLogByYear(period.year)
+        for (const wineId of period.wineIds) {
+          const log = logs.find(l => l.wine_id === wineId)
+          if (log) {
+            const statusKey = `${wineId}-${period.year}-${period.month}`
+            consumptionStatus.set(statusKey, { consumed: true, consumedDate: log.consumed_date })
+          }
         }
       }
 
