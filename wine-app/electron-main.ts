@@ -64,80 +64,125 @@ async function initializeDatabase(): Promise<void> {
 // Initialize database schema
 function initializeSchema(): void {
   const statements = [
+    // Master wine inventory table with split quantities
     `CREATE TABLE IF NOT EXISTS wines (
       id TEXT PRIMARY KEY,
-      producer TEXT NOT NULL,
       name TEXT NOT NULL,
       vintage INTEGER NOT NULL,
-      country TEXT NOT NULL,
+      tier INTEGER NOT NULL CHECK(tier >= 1 AND tier <= 5),
       region TEXT NOT NULL,
+      producer TEXT,
       classification TEXT,
       wine_type TEXT,
       varietal TEXT,
-      tier INTEGER NOT NULL,
-      location TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
-      format TEXT NOT NULL,
-      drinking_window_start INTEGER NOT NULL,
-      drinking_window_end INTEGER NOT NULL,
-      alcohol_percent REAL,
+      country TEXT,
+      alcohol_percent REAL CHECK(alcohol_percent >= 0 AND alcohol_percent <= 20),
       serving_temp_min INTEGER,
       serving_temp_max INTEGER,
-      notes TEXT,
-      critic_ratings TEXT,
       flavor_profile TEXT,
+      critic_ratings TEXT,
+      drinking_window_start INTEGER NOT NULL,
+      drinking_window_end INTEGER NOT NULL,
       image_url TEXT,
+      quantity_in_storage INTEGER NOT NULL DEFAULT 0 CHECK(quantity_in_storage >= 0),
+      quantity_at_home INTEGER NOT NULL DEFAULT 0 CHECK(quantity_at_home >= 0),
+      notes TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,
+    // Singleton configuration table
     `CREATE TABLE IF NOT EXISTS cellar_config (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      max_slots INTEGER NOT NULL DEFAULT 80,
-      current_slots INTEGER NOT NULL DEFAULT 0,
-      min_delivery_bottles INTEGER NOT NULL DEFAULT 24,
-      annual_consumption_target INTEGER NOT NULL DEFAULT 30
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      max_home_capacity INTEGER NOT NULL CHECK(max_home_capacity > 0),
+      annual_consumption_target INTEGER NOT NULL CHECK(annual_consumption_target > 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )`,
+    // Historical consumption records
     `CREATE TABLE IF NOT EXISTS consumption_log (
       id TEXT PRIMARY KEY,
       wine_id TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
       consumed_date TEXT NOT NULL,
       notes TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (wine_id) REFERENCES wines(id)
     )`,
-    `CREATE TABLE IF NOT EXISTS delivery_schedule (
+    // Delivery windows (scheduled occasions)
+    `CREATE TABLE IF NOT EXISTS delivery_window (
       id TEXT PRIMARY KEY,
-      wine_id TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
       scheduled_date TEXT NOT NULL,
-      from_location TEXT NOT NULL,
-      to_location TEXT NOT NULL,
-      status TEXT NOT NULL,
+      locked INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned', 'in_transit', 'completed')),
       created_at TEXT NOT NULL,
-      FOREIGN KEY (wine_id) REFERENCES wines(id)
+      updated_at TEXT NOT NULL
     )`,
-    `CREATE TABLE IF NOT EXISTS delivery_delays (
+    // Manually-edited wines for locked windows (persisted)
+    `CREATE TABLE IF NOT EXISTS delivery_window_wines (
+      id TEXT PRIMARY KEY,
+      delivery_window_id TEXT NOT NULL,
+      wine_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL CHECK(quantity > 0),
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'delivered', 'failed')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (delivery_window_id) REFERENCES delivery_window(id),
+      FOREIGN KEY (wine_id) REFERENCES wines(id),
+      UNIQUE(delivery_window_id, wine_id)
+    )`,
+    // History of completed deliveries
+    `CREATE TABLE IF NOT EXISTS delivery_completion_log (
       id TEXT PRIMARY KEY,
       wine_id TEXT NOT NULL,
-      delivery_date TEXT NOT NULL,
+      delivery_window_id TEXT NOT NULL,
+      quantity_delivered INTEGER NOT NULL CHECK(quantity_delivered > 0),
+      delivered_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('completed', 'failed', 'partial')),
       created_at TEXT NOT NULL,
-      FOREIGN KEY (wine_id) REFERENCES wines(id)
+      FOREIGN KEY (wine_id) REFERENCES wines(id),
+      FOREIGN KEY (delivery_window_id) REFERENCES delivery_window(id)
     )`,
-    `CREATE TABLE IF NOT EXISTS delivery_pins (
+    // Action history for traceability
+    `CREATE TABLE IF NOT EXISTS audit_log (
       id TEXT PRIMARY KEY,
-      wine_id TEXT NOT NULL,
-      delivery_date TEXT NOT NULL,
+      action TEXT NOT NULL,
+      wine_id TEXT,
+      delivery_window_id TEXT,
+      details TEXT NOT NULL,
+      user_id TEXT,
       created_at TEXT NOT NULL,
-      FOREIGN KEY (wine_id) REFERENCES wines(id)
+      FOREIGN KEY (wine_id) REFERENCES wines(id),
+      FOREIGN KEY (delivery_window_id) REFERENCES delivery_window(id)
     )`,
   ]
 
   for (const stmt of statements) {
     try {
       db.run(stmt)
+      console.log(`[Database] Created/verified table`)
     } catch (error) {
       // Table might already exist, ignore
+      console.log(`[Database] Table creation note:`, (error as any).message?.substring(0, 50))
+    }
+  }
+
+  // Create indices for performance
+  const indices = [
+    'CREATE INDEX IF NOT EXISTS idx_wines_tier ON wines(tier)',
+    'CREATE INDEX IF NOT EXISTS idx_wines_region ON wines(region)',
+    'CREATE INDEX IF NOT EXISTS idx_wines_vintage ON wines(vintage)',
+    'CREATE INDEX IF NOT EXISTS idx_consumption_wine_id ON consumption_log(wine_id)',
+    'CREATE INDEX IF NOT EXISTS idx_consumption_date ON consumption_log(consumed_date)',
+    'CREATE INDEX IF NOT EXISTS idx_delivery_window_date ON delivery_window(scheduled_date)',
+    'CREATE INDEX IF NOT EXISTS idx_delivery_window_wines_window ON delivery_window_wines(delivery_window_id)',
+    'CREATE INDEX IF NOT EXISTS idx_delivery_completion_wine ON delivery_completion_log(wine_id)',
+    'CREATE INDEX IF NOT EXISTS idx_delivery_completion_window ON delivery_completion_log(delivery_window_id)',
+  ]
+
+  for (const indexStmt of indices) {
+    try {
+      db.run(indexStmt)
+    } catch (error) {
+      // Index might already exist, ignore
     }
   }
 
@@ -145,8 +190,8 @@ function initializeSchema(): void {
   try {
     console.log('[Database] Initializing default cellar_config...')
     db.run(
-      `INSERT OR IGNORE INTO cellar_config (id, max_slots, current_slots, min_delivery_bottles, annual_consumption_target)
-       VALUES (1, 80, 0, 24, 30)`
+      `INSERT OR IGNORE INTO cellar_config (id, max_home_capacity, annual_consumption_target, created_at, updated_at)
+       VALUES (1, 80, 30, datetime('now'), datetime('now'))`
     )
 
     // Verify it was created

@@ -1,26 +1,31 @@
-import type { Wine, CellarConfig, ConsumptionLogEntry, DeliveryScheduleEntry } from '../types/index'
+import type {
+  Wine,
+  CellarConfig,
+  ConsumptionLogEntry,
+  DeliveryWindow,
+  DeliveryWindowWine,
+  DeliveryCompletionLog,
+  AuditLogEntry,
+} from '../types/index'
+import { v4 as uuidv4 } from 'uuid'
 
-// Database abstraction layer - supports Electron, Capacitor, and in-memory (dev) modes
+// Database abstraction layer - supports Electron and in-memory (dev) modes
 let db: any = null
-let dbType: 'electron' | 'capacitor' | 'memory' = 'memory'
+let dbType: 'electron' | 'memory' = 'memory'
 let memoryStorage: Map<string, any[]> = new Map()
 
-// Export dbType for other modules
 export function getDbType() {
   return dbType
 }
 
 export async function initializeDatabase() {
-  // Detect environment
   const isElectron = (window as any).electronAPI !== undefined
 
   console.log('[Database] Initializing database...')
   console.log('[Database] window.electronAPI exists:', isElectron)
-  console.log('[Database] window.electronAPI:', (window as any).electronAPI)
 
   if (isElectron) {
     dbType = 'electron'
-    // Electron will handle initialization via preload
     db = (window as any).electronAPI
     console.log('[Database] Using Electron SQLite database')
     if (!db) {
@@ -29,15 +34,8 @@ export async function initializeDatabase() {
       await initMemoryDatabase()
     }
   } else {
-    try {
-      dbType = 'capacitor'
-      // Try to initialize Capacitor SQLite
-      await initCapacitorDatabase()
-    } catch (error) {
-      console.warn('[Database] Capacitor not available, falling back to memory storage:', error)
-      dbType = 'memory'
-      await initMemoryDatabase()
-    }
+    dbType = 'memory'
+    await initMemoryDatabase()
   }
 
   console.log('[Database] Database type:', dbType)
@@ -45,148 +43,154 @@ export async function initializeDatabase() {
 }
 
 async function initMemoryDatabase() {
-  // Initialize in-memory storage for development/testing
-  // Try to load from localStorage first
+  // Load from localStorage if available
   const stored = localStorage.getItem('wine-app-db')
   if (stored) {
     try {
       const data = JSON.parse(stored)
       memoryStorage = new Map(Object.entries(data))
-      console.log('Loaded database from localStorage')
+      console.log('[Database] Loaded database from localStorage')
       return
     } catch (error) {
-      console.warn('Failed to load from localStorage, starting fresh:', error)
+      console.warn('[Database] Failed to load from localStorage, starting fresh:', error)
     }
   }
 
   // Initialize with empty tables
   memoryStorage = new Map()
   memoryStorage.set('wines', [])
-  // Initialize cellar_config with defaults
   memoryStorage.set('cellar_config', [
     {
       id: 1,
-      max_slots: 80,
-      current_slots: 0,
-      min_delivery_bottles: 24,
+      max_home_capacity: 80,
       annual_consumption_target: 30,
-    }
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
   ])
   memoryStorage.set('consumption_log', [])
-  memoryStorage.set('delivery_schedule', [])
-  memoryStorage.set('delivery_delays', [])
-  memoryStorage.set('delivery_pins', [])
-  memoryStorage.set('delivery_locks', [])
+  memoryStorage.set('delivery_window', [])
+  memoryStorage.set('delivery_window_wines', [])
+  memoryStorage.set('delivery_completion_log', [])
+  memoryStorage.set('audit_log', [])
 }
 
-// Persist memory database to localStorage
 function persistMemoryDatabase() {
   try {
     const data = Object.fromEntries(memoryStorage)
     localStorage.setItem('wine-app-db', JSON.stringify(data))
   } catch (error) {
-    console.warn('Failed to persist to localStorage:', error)
+    console.warn('[Database] Failed to persist to localStorage:', error)
   }
-}
-
-async function initCapacitorDatabase() {
-  // Capacitor SQLite will be implemented in Phase 8 when building for mobile
-  // For now, use in-memory storage
-  dbType = 'memory'
-  await initMemoryDatabase()
 }
 
 async function createSchema() {
   if (dbType === 'memory') {
-    // Initialize in-memory tables
     return
   }
 
   const schema = `
     CREATE TABLE IF NOT EXISTS wines (
       id TEXT PRIMARY KEY,
-      producer TEXT NOT NULL,
       name TEXT NOT NULL,
       vintage INTEGER NOT NULL,
-      country TEXT NOT NULL,
+      tier INTEGER NOT NULL CHECK(tier >= 1 AND tier <= 5),
       region TEXT NOT NULL,
+      producer TEXT,
       classification TEXT,
-      wine_type TEXT NOT NULL,
+      wine_type TEXT,
       varietal TEXT,
-      tier INTEGER NOT NULL,
-      location TEXT NOT NULL CHECK(location IN ('home', 'storage')),
-      quantity INTEGER NOT NULL DEFAULT 0,
-      format TEXT NOT NULL,
-      drinking_window_start INTEGER NOT NULL,
-      drinking_window_end INTEGER NOT NULL,
-      alcohol_percent REAL,
+      country TEXT,
+      alcohol_percent REAL CHECK(alcohol_percent >= 0 AND alcohol_percent <= 20),
       serving_temp_min INTEGER,
       serving_temp_max INTEGER,
-      notes TEXT,
-      critic_ratings TEXT,
       flavor_profile TEXT,
+      critic_ratings TEXT,
+      drinking_window_start INTEGER NOT NULL,
+      drinking_window_end INTEGER NOT NULL,
       image_url TEXT,
+      quantity_in_storage INTEGER NOT NULL DEFAULT 0 CHECK(quantity_in_storage >= 0),
+      quantity_at_home INTEGER NOT NULL DEFAULT 0 CHECK(quantity_at_home >= 0),
+      notes TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS cellar_config (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      max_slots INTEGER NOT NULL DEFAULT 80,
-      current_slots INTEGER NOT NULL DEFAULT 0,
-      min_delivery_bottles INTEGER NOT NULL DEFAULT 24,
-      annual_consumption_target INTEGER NOT NULL DEFAULT 30
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      max_home_capacity INTEGER NOT NULL CHECK(max_home_capacity > 0),
+      annual_consumption_target INTEGER NOT NULL CHECK(annual_consumption_target > 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS consumption_log (
       id TEXT PRIMARY KEY,
       wine_id TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
       consumed_date TEXT NOT NULL,
       notes TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (wine_id) REFERENCES wines(id)
     );
 
-    CREATE TABLE IF NOT EXISTS delivery_schedule (
+    CREATE TABLE IF NOT EXISTS delivery_window (
+      id TEXT PRIMARY KEY,
+      scheduled_date TEXT NOT NULL,
+      locked INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned', 'in_transit', 'completed')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS delivery_window_wines (
+      id TEXT PRIMARY KEY,
+      delivery_window_id TEXT NOT NULL,
+      wine_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL CHECK(quantity > 0),
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'delivered', 'failed')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (delivery_window_id) REFERENCES delivery_window(id),
+      FOREIGN KEY (wine_id) REFERENCES wines(id),
+      UNIQUE(delivery_window_id, wine_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS delivery_completion_log (
       id TEXT PRIMARY KEY,
       wine_id TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
-      scheduled_date TEXT NOT NULL,
-      from_location TEXT NOT NULL,
-      to_location TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
+      delivery_window_id TEXT NOT NULL,
+      quantity_delivered INTEGER NOT NULL CHECK(quantity_delivered > 0),
+      delivered_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('completed', 'failed', 'partial')),
       created_at TEXT NOT NULL,
-      FOREIGN KEY (wine_id) REFERENCES wines(id)
+      FOREIGN KEY (wine_id) REFERENCES wines(id),
+      FOREIGN KEY (delivery_window_id) REFERENCES delivery_window(id)
     );
 
-    CREATE TABLE IF NOT EXISTS delivery_locks (
-      delivery_date TEXT PRIMARY KEY,
-      locked_at TEXT NOT NULL
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      action TEXT NOT NULL,
+      wine_id TEXT,
+      delivery_window_id TEXT,
+      details TEXT NOT NULL,
+      user_id TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (wine_id) REFERENCES wines(id),
+      FOREIGN KEY (delivery_window_id) REFERENCES delivery_window(id)
     );
 
-    CREATE TABLE IF NOT EXISTS delivery_delays (
-      wine_id TEXT NOT NULL,
-      delivery_date TEXT NOT NULL,
-      PRIMARY KEY (wine_id, delivery_date),
-      FOREIGN KEY (wine_id) REFERENCES wines(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS delivery_pins (
-      wine_id TEXT NOT NULL,
-      delivery_date TEXT NOT NULL,
-      PRIMARY KEY (wine_id, delivery_date),
-      FOREIGN KEY (wine_id) REFERENCES wines(id)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_wines_location ON wines(location);
     CREATE INDEX IF NOT EXISTS idx_wines_tier ON wines(tier);
+    CREATE INDEX IF NOT EXISTS idx_wines_region ON wines(region);
     CREATE INDEX IF NOT EXISTS idx_wines_vintage ON wines(vintage);
     CREATE INDEX IF NOT EXISTS idx_consumption_wine_id ON consumption_log(wine_id);
-    CREATE INDEX IF NOT EXISTS idx_delivery_wine_id ON delivery_schedule(wine_id);
+    CREATE INDEX IF NOT EXISTS idx_consumption_date ON consumption_log(consumed_date);
+    CREATE INDEX IF NOT EXISTS idx_delivery_window_date ON delivery_window(scheduled_date);
+    CREATE INDEX IF NOT EXISTS idx_delivery_window_wines_window ON delivery_window_wines(delivery_window_id);
+    CREATE INDEX IF NOT EXISTS idx_delivery_completion_wine ON delivery_completion_log(wine_id);
+    CREATE INDEX IF NOT EXISTS idx_delivery_completion_window ON delivery_completion_log(delivery_window_id);
   `
 
-  const statements = schema.split(';').filter(s => s.trim())
+  const statements = schema.split(';').filter((s) => s.trim())
 
   for (const statement of statements) {
     if (statement.trim()) {
@@ -194,55 +198,28 @@ async function createSchema() {
     }
   }
 
-  // Run migrations for existing databases
-  if (dbType === 'electron') {
-    await runMigrations()
-  }
-
-  // Initialize cellar_config if empty
-  const config = await executeQuery('SELECT COUNT(*) as count FROM cellar_config')
-  if (config.values?.length === 0 || config.values?.[0]?.count === 0) {
+  // Initialize default cellar_config if not exists
+  const config = await queryOne(
+    'SELECT COUNT(*) as count FROM cellar_config WHERE id = 1'
+  )
+  if (!config || config.count === 0) {
     await executeQuery(
-      'INSERT INTO cellar_config (id, max_slots, current_slots, min_delivery_bottles, annual_consumption_target) VALUES (1, 80, 0, 24, 30)'
+      `INSERT INTO cellar_config (id, max_home_capacity, annual_consumption_target, created_at, updated_at)
+       VALUES (1, 80, 30, ?, ?)`,
+      [new Date().toISOString(), new Date().toISOString()]
     )
-  }
-}
-
-async function runMigrations() {
-  try {
-    // Check if cellar_config has the missing columns and add them if needed
-    console.log('[Database] Running migrations for existing databases...')
-
-    // Try to select from the new columns to see if they exist
-    try {
-      await executeQuery('SELECT min_delivery_bottles, annual_consumption_target FROM cellar_config LIMIT 1', [])
-      console.log('[Database] cellar_config schema is up to date')
-    } catch (error) {
-      console.log('[Database] Adding missing columns to cellar_config...')
-
-      // Add missing columns
-      await executeQuery(
-        'ALTER TABLE cellar_config ADD COLUMN min_delivery_bottles INTEGER NOT NULL DEFAULT 24',
-        []
-      )
-      await executeQuery(
-        'ALTER TABLE cellar_config ADD COLUMN annual_consumption_target INTEGER NOT NULL DEFAULT 30',
-        []
-      )
-      console.log('[Database] Successfully added missing columns to cellar_config')
-    }
-  } catch (error) {
-    console.warn('[Database] Migration error (may be expected if schema is already up to date):', error)
   }
 }
 
 async function executeQuery(sql: string, params: any[] = []): Promise<any> {
   if (dbType === 'memory') {
     const result = handleMemoryQuery(sql, params)
-    // Persist to localStorage after write operations
     const upperSql = sql.trim().toUpperCase()
-    if (upperSql.startsWith('INSERT') || upperSql.startsWith('UPDATE') || upperSql.startsWith('DELETE')) {
-      console.log('[Database] Memory mode query:', { sql, params, result })
+    if (
+      upperSql.startsWith('INSERT') ||
+      upperSql.startsWith('UPDATE') ||
+      upperSql.startsWith('DELETE')
+    ) {
       persistMemoryDatabase()
     }
     return result
@@ -252,767 +229,551 @@ async function executeQuery(sql: string, params: any[] = []): Promise<any> {
 
     if (upperSql.startsWith('SELECT')) {
       const result = await api.db.query(sql, params)
-      // Wrap array result in values property for consistency
       return { values: result }
     } else {
-      // For INSERT/UPDATE/DELETE, use run() method
       const result = await api.db.run(sql, params)
       return result
     }
-  } else {
-    return db.query(sql, params)
   }
 }
 
+async function queryOne(sql: string, params: any[] = []): Promise<any> {
+  const result = await executeQuery(sql, params)
+  return result?.values?.[0] || null
+}
+
+async function queryAll(sql: string, params: any[] = []): Promise<any[]> {
+  const result = await executeQuery(sql, params)
+  return result?.values || []
+}
+
 function handleMemoryQuery(sql: string, params: any[] = []): any {
-  // Simple in-memory query handler for development
-  // This is a basic implementation - doesn't handle complex SQL
   const upperSql = sql.toUpperCase().trim()
 
   if (upperSql.startsWith('SELECT')) {
-    // Handle SELECT
-    if (upperSql.includes('COUNT(*)')) {
-      const table = extractTableName(sql)
-      const count = memoryStorage.get(table)?.length || 0
-      return { values: [{ count }] }
-    } else {
-      const table = extractTableName(sql)
-      let rows = memoryStorage.get(table) || []
+    const table = extractTableName(sql)
+    let rows = [...(memoryStorage.get(table) || [])]
 
-      // Simple WHERE clause handling
-      if (sql.includes('WHERE')) {
-        rows = rows.filter(r => evaluateWhere(r, sql))
-      }
-
-      // Handle ORDER BY
-      if (sql.includes('ORDER BY')) {
-        const match = sql.match(/ORDER BY\s+(\w+)\s+(ASC|DESC)?/i)
-        if (match) {
-          const field = match[1]
-          const direction = match[2]?.toUpperCase() === 'DESC' ? -1 : 1
-          rows = rows.sort((a, b) => {
-            if (a[field] < b[field]) return -direction
-            if (a[field] > b[field]) return direction
-            return 0
-          })
-        }
-      }
-
-      return { values: rows }
+    // Apply WHERE clause if present
+    if (sql.includes('WHERE')) {
+      rows = rows.filter((r) => evaluateWhere(r, sql, params))
     }
+
+    // Apply ORDER BY
+    if (sql.includes('ORDER BY')) {
+      rows = applyOrderBy(rows, sql)
+    }
+
+    // Apply LIMIT
+    if (sql.includes('LIMIT')) {
+      const match = sql.match(/LIMIT\s+(\d+)/i)
+      if (match) {
+        const limit = parseInt(match[1])
+        rows = rows.slice(0, limit)
+      }
+    }
+
+    return { values: rows }
   } else if (upperSql.startsWith('INSERT')) {
     const table = extractTableName(sql)
-    const values = params
-    const newRow: any = {}
-
-    const columnMatch = sql.match(/INSERT INTO\s+\w+\s*\((.*?)\)\s*VALUES/is)
-    if (columnMatch) {
-      const columns = columnMatch[1].split(',').map(c => c.trim())
-      columns.forEach((col, idx) => {
-        newRow[col] = values[idx]
-      })
-    }
-
-    const table_data = memoryStorage.get(table) || []
-    table_data.push(newRow)
-    memoryStorage.set(table, table_data)
+    const data = parseInsertValues(sql, params)
+    const rows = memoryStorage.get(table) || []
+    rows.push(data)
+    memoryStorage.set(table, rows)
     return { changes: 1 }
   } else if (upperSql.startsWith('UPDATE')) {
     const table = extractTableName(sql)
-    let rows = memoryStorage.get(table) || []
-    const originalRows = JSON.parse(JSON.stringify(rows)) // Deep copy for logging
+    const rows = memoryStorage.get(table) || []
+    let updated = 0
 
-    // Extract SET clause to count how many parameters are for the SET
-    const setMatch = sql.match(/SET\s+(.*?)\s+WHERE/is)
-    const setFieldCount = setMatch ? setMatch[1].split(',').length : 0
+    const updates = parseUpdateValues(sql, params)
+    const whereIndex = findWhereIndex(sql)
+    const whereClause = sql.substring(whereIndex)
 
-    console.log('[Database] UPDATE before:', { table, originalRows, params, setFieldCount })
-
-    // Very simple update handling
-    let changedCount = 0
-    rows = rows.map(row => {
-      if (evaluateWhere(row, sql, params, setFieldCount)) {
-        console.log('[Database] Row matched WHERE clause:', row)
-        changedCount++
-        // Extract SET values - simplified
-        if (setMatch) {
-          const setParts = setMatch[1].split(',')
-          setParts.forEach((setPart, idx) => {
-            const [field] = setPart.split('=').map(p => p.trim())
-            console.log(`[Database] Setting ${field} = ${params[idx]}`)
-            row[field] = params[idx]
-          })
-        }
+    for (let i = 0; i < rows.length; i++) {
+      if (evaluateWhere(rows[i], whereClause, params)) {
+        rows[i] = { ...rows[i], ...updates }
+        updated++
       }
-      return row
-    })
+    }
 
-    console.log('[Database] UPDATE after:', { table, rows, changedCount })
-    memoryStorage.set(table, rows)
-    return { changes: changedCount }
+    return { changes: updated }
   } else if (upperSql.startsWith('DELETE')) {
     const table = extractTableName(sql)
-    const originalLength = memoryStorage.get(table)?.length || 0
-    let rows = memoryStorage.get(table) || []
+    const rows = memoryStorage.get(table) || []
+    const initialLength = rows.length
 
-    rows = rows.filter(r => !evaluateWhere(r, sql, params))
+    const whereIndex = findWhereIndex(sql)
+    const whereClause = sql.substring(whereIndex)
+    const filtered = rows.filter((r) => !evaluateWhere(r, whereClause, params))
 
-    memoryStorage.set(table, rows)
-    return { changes: originalLength - rows.length }
+    memoryStorage.set(table, filtered)
+    return { changes: initialLength - filtered.length }
   }
 
   return { values: [] }
 }
 
 function extractTableName(sql: string): string {
-  const match = sql.match(/(?:FROM|INTO)\s+(\w+)/i)
-  return (match?.[1] || 'wines').toLowerCase()
+  const match = sql.match(/(?:FROM|INTO|TABLE)\s+(\w+)/i)
+  return match ? match[1] : ''
 }
 
-function evaluateWhere(row: any, sql: string, params: any[] = [], paramOffset: number = 0): boolean {
-  const whereMatch = sql.match(/WHERE\s+(.*?)(?:ORDER BY|LIMIT|$)/is)
+function evaluateWhere(row: any, sql: string, params: any[]): boolean {
+  // Simple WHERE clause evaluation
+  const whereMatch = sql.match(/WHERE\s+(.+?)(?:ORDER|LIMIT|$)/i)
   if (!whereMatch) return true
 
   const whereClause = whereMatch[1].trim()
-  // Very simple WHERE handling - just check for equality
-  const conditionMatch = whereClause.match(/(\w+)\s*=\s*\?/)
-  if (conditionMatch) {
-    const fieldName = conditionMatch[1]
-    // For UPDATE statements, WHERE params come after SET params
-    // For other statements, they come first (paramOffset = 0)
-    const expectedValue = params[paramOffset]
-    const matches = row[fieldName] === expectedValue
-    console.log('[Database] evaluateWhere:', { fieldName, rowValue: row[fieldName], expectedValue, paramOffset, params, matches })
-    return matches
+  let paramIndex = 0
+
+  // Handle simple equality: "id = ?" or "status IN ('pending', 'completed')"
+  if (whereClause.includes('=')) {
+    const parts = whereClause.split('=')
+    const field = parts[0].trim().split(' ').pop()
+    const value = params[paramIndex]
+    return row[field] === value
+  }
+
+  if (whereClause.includes('IN')) {
+    const match = whereClause.match(/(\w+)\s+IN\s+\(([^)]+)\)/i)
+    if (match) {
+      const field = match[1].trim()
+      const values = match[2].split(',').map((v) => v.trim().replace(/'/g, ''))
+      return values.includes(String(row[field]))
+    }
+  }
+
+  if (whereClause.includes('<>') || whereClause.includes('!=')) {
+    const match = whereClause.match(/(\w+)\s*(<>|!=)\s*(.+)/i)
+    if (match) {
+      const field = match[1].trim()
+      const value = params[paramIndex]
+      return row[field] !== value
+    }
   }
 
   return true
 }
 
-// Wine operations
-export async function getWines(location?: 'home' | 'storage'): Promise<Wine[]> {
-  let sql = 'SELECT * FROM wines'
-  const params = []
-
-  if (location) {
-    sql += ' WHERE location = ?'
-    params.push(location)
-  }
-
-  sql += ' ORDER BY vintage DESC'
-
-  const result = await executeQuery(sql, params)
-  return (result.values || []).map(parseWineRow)
+function findWhereIndex(sql: string): number {
+  return sql.toUpperCase().indexOf('WHERE')
 }
 
-export async function getWine(id: string): Promise<Wine | null> {
-  const result = await executeQuery('SELECT * FROM wines WHERE id = ?', [id])
-  const row = result.values?.[0]
-  return row ? parseWineRow(row) : null
-}
+function applyOrderBy(rows: any[], sql: string): any[] {
+  const match = sql.match(/ORDER BY\s+(\w+)(?:\s+(ASC|DESC))?/i)
+  if (!match) return rows
 
-export async function createWine(wine: Omit<Wine, 'id' | 'created_at' | 'updated_at'>): Promise<Wine> {
-  const id = generateId()
-  const now = new Date().toISOString()
+  const field = match[1]
+  const direction = match[2]?.toUpperCase() === 'DESC' ? -1 : 1
 
-  const sql = `
-    INSERT INTO wines (
-      id, producer, name, vintage, country, region, classification,
-      wine_type, varietal, tier, location, quantity, format,
-      drinking_window_start, drinking_window_end, alcohol_percent,
-      serving_temp_min, serving_temp_max, notes, critic_ratings,
-      flavor_profile, image_url, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `
-
-  const params = [
-    id,
-    wine.producer,
-    wine.name,
-    wine.vintage,
-    wine.country,
-    wine.region,
-    wine.classification,
-    wine.wine_type,
-    wine.varietal,
-    wine.tier,
-    wine.location,
-    wine.quantity,
-    wine.format,
-    wine.drinking_window_start,
-    wine.drinking_window_end,
-    wine.alcohol_percent,
-    wine.serving_temp_min,
-    wine.serving_temp_max,
-    wine.notes,
-    JSON.stringify(wine.critic_ratings),
-    wine.flavor_profile,
-    wine.image_url || null,
-    now,
-    now,
-  ]
-
-  await executeQuery(sql, params)
-  return { ...wine, id, created_at: now, updated_at: now }
-}
-
-export async function updateWine(id: string, updates: Partial<Wine>): Promise<Wine> {
-  const wine = await getWine(id)
-  if (!wine) throw new Error(`Wine ${id} not found`)
-
-  const updated = { ...wine, ...updates, updated_at: new Date().toISOString() }
-
-  // Build dynamic UPDATE statement with only changed fields
-  const fields = Object.keys(updates).filter(key => key !== 'id' && key !== 'created_at')
-  if (fields.length === 0) {
-    return updated // No changes to make
-  }
-
-  const setClauses = fields.map(field => `${field} = ?`)
-  const sql = `UPDATE wines SET ${setClauses.join(', ')}, updated_at = ? WHERE id = ?`
-
-  const params = fields.map(field => {
-    const value = (updated as any)[field]
-    // Special handling for JSON fields
-    if (field === 'critic_ratings' && typeof value === 'object') {
-      return JSON.stringify(value)
-    }
-    return value ?? null
+  return rows.sort((a, b) => {
+    const aVal = a[field]
+    const bVal = b[field]
+    if (aVal < bVal) return -direction
+    if (aVal > bVal) return direction
+    return 0
   })
-  params.push(updated.updated_at)
-  params.push(id)
+}
 
-  await executeQuery(sql, params)
-  return updated
+function parseInsertValues(sql: string, params: any[]): Record<string, any> {
+  const match = sql.match(/\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i)
+  if (!match) return {}
+
+  const fields = match[1].split(',').map((f) => f.trim())
+  const data: Record<string, any> = {}
+
+  fields.forEach((field, i) => {
+    data[field] = params[i]
+  })
+
+  return data
+}
+
+function parseUpdateValues(sql: string, params: any[]): Record<string, any> {
+  const match = sql.match(/SET\s+(.+?)\s+WHERE/i)
+  if (!match) return {}
+
+  const setParts = match[1].split(',').map((p) => p.trim())
+  const data: Record<string, any> = {}
+  let paramIndex = 0
+
+  setParts.forEach((part) => {
+    const [field] = part.split('=').map((p) => p.trim())
+    data[field] = params[paramIndex++]
+  })
+
+  return data
+}
+
+// ============================================================================
+// PUBLIC SERVICE METHODS (Aligned with Workflows)
+// ============================================================================
+
+// WINES TABLE OPERATIONS
+export async function createWine(wine: Omit<Wine, 'id' | 'created_at' | 'updated_at'>): Promise<Wine> {
+  const now = new Date().toISOString()
+  const id = uuidv4()
+
+  const wineData: Wine = {
+    ...wine,
+    id,
+    created_at: now,
+    updated_at: now,
+  }
+
+  await executeQuery(
+    `INSERT INTO wines (
+      id, name, vintage, tier, region, producer, classification, wine_type, varietal,
+      country, alcohol_percent, serving_temp_min, serving_temp_max, flavor_profile,
+      critic_ratings, drinking_window_start, drinking_window_end, image_url,
+      quantity_in_storage, quantity_at_home, notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      wine.name,
+      wine.vintage,
+      wine.tier,
+      wine.region,
+      wine.producer || null,
+      wine.classification || null,
+      wine.wine_type || null,
+      wine.varietal || null,
+      wine.country || null,
+      wine.alcohol_percent || null,
+      wine.serving_temp_min || null,
+      wine.serving_temp_max || null,
+      wine.flavor_profile || null,
+      wine.critic_ratings || null,
+      wine.drinking_window_start,
+      wine.drinking_window_end,
+      wine.image_url || null,
+      wine.quantity_in_storage,
+      wine.quantity_at_home,
+      wine.notes || null,
+      now,
+      now,
+    ]
+  )
+
+  return wineData
+}
+
+export async function getWineById(id: string): Promise<Wine | null> {
+  return queryOne('SELECT * FROM wines WHERE id = ?', [id])
+}
+
+export async function getAllWines(): Promise<Wine[]> {
+  return queryAll('SELECT * FROM wines ORDER BY name ASC')
+}
+
+export async function updateWine(id: string, updates: Partial<Wine>): Promise<void> {
+  const now = new Date().toISOString()
+  const wine = await getWineById(id)
+
+  if (!wine) {
+    throw new Error(`Wine not found: ${id}`)
+  }
+
+  const fields: string[] = []
+  const values: any[] = []
+
+  Object.entries(updates).forEach(([key, value]) => {
+    if (key !== 'id' && key !== 'created_at') {
+      fields.push(`${key} = ?`)
+      values.push(value)
+    }
+  })
+
+  fields.push('updated_at = ?')
+  values.push(now)
+  values.push(id)
+
+  await executeQuery(`UPDATE wines SET ${fields.join(', ')} WHERE id = ?`, values)
+
+  // Log audit
+  await createAuditLog({
+    action: 'edit_wine_details',
+    wine_id: id,
+    details: {
+      fields_changed: Object.keys(updates),
+      old_values: wine,
+      new_values: updates,
+    },
+  })
 }
 
 export async function deleteWine(id: string): Promise<void> {
   await executeQuery('DELETE FROM wines WHERE id = ?', [id])
+  await createAuditLog({
+    action: 'delete_wine',
+    wine_id: id,
+    details: { wine_id: id },
+  })
 }
 
-export async function isWineConsumedInPeriod(wineId: string, year: number, month: number): Promise<{ consumed: boolean; consumedDate?: string }> {
-  const result = await executeQuery(
-    'SELECT consumed_date, notes FROM consumption_log WHERE wine_id = ? ORDER BY created_at DESC LIMIT 1',
-    [wineId]
-  )
-
-  if (!result.values?.length) {
-    return { consumed: false }
+// CELLAR CONFIG OPERATIONS
+export async function getCellarConfig(): Promise<CellarConfig> {
+  const config = await queryOne('SELECT * FROM cellar_config WHERE id = 1')
+  if (!config) {
+    throw new Error('Cellar config not found')
   }
-
-  const logEntry = result.values[0]
-  const notes = logEntry.notes || ''
-
-  // Check if notes contain the schedule period this was consumed from
-  const schedulePattern = `Schedule: ${year}-${String(month).padStart(2, '0')}`
-  if (notes.includes(schedulePattern)) {
-    return { consumed: true, consumedDate: logEntry.consumed_date }
-  }
-
-  return { consumed: false }
+  return config as CellarConfig
 }
 
-// Batch load consumption status for multiple wines - eliminates N+1 queries
-export async function getConsumptionStatusBatch(
-  wineIds: string[],
-  year: number,
-  month: number
-): Promise<Map<string, { consumed: boolean; consumedDate?: string }>> {
-  if (wineIds.length === 0) {
-    return new Map()
-  }
-
-  const schedulePattern = `Schedule: ${year}-${String(month).padStart(2, '0')}`
-  const result = await executeQuery(
-    'SELECT wine_id, consumed_date, notes FROM consumption_log WHERE wine_id IN (' +
-    wineIds.map(() => '?').join(',') +
-    ') ORDER BY wine_id, created_at DESC',
-    wineIds
-  )
-
-  // Process results - one entry per wine (most recent)
-  const statusMap = new Map<string, { consumed: boolean; consumedDate?: string }>()
-  const seenWines = new Set<string>()
-
-  const allRows = result.values || []
-  for (const row of allRows) {
-    if (seenWines.has(row.wine_id)) continue // Already processed this wine
-    seenWines.add(row.wine_id)
-
-    const notes = row.notes || ''
-    if (notes.includes(schedulePattern)) {
-      statusMap.set(row.wine_id, {
-        consumed: true,
-        consumedDate: row.consumed_date,
-      })
-    } else {
-      statusMap.set(row.wine_id, { consumed: false })
-    }
-  }
-
-  // Add entries for wines with no consumption log
-  for (const wineId of wineIds) {
-    if (!statusMap.has(wineId)) {
-      statusMap.set(wineId, { consumed: false })
-    }
-  }
-
-  return statusMap
-}
-
-export async function consumeWine(
-  wineId: string,
-  quantity: number = 1,
-  notes?: string,
-  scheduleYear?: number,
-  scheduleMonth?: number
-): Promise<void> {
-  const wine = await getWine(wineId)
-  if (!wine) throw new Error(`Wine ${wineId} not found`)
-  if (wine.quantity < quantity) throw new Error('Not enough bottles to consume')
-
-  // Update wine quantity directly in database (more efficient than fetching full record)
-  await executeQuery('UPDATE wines SET quantity = quantity - ? WHERE id = ?', [quantity, wineId])
-
-  // Log consumption with optional schedule pinning info
-  const logId = generateId()
+export async function updateCellarConfig(updates: Partial<CellarConfig>): Promise<void> {
   const now = new Date().toISOString()
-  const scheduleInfo = scheduleYear && scheduleMonth
-    ? `Schedule: ${scheduleYear}-${String(scheduleMonth).padStart(2, '0')}`
-    : null
-  const fullNotes = [notes, scheduleInfo].filter(Boolean).join(' | ')
+  const config = await getCellarConfig()
+
+  const fields: string[] = []
+  const values: any[] = []
+
+  Object.entries(updates).forEach(([key, value]) => {
+    if (key !== 'id' && key !== 'created_at') {
+      fields.push(`${key} = ?`)
+      values.push(value)
+    }
+  })
+
+  fields.push('updated_at = ?')
+  values.push(now)
+  values.push(1) // id = 1
+
+  await executeQuery(`UPDATE cellar_config SET ${fields.join(', ')} WHERE id = ?`, values)
+
+  await createAuditLog({
+    action: 'update_cellar_config',
+    details: {
+      old_values: config,
+      new_values: updates,
+    },
+  })
+}
+
+// CONSUMPTION LOG OPERATIONS
+export async function createConsumptionEntry(entry: Omit<ConsumptionLogEntry, 'id' | 'created_at'>): Promise<ConsumptionLogEntry> {
+  const now = new Date().toISOString()
+  const id = uuidv4()
+
+  const logEntry: ConsumptionLogEntry = {
+    ...entry,
+    id,
+    created_at: now,
+  }
 
   await executeQuery(
-    'INSERT INTO consumption_log (id, wine_id, quantity, consumed_date, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [logId, wineId, quantity, now, fullNotes || null, now]
+    'INSERT INTO consumption_log (id, wine_id, consumed_date, notes, created_at) VALUES (?, ?, ?, ?, ?)',
+    [id, entry.wine_id, entry.consumed_date, entry.notes || null, now]
+  )
+
+  return logEntry
+}
+
+export async function getConsumptionLogByWineId(wineId: string): Promise<ConsumptionLogEntry[]> {
+  return queryAll('SELECT * FROM consumption_log WHERE wine_id = ? ORDER BY consumed_date DESC', [wineId])
+}
+
+export async function getConsumptionLogByYear(year: number): Promise<ConsumptionLogEntry[]> {
+  return queryAll(
+    `SELECT * FROM consumption_log WHERE strftime('%Y', consumed_date) = ? ORDER BY consumed_date DESC`,
+    [String(year)]
   )
 }
 
-export async function moveWineLocation(wineId: string, toLocation: 'home' | 'storage', _quantity?: number): Promise<void> {
-  // Verify wine exists
-  const result = await executeQuery('SELECT id FROM wines WHERE id = ?', [wineId])
-  if (!result.values?.length) throw new Error(`Wine ${wineId} not found`)
+// DELIVERY WINDOW OPERATIONS
+export async function createDeliveryWindow(data: Omit<DeliveryWindow, 'id' | 'created_at' | 'updated_at'>): Promise<DeliveryWindow> {
+  const now = new Date().toISOString()
+  const id = uuidv4()
 
-  // Direct UPDATE is more efficient than fetching and updating full record
-  await executeQuery('UPDATE wines SET location = ?, updated_at = ? WHERE id = ?', [
-    toLocation,
-    new Date().toISOString(),
+  const window: DeliveryWindow = {
+    ...data,
+    id,
+    created_at: now,
+    updated_at: now,
+  }
+
+  await executeQuery(
+    `INSERT INTO delivery_window (id, scheduled_date, locked, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, data.scheduled_date, data.locked ? 1 : 0, data.status, now, now]
+  )
+
+  return window
+}
+
+export async function getDeliveryWindowById(id: string): Promise<DeliveryWindow | null> {
+  return queryOne('SELECT * FROM delivery_window WHERE id = ?', [id])
+}
+
+export async function getCurrentDeliveryWindow(): Promise<DeliveryWindow | null> {
+  return queryOne(
+    `SELECT * FROM delivery_window WHERE status != 'completed' ORDER BY scheduled_date ASC LIMIT 1`
+  )
+}
+
+export async function getAllDeliveryWindows(): Promise<DeliveryWindow[]> {
+  return queryAll('SELECT * FROM delivery_window ORDER BY scheduled_date ASC')
+}
+
+export async function updateDeliveryWindow(id: string, updates: Partial<DeliveryWindow>): Promise<void> {
+  const now = new Date().toISOString()
+
+  const fields: string[] = []
+  const values: any[] = []
+
+  Object.entries(updates).forEach(([key, value]) => {
+    if (key !== 'id' && key !== 'created_at') {
+      if (key === 'locked') {
+        fields.push('locked = ?')
+        values.push(value ? 1 : 0)
+      } else {
+        fields.push(`${key} = ?`)
+        values.push(value)
+      }
+    }
+  })
+
+  fields.push('updated_at = ?')
+  values.push(now)
+  values.push(id)
+
+  await executeQuery(`UPDATE delivery_window SET ${fields.join(', ')} WHERE id = ?`, values)
+}
+
+// DELIVERY WINDOW WINES OPERATIONS
+export async function addWineToDeliveryWindow(
+  windowId: string,
+  wineId: string,
+  quantity: number
+): Promise<DeliveryWindowWine> {
+  const now = new Date().toISOString()
+  const id = uuidv4()
+
+  const windowWine: DeliveryWindowWine = {
+    id,
+    delivery_window_id: windowId,
+    wine_id: wineId,
+    quantity,
+    status: 'pending',
+    created_at: now,
+    updated_at: now,
+  }
+
+  await executeQuery(
+    `INSERT INTO delivery_window_wines (id, delivery_window_id, wine_id, quantity, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, windowId, wineId, quantity, 'pending', now, now]
+  )
+
+  return windowWine
+}
+
+export async function getDeliveryWindowWines(windowId: string): Promise<DeliveryWindowWine[]> {
+  return queryAll('SELECT * FROM delivery_window_wines WHERE delivery_window_id = ?', [windowId])
+}
+
+export async function updateDeliveryWindowWine(
+  windowId: string,
+  wineId: string,
+  quantity: number
+): Promise<void> {
+  const now = new Date().toISOString()
+
+  await executeQuery(
+    `UPDATE delivery_window_wines SET quantity = ?, updated_at = ? WHERE delivery_window_id = ? AND wine_id = ?`,
+    [quantity, now, windowId, wineId]
+  )
+}
+
+export async function removeWineFromDeliveryWindow(windowId: string, wineId: string): Promise<void> {
+  await executeQuery(
+    'DELETE FROM delivery_window_wines WHERE delivery_window_id = ? AND wine_id = ?',
+    [windowId, wineId]
+  )
+}
+
+export async function deleteDeliveryWindowWinesByWindow(windowId: string): Promise<void> {
+  await executeQuery('DELETE FROM delivery_window_wines WHERE delivery_window_id = ?', [windowId])
+}
+
+// DELIVERY COMPLETION LOG OPERATIONS
+export async function createDeliveryCompletion(
+  data: Omit<DeliveryCompletionLog, 'id' | 'created_at'>
+): Promise<DeliveryCompletionLog> {
+  const now = new Date().toISOString()
+  const id = uuidv4()
+
+  const completion: DeliveryCompletionLog = {
+    ...data,
+    id,
+    created_at: now,
+  }
+
+  await executeQuery(
+    `INSERT INTO delivery_completion_log (id, wine_id, delivery_window_id, quantity_delivered, delivered_date, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      data.wine_id,
+      data.delivery_window_id,
+      data.quantity_delivered,
+      data.delivered_date,
+      data.status,
+      now,
+    ]
+  )
+
+  return completion
+}
+
+export async function getDeliveryCompletionByWineId(wineId: string): Promise<DeliveryCompletionLog[]> {
+  return queryAll('SELECT * FROM delivery_completion_log WHERE wine_id = ? ORDER BY delivered_date DESC', [
     wineId,
   ])
 }
 
-// Generic delivery marker functions (used for delays and pins)
-async function insertDeliveryMarker(table: 'delivery_delays' | 'delivery_pins', wineId: string, deliveryDate: string): Promise<void> {
-  const id = generateId()
+export async function getFirstDeliveryDateForWine(wineId: string): Promise<string | null> {
+  const result = await queryOne(
+    'SELECT MIN(delivered_date) as earliest_date FROM delivery_completion_log WHERE wine_id = ?',
+    [wineId]
+  )
+  return result?.earliest_date || null
+}
+
+// AUDIT LOG OPERATIONS
+export async function createAuditLog(
+  data: Omit<AuditLogEntry, 'id' | 'created_at'>
+): Promise<AuditLogEntry> {
   const now = new Date().toISOString()
-  await executeQuery(
-    `INSERT INTO ${table} (id, wine_id, delivery_date, created_at) VALUES (?, ?, ?, ?)`,
-    [id, wineId, deliveryDate, now]
-  )
-}
+  const id = uuidv4()
 
-async function getDeliveryMarkers(table: 'delivery_delays' | 'delivery_pins', deliveryDate: string): Promise<string[]> {
-  const result = await executeQuery(
-    `SELECT wine_id FROM ${table} WHERE delivery_date = ?`,
-    [deliveryDate]
-  )
-  return (result.values || []).map((row: any) => row.wine_id)
-}
-
-async function clearDeliveryMarkers(table: 'delivery_delays' | 'delivery_pins', deliveryDate: string): Promise<void> {
-  await executeQuery(`DELETE FROM ${table} WHERE delivery_date = ?`, [deliveryDate])
-}
-
-// Delivery delay management
-export async function delayWineFromDelivery(wineId: string, deliveryDate: string): Promise<void> {
-  // Mark wine as delayed for this delivery date
-  await insertDeliveryMarker('delivery_delays', wineId, deliveryDate)
-
-  // Remove this wine from the delivery_schedule for this specific date
-  // This makes the wine's quantity available for rescheduling in future deliveries
-  if (dbType === 'memory') {
-    const schedules = memoryStorage.get('delivery_schedule') || []
-    const filtered = schedules.filter((s: any) =>
-      !(s.wine_id === wineId && s.scheduled_date === deliveryDate)
-    )
-    memoryStorage.set('delivery_schedule', filtered)
-    persistMemoryDatabase()
-    console.log('[Database] delayWineFromDelivery: removed from schedule', {
-      wineId,
-      deliveryDate,
-      beforeCount: schedules.length,
-      afterCount: filtered.length,
-    })
-  } else {
-    // For SQLite: delete the specific delivery entry
-    await executeQuery(
-      'DELETE FROM delivery_schedule WHERE wine_id = ? AND scheduled_date = ?',
-      [wineId, deliveryDate]
-    )
-    console.log('[Database] delayWineFromDelivery: removed from schedule', {
-      wineId,
-      deliveryDate,
-    })
+  const entry: AuditLogEntry = {
+    ...data,
+    id,
+    created_at: now,
   }
-
-  // Clear pin for this wine if it was previously promoted
-  await clearWinePinMark(wineId, deliveryDate)
-}
-
-export async function getDelayedWines(deliveryDate: string): Promise<string[]> {
-  return getDeliveryMarkers('delivery_delays', deliveryDate)
-}
-
-export async function clearDelayMarks(deliveryDate: string): Promise<void> {
-  await clearDeliveryMarkers('delivery_delays', deliveryDate)
-  // Also clear pin marks when delivery is completed
-  await clearPinMarks(deliveryDate)
-}
-
-export async function isWineDelayed(wineId: string, deliveryDate: string): Promise<boolean> {
-  const result = await executeQuery(
-    'SELECT id FROM delivery_delays WHERE wine_id = ? AND delivery_date = ?',
-    [wineId, deliveryDate]
-  )
-  return result.values?.length > 0
-}
-
-// Delivery pin management (for promoted wines that must stay in current delivery)
-export async function pinWineToCurrentDelivery(wineId: string, deliveryDate: string): Promise<void> {
-  await insertDeliveryMarker('delivery_pins', wineId, deliveryDate)
-}
-
-export async function getPinnedWines(deliveryDate: string): Promise<string[]> {
-  return getDeliveryMarkers('delivery_pins', deliveryDate)
-}
-
-export async function clearPinMarks(deliveryDate: string): Promise<void> {
-  await clearDeliveryMarkers('delivery_pins', deliveryDate)
-}
-
-export async function clearWinePinMark(wineId: string, deliveryDate: string): Promise<void> {
-  if (dbType === 'memory') {
-    const pins = memoryStorage.get('delivery_pins') || []
-    const filtered = pins.filter((p: any) => !(p.wine_id === wineId && p.delivery_date === deliveryDate))
-    memoryStorage.set('delivery_pins', filtered)
-    persistMemoryDatabase()
-  } else {
-    await executeQuery(
-      'DELETE FROM delivery_pins WHERE wine_id = ? AND delivery_date = ?',
-      [wineId, deliveryDate]
-    )
-  }
-}
-
-export async function lockDelivery(deliveryDate: string): Promise<void> {
-  if (dbType === 'memory') {
-    const locks = memoryStorage.get('delivery_locks') || []
-    // Remove existing lock for this date if any
-    const filtered = locks.filter((l: any) => l.delivery_date !== deliveryDate)
-    filtered.push({ delivery_date: deliveryDate, locked_at: new Date().toISOString() })
-    memoryStorage.set('delivery_locks', filtered)
-    persistMemoryDatabase()
-  } else {
-    await executeQuery(
-      'INSERT OR REPLACE INTO delivery_locks (delivery_date, locked_at) VALUES (?, ?)',
-      [deliveryDate, new Date().toISOString()]
-    )
-  }
-}
-
-export async function unlockDelivery(deliveryDate: string): Promise<void> {
-  if (dbType === 'memory') {
-    const locks = memoryStorage.get('delivery_locks') || []
-    const filtered = locks.filter((l: any) => l.delivery_date !== deliveryDate)
-    memoryStorage.set('delivery_locks', filtered)
-    persistMemoryDatabase()
-  } else {
-    await executeQuery(
-      'DELETE FROM delivery_locks WHERE delivery_date = ?',
-      [deliveryDate]
-    )
-  }
-}
-
-export async function isDeliveryLocked(deliveryDate: string): Promise<boolean> {
-  if (dbType === 'memory') {
-    const locks = memoryStorage.get('delivery_locks') || []
-    return locks.some((l: any) => l.delivery_date === deliveryDate)
-  } else {
-    const result = await executeQuery(
-      'SELECT 1 FROM delivery_locks WHERE delivery_date = ?',
-      [deliveryDate]
-    )
-    return (result.values?.length ?? 0) > 0
-  }
-}
-
-export async function checkDeliveryCapacity(
-  wineQuantity: number,
-  currentBottlesAtHome: number,
-  currentDeliveryBottles: number,
-  maxCapacity: number
-): Promise<{ canPromote: boolean; message: string; projectedTotal: number }> {
-  const projectedTotal = currentBottlesAtHome + currentDeliveryBottles + wineQuantity
-
-  if (projectedTotal > maxCapacity) {
-    return {
-      canPromote: false,
-      message: `Cannot promote: would exceed capacity. Current home: ${currentBottlesAtHome} + Current delivery: ${currentDeliveryBottles} + Wine: ${wineQuantity} = ${projectedTotal} (max: ${maxCapacity})`,
-      projectedTotal,
-    }
-  }
-
-  return {
-    canPromote: true,
-    message: `Promotion OK: total will be ${projectedTotal} bottles (capacity: ${maxCapacity})`,
-    projectedTotal,
-  }
-}
-
-export async function getWineScheduledDeliveryDate(wineId: string): Promise<string | undefined> {
-  if (dbType === 'memory') {
-    const schedules = memoryStorage.get('delivery_schedule') || []
-    const delays = memoryStorage.get('delivery_delays') || []
-
-    // Get all dates this wine is delayed from
-    const delayedDates = new Set(
-      delays
-        .filter((d: any) => d.wine_id === wineId)
-        .map((d: any) => d.delivery_date)
-    )
-
-    // Find first scheduled date that is NOT delayed
-    const entry = schedules.find((s: any) =>
-      s.wine_id === wineId && !delayedDates.has(s.scheduled_date)
-    )
-    return entry?.scheduled_date
-  } else {
-    // Get all scheduled dates for this wine, ordered by date
-    const result = await executeQuery(
-      'SELECT scheduled_date FROM delivery_schedule WHERE wine_id = ? ORDER BY scheduled_date ASC',
-      [wineId]
-    )
-
-    const allDates = result.values?.map((v: any) => v.scheduled_date) || []
-
-    // Get all dates this wine is delayed from
-    const delayedResult = await executeQuery(
-      'SELECT delivery_date FROM delivery_delays WHERE wine_id = ?',
-      [wineId]
-    )
-    const delayedDates = new Set(delayedResult.values?.map((v: any) => v.delivery_date) || [])
-
-    // Return first scheduled date that is NOT delayed
-    const scheduledDate = allDates.find((date: string) => !delayedDates.has(date))
-
-    console.log('[Database] getWineScheduledDeliveryDate:', {
-      wineId,
-      allScheduledDates: allDates,
-      delayedDates: Array.from(delayedDates),
-      scheduledDate
-    })
-    return scheduledDate
-  }
-}
-
-export async function saveDeliverySchedule(scheduleEntries: DeliveryScheduleEntry[]): Promise<void> {
-  if (dbType === 'memory') {
-    memoryStorage.set('delivery_schedule', scheduleEntries)
-    persistMemoryDatabase()
-  } else {
-    // Clear and recreate delivery_schedule table to avoid UNIQUE constraint issues
-    console.log('[Database] Clearing delivery_schedule by dropping and recreating table...')
-
-    try {
-      // Drop the existing table
-      await executeQuery('DROP TABLE IF EXISTS delivery_schedule', [])
-      console.log('[Database] Dropped existing delivery_schedule table')
-
-      // Recreate the table with proper schema
-      await executeQuery(`
-        CREATE TABLE delivery_schedule (
-          id TEXT PRIMARY KEY,
-          wine_id TEXT NOT NULL,
-          quantity INTEGER NOT NULL,
-          scheduled_date TEXT NOT NULL,
-          from_location TEXT NOT NULL,
-          to_location TEXT NOT NULL,
-          status TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          FOREIGN KEY (wine_id) REFERENCES wines(id)
-        )
-      `, [])
-      console.log('[Database] Recreated delivery_schedule table')
-    } catch (error) {
-      console.error('[Database] Error dropping/recreating table:', error)
-      throw error
-    }
-
-    // Insert all schedule entries
-    console.log(`[Database] Inserting ${scheduleEntries.length} new delivery_schedule entries...`)
-    let successCount = 0
-    for (const entry of scheduleEntries) {
-      try {
-        await executeQuery(
-          `INSERT INTO delivery_schedule (id, wine_id, quantity, scheduled_date, from_location, to_location, status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            entry.id || generateId(),
-            entry.wine_id,
-            entry.quantity,
-            entry.scheduled_date,
-            entry.from_location,
-            entry.to_location,
-            entry.status || 'pending',
-            new Date().toISOString(),
-          ]
-        )
-        successCount++
-      } catch (error) {
-        console.error('[Database] Failed to insert delivery_schedule entry:', { entry, error })
-        throw error
-      }
-    }
-    console.log(`[Database] Successfully saved ${successCount}/${scheduleEntries.length} delivery_schedule entries`)
-  }
-}
-
-// Cellar config
-export async function getCellarConfig(): Promise<CellarConfig> {
-  console.log('[Database] getCellarConfig: Querying database...')
-  const result = await executeQuery('SELECT * FROM cellar_config WHERE id = ?', [1])
-  console.log('[Database] getCellarConfig: Query result:', result)
-  const row = result.values?.[0]
-  console.log('[Database] getCellarConfig: Row data:', row)
-  const config = row || {
-    id: 1,
-    max_slots: 80,
-    current_slots: 0,
-    min_delivery_bottles: 24,
-    annual_consumption_target: 30,
-  }
-  console.log('[Database] getCellarConfig: Returning config:', config)
-  return config
-}
-
-export async function updateCellarConfig(config: Partial<CellarConfig>): Promise<void> {
-  console.log('[Database] updateCellarConfig: Updating with values:', config)
-  const updates: string[] = []
-  const values: (string | number)[] = []
-
-  if (config.max_slots !== undefined) {
-    updates.push('max_slots = ?')
-    values.push(config.max_slots)
-  }
-  if (config.min_delivery_bottles !== undefined) {
-    updates.push('min_delivery_bottles = ?')
-    values.push(config.min_delivery_bottles)
-  }
-  if (config.annual_consumption_target !== undefined) {
-    updates.push('annual_consumption_target = ?')
-    values.push(config.annual_consumption_target)
-  }
-
-  if (updates.length === 0) {
-    console.warn('[Database] updateCellarConfig: No fields to update!')
-    return
-  }
-
-  values.push(1) // id = 1
-  const sql = `UPDATE cellar_config SET ${updates.join(', ')} WHERE id = ?`
-  console.log('[Database] updateCellarConfig: SQL:', sql, 'Values:', values)
-
-  const result = await executeQuery(sql, values)
-  console.log('[Database] updateCellarConfig: Update result:', result)
-
-  // Verify the update by reading back
-  const updated = await getCellarConfig()
-  console.log('[Database] updateCellarConfig: Verified config after update:', updated)
-}
-
-// Consumption log
-export async function getConsumptionLog(wineId?: string, year?: number): Promise<ConsumptionLogEntry[]> {
-  let sql = 'SELECT * FROM consumption_log'
-  const params = []
-
-  if (wineId) {
-    sql += ' WHERE wine_id = ?'
-    params.push(wineId)
-  }
-
-  if (year) {
-    sql += wineId ? ' AND' : ' WHERE'
-    sql += ' strftime("%Y", consumed_date) = ?'
-    params.push(year.toString())
-  }
-
-  sql += ' ORDER BY consumed_date DESC'
-
-  const result = await executeQuery(sql, params)
-  return result.values || []
-}
-
-// Delivery schedule
-export async function getDeliverySchedule(): Promise<DeliveryScheduleEntry[]> {
-  const result = await executeQuery(
-    'SELECT * FROM delivery_schedule WHERE status = ? ORDER BY scheduled_date ASC',
-    ['pending']
-  )
-  return result.values || []
-}
-
-export async function createDelivery(delivery: Omit<DeliveryScheduleEntry, 'id' | 'created_at'>): Promise<DeliveryScheduleEntry> {
-  const id = generateId()
-  const now = new Date().toISOString()
 
   await executeQuery(
-    'INSERT INTO delivery_schedule (id, wine_id, quantity, scheduled_date, from_location, to_location, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, delivery.wine_id, delivery.quantity, delivery.scheduled_date, delivery.from_location, delivery.to_location, delivery.status || 'pending', now]
+    `INSERT INTO audit_log (id, action, wine_id, delivery_window_id, details, user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      data.action,
+      data.wine_id || null,
+      data.delivery_window_id || null,
+      JSON.stringify(data.details),
+      data.user_id || null,
+      now,
+    ]
   )
 
-  return { ...delivery, id, created_at: now }
+  return entry
 }
 
-export async function completeDelivery(deliveryId: string): Promise<void> {
-  // Only fetch what we need (wine_id and to_location)
-  const result = await executeQuery('SELECT wine_id, to_location FROM delivery_schedule WHERE id = ?', [deliveryId])
-  const delivery = result.values?.[0]
-  if (!delivery) throw new Error(`Delivery ${deliveryId} not found`)
-
-  // Move wine location
-  await moveWineLocation(delivery.wine_id, delivery.to_location)
-
-  // Mark delivery as complete
-  await executeQuery('UPDATE delivery_schedule SET status = ? WHERE id = ?', ['completed', deliveryId])
-}
-
-// Utilities
-function parseWineRow(row: any): Wine {
-  return {
-    ...row,
-    critic_ratings: typeof row.critic_ratings === 'string' ? JSON.parse(row.critic_ratings) : row.critic_ratings || {},
-  }
-}
-
-// Admin utilities
-export async function deduplicateWines(): Promise<number> {
-  // Delete all but the first (oldest) copy of each wine based on producer + name
-  const sql = `
-    DELETE FROM wines WHERE id IN (
-      SELECT id FROM wines w1
-      WHERE EXISTS (
-        SELECT 1 FROM wines w2
-        WHERE w1.producer = w2.producer
-        AND w1.name = w2.name
-        AND w1.created_at > w2.created_at
-      )
-    )
-  `
-  await executeQuery(sql, [])
-  return (await getWines()).length
-}
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+export async function getAuditLog(limit: number = 100): Promise<AuditLogEntry[]> {
+  const logs = await queryAll('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?', [limit])
+  return logs.map((log) => ({
+    ...log,
+    details: typeof log.details === 'string' ? JSON.parse(log.details) : log.details,
+  }))
 }
