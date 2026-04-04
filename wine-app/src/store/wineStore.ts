@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import type { Wine } from '../types/index'
+import type { Wine, CellarConfig } from '../types/index'
 import * as db from '../services/database'
-import { WineService } from '../services/wine.service'
+import * as workflows from '../services/workflows.service'
 
 interface WineStore {
   wines: Wine[]
@@ -12,40 +12,37 @@ interface WineStore {
   scheduleUpdateTrigger: number // Timestamp for schedule regeneration triggers
 
   // Filters
-  locationFilter: 'all' | 'home' | 'storage'
+  locationFilter: 'all' | 'storage' | 'home'
   tierFilter: number | null
   searchTerm: string
   regionFilter: string | null
   countryFilter: string | null
   wineTypeFilter: string | null
-  formatFilter: string | null
   sortBy: 'vintage' | 'tier' | 'producer'
 
   // Actions
   loadWines: () => Promise<void>
   addWine: (wine: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => Promise<void>
-  updateWine: (id: string, updates: Partial<Wine>) => Promise<void>
+  editWineDetails: (id: string, updates: Partial<Wine>) => Promise<void>
+  addBottles: (wineId: string, quantity: number, destination: 'storage' | 'home') => Promise<void>
+  consumeWine: (wineId: string, consumedDate?: string, notes?: string) => Promise<void>
+  moveWineToHome: (wineId: string, quantity: number) => Promise<void>
   deleteWine: (id: string) => Promise<void>
-  consumeWine: (wineId: string, quantity?: number) => Promise<void>
-  moveWineToHome: (wineId: string) => Promise<void>
-  delayWineFromDelivery: (wineId: string, deliveryDate: string) => Promise<void>
-  promoteWineToCurrentDelivery: (wineId: string, currentDeliveryDate: string) => Promise<void>
-  deduplicateWines: () => Promise<void>
 
   selectWine: (wine: Wine | null) => void
-  setLocationFilter: (filter: 'all' | 'home' | 'storage') => void
+  setLocationFilter: (filter: 'all' | 'storage' | 'home') => void
   setTierFilter: (tier: number | null) => void
   setSearchTerm: (term: string) => void
   setRegionFilter: (region: string | null) => void
   setCountryFilter: (country: string | null) => void
   setWineTypeFilter: (type: string | null) => void
-  setFormatFilter: (format: string | null) => void
   setSortBy: (sort: 'vintage' | 'tier' | 'producer') => void
   applyFilters: () => void
   clearFilters: () => void
-  triggerScheduleUpdate: () => void // Notify schedules to regenerate
+  triggerScheduleUpdate: () => void
 
-  getStats: () => Promise<any>
+  getCellarConfig: () => Promise<CellarConfig>
+  updateCellarConfig: (updates: Partial<CellarConfig>) => Promise<void>
 }
 
 export const useWineStore = create<WineStore>((set, get) => ({
@@ -62,15 +59,12 @@ export const useWineStore = create<WineStore>((set, get) => ({
   regionFilter: null,
   countryFilter: null,
   wineTypeFilter: null,
-  formatFilter: null,
   sortBy: 'vintage',
 
   loadWines: async () => {
     set({ loading: true, error: null })
     try {
-      // Always fetch ALL wines (no filters at service level)
-      // Filtering happens in applyFilters() for UI display
-      const wines = await WineService.getWines()
+      const wines = await db.getAllWines()
       set({ wines })
       get().applyFilters()
     } catch (error) {
@@ -85,7 +79,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
     try {
       await db.createWine(wine)
       await get().loadWines()
-      get().triggerScheduleUpdate() // Regenerate schedules after adding wine
+      get().triggerScheduleUpdate()
     } catch (error) {
       set({ error: (error as Error).message })
     } finally {
@@ -93,18 +87,68 @@ export const useWineStore = create<WineStore>((set, get) => ({
     }
   },
 
-  updateWine: async (id, updates) => {
+  editWineDetails: async (id, updates) => {
     set({ loading: true, error: null })
     try {
-      await db.updateWine(id, updates)
+      await workflows.editWineDetails(id, updates)
       await get().loadWines()
       if (get().selectedWine?.id === id) {
-        set({ selectedWine: await db.getWine(id) })
+        const updated = await db.getWineById(id)
+        set({ selectedWine: updated })
       }
+      get().triggerScheduleUpdate()
     } catch (error) {
       set({ error: (error as Error).message })
     } finally {
       set({ loading: false })
+    }
+  },
+
+  addBottles: async (wineId, quantity, destination) => {
+    set({ loading: true, error: null })
+    try {
+      await workflows.addBottles(wineId, quantity, destination)
+      await get().loadWines()
+      if (get().selectedWine?.id === wineId) {
+        const updated = await db.getWineById(wineId)
+        set({ selectedWine: updated })
+      }
+      get().triggerScheduleUpdate()
+    } catch (error) {
+      set({ error: (error as Error).message })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  consumeWine: async (wineId, consumedDate, notes) => {
+    set({ error: null })
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      await workflows.consumeWine(wineId, consumedDate || today, notes)
+      await get().loadWines()
+      get().triggerScheduleUpdate()
+      if (get().selectedWine?.id === wineId) {
+        const updated = await db.getWineById(wineId)
+        set({ selectedWine: updated })
+      }
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  moveWineToHome: async (wineId, quantity) => {
+    set({ error: null })
+    try {
+      await workflows.moveToHome(wineId, quantity)
+      await get().loadWines()
+      get().triggerScheduleUpdate()
+      if (get().selectedWine?.id === wineId) {
+        const updated = await db.getWineById(wineId)
+        set({ selectedWine: updated })
+      }
+    } catch (error) {
+      set({ error: (error as Error).message })
     }
   },
 
@@ -123,110 +167,43 @@ export const useWineStore = create<WineStore>((set, get) => ({
     }
   },
 
-  consumeWine: async (wineId, quantity = 1) => {
-    set({ error: null })
-    try {
-      await db.consumeWine(wineId, quantity)
-      await get().loadWines()
-      get().triggerScheduleUpdate() // Regenerate schedules after consumption
-      if (get().selectedWine?.id === wineId) {
-        set({ selectedWine: await db.getWine(wineId) })
-      }
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  moveWineToHome: async (wineId) => {
-    set({ error: null })
-    try {
-      await db.moveWineLocation(wineId, 'home')
-      await get().loadWines()
-      if (get().selectedWine?.id === wineId) {
-        set({ selectedWine: await db.getWine(wineId) })
-      }
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  delayWineFromDelivery: async (wineId, deliveryDate) => {
-    set({ error: null })
-    try {
-      await db.delayWineFromDelivery(wineId, deliveryDate)
-      get().triggerScheduleUpdate() // Regenerate future deliveries with delayed wine
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  promoteWineToCurrentDelivery: async (wineId, currentDeliveryDate) => {
-    set({ error: null })
-    try {
-      // Pin wine to current delivery to ensure it stays there even on regenerate
-      // Pinning is the single source of truth - no redundant delay marking
-      await db.pinWineToCurrentDelivery(wineId, currentDeliveryDate)
-      get().triggerScheduleUpdate() // Regenerate schedule with pinned wine excluded from algorithm
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  deduplicateWines: async () => {
-    set({ loading: true, error: null })
-    try {
-      await db.deduplicateWines()
-      await get().loadWines()
-      set({ selectedWine: null })
-    } catch (error) {
-      set({ error: (error as Error).message })
-    } finally {
-      set({ loading: false })
-    }
-  },
-
   selectWine: (wine) => {
     set({ selectedWine: wine })
   },
 
   setLocationFilter: (filter) => {
     set({ locationFilter: filter })
-    get().loadWines()
+    get().applyFilters()
   },
 
   setTierFilter: (tier) => {
     set({ tierFilter: tier })
-    get().loadWines()
+    get().applyFilters()
   },
 
   setSearchTerm: (term) => {
     set({ searchTerm: term })
-    get().loadWines()
+    get().applyFilters()
   },
 
   setRegionFilter: (region) => {
     set({ regionFilter: region })
-    get().loadWines()
+    get().applyFilters()
   },
 
   setCountryFilter: (country) => {
     set({ countryFilter: country })
-    get().loadWines()
+    get().applyFilters()
   },
 
   setWineTypeFilter: (type) => {
     set({ wineTypeFilter: type })
-    get().loadWines()
-  },
-
-  setFormatFilter: (format) => {
-    set({ formatFilter: format })
-    get().loadWines()
+    get().applyFilters()
   },
 
   setSortBy: (sort) => {
     set({ sortBy: sort })
-    get().loadWines()
+    get().applyFilters()
   },
 
   clearFilters: () => {
@@ -237,9 +214,8 @@ export const useWineStore = create<WineStore>((set, get) => ({
       regionFilter: null,
       countryFilter: null,
       wineTypeFilter: null,
-      formatFilter: null,
     })
-    get().loadWines()
+    get().applyFilters()
   },
 
   applyFilters: () => {
@@ -251,50 +227,51 @@ export const useWineStore = create<WineStore>((set, get) => ({
       regionFilter,
       countryFilter,
       wineTypeFilter,
-      formatFilter,
       sortBy,
     } = get()
 
     let filtered = wines
 
+    // Filter by location (storage vs home)
     if (locationFilter !== 'all') {
-      filtered = filtered.filter(w => w.location === locationFilter)
+      if (locationFilter === 'storage') {
+        filtered = filtered.filter((w) => w.quantity_in_storage > 0)
+      } else if (locationFilter === 'home') {
+        filtered = filtered.filter((w) => w.quantity_at_home > 0)
+      }
     }
 
     if (tierFilter) {
-      filtered = filtered.filter(w => w.tier === tierFilter)
+      filtered = filtered.filter((w) => w.tier === tierFilter)
     }
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
       filtered = filtered.filter(
-        w =>
-          w.producer.toLowerCase().includes(term) ||
+        (w) =>
           w.name.toLowerCase().includes(term) ||
+          (w.producer && w.producer.toLowerCase().includes(term)) ||
           w.region.toLowerCase().includes(term)
       )
     }
 
     if (regionFilter) {
-      filtered = filtered.filter(w => w.region === regionFilter)
+      filtered = filtered.filter((w) => w.region === regionFilter)
     }
 
     if (countryFilter) {
-      filtered = filtered.filter(w => w.country === countryFilter)
+      filtered = filtered.filter((w) => w.country === countryFilter)
     }
 
     if (wineTypeFilter) {
-      filtered = filtered.filter(w => w.wine_type === wineTypeFilter)
+      filtered = filtered.filter((w) => w.wine_type === wineTypeFilter)
     }
 
-    if (formatFilter) {
-      filtered = filtered.filter(w => w.format === formatFilter)
-    }
-
+    // Apply sorting
     if (sortBy === 'tier') {
       filtered.sort((a, b) => b.tier - a.tier)
     } else if (sortBy === 'producer') {
-      filtered.sort((a, b) => a.producer.localeCompare(b.producer))
+      filtered.sort((a, b) => (a.producer || '').localeCompare(b.producer || ''))
     } else {
       filtered.sort((a, b) => b.vintage - a.vintage)
     }
@@ -306,7 +283,16 @@ export const useWineStore = create<WineStore>((set, get) => ({
     set({ scheduleUpdateTrigger: Date.now() })
   },
 
-  getStats: async () => {
-    return WineService.getStats()
+  getCellarConfig: async () => {
+    return db.getCellarConfig()
+  },
+
+  updateCellarConfig: async (updates) => {
+    set({ error: null })
+    try {
+      await workflows.updateCellarConfig(updates)
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
   },
 }))
