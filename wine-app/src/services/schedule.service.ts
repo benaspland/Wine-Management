@@ -172,7 +172,16 @@ export class ScheduleService {
 
             if (!selectedWine) break
 
-            const monthNum = this.calculateConsumptionMonthDistributed(year, month, yearsConsumption.length)
+            let monthNum = this.calculateConsumptionMonthDistributed(year, month, yearsConsumption.length)
+
+            // Ensure suggested month is never before the wine's availability month
+            const avail = wineAvailability[selectedWine.id]
+            if (avail) {
+              const [availYear, availMonth] = avail.split('-').map(Number)
+              if (year === availYear && monthNum < availMonth) {
+                monthNum = availMonth
+              }
+            }
 
             yearsConsumption.push({
               wineId: selectedWine.id,
@@ -352,8 +361,12 @@ export class ScheduleService {
         if (!deliveriesPerYear[year]) deliveriesPerYear[year] = 0
         if (deliveriesPerYear[year] >= 2) continue
 
-        // 4.1 Build candidate list — all wines should be scheduled for delivery
-        // The schedule is a plan; capacity constraints are handled at execution time
+        // 4.1 Check available space at home
+        const homeTotal = Object.values(home).reduce((a, b) => a + b, 0)
+        const space = cellarCapacity - homeTotal
+        if (space < 3) break // Not enough room for any case — wait for consumption to free space
+
+        // 4.2 Build candidate list
         const unscheduledWines = candidateWines.filter(w => remaining[w.id] > 0)
         const candidates: Array<{ wine: Wine; priority: number }> = []
 
@@ -422,11 +435,13 @@ export class ScheduleService {
         let totalDelivered = 0
 
         for (const { wine } of candidates) {
+          if (totalDelivered >= space) break // Cellar full for this delivery
+
           const cs = caseSize(wine)
           if (remaining[wine.id] === 0) continue
 
           const deliverAmount = remaining[wine.id] >= cs ? cs : remaining[wine.id]
-          if (deliverAmount <= 0) continue
+          if (deliverAmount <= 0 || deliverAmount > space - totalDelivered) continue
 
           cases.push({ wine, bottles: deliverAmount })
           totalDelivered += deliverAmount
