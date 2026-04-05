@@ -31,6 +31,19 @@ export default function DeliverySchedulePage() {
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [currentWinesAtHome, setCurrentWinesAtHome] = useState(0)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [collapsedDeliveries, setCollapsedDeliveries] = useState<Set<string>>(new Set())
+
+  const toggleCollapse = (date: string) => {
+    setCollapsedDeliveries(prev => {
+      const next = new Set(prev)
+      if (next.has(date)) {
+        next.delete(date)
+      } else {
+        next.add(date)
+      }
+      return next
+    })
+  }
 
   // Load cellar config on mount
   useEffect(() => {
@@ -187,55 +200,81 @@ export default function DeliverySchedulePage() {
             <p className="text-outline">No deliveries scheduled</p>
           </div>
         ) : (
-          deliverySchedule.map(delivery => (
-            <div key={delivery.date} className="bg-surface-container p-4 rounded-lg border border-outline-variant">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-on-surface">
-                  {new Date(delivery.date).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded text-sm font-medium ${
-                    delivery.status === 'completed' ? 'bg-success/20 text-success' :
-                    delivery.status === 'in_transit' ? 'bg-warning/20 text-warning' :
-                    'bg-primary/20 text-primary'
-                  }`}>
-                    {delivery.status}
-                  </span>
-                  {delivery.locked && (
-                    <span className="px-3 py-1 rounded text-sm bg-outline/20 text-outline">
-                      🔒 Locked
-                    </span>
-                  )}
-                </div>
-              </div>
+          deliverySchedule.map(delivery => {
+            const isCollapsed = collapsedDeliveries.has(delivery.date)
+            const totalBottles = delivery.wines.reduce((sum, w) => sum + w.quantity, 0)
+            const totalWines = delivery.wines.length
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                {delivery.wines.map(wine => (
-                  <div key={wine.id} className="bg-surface p-3 rounded border border-outline-variant text-sm">
-                    <p className="font-semibold text-on-surface">
-                      {wine.producer} {wine.name}
-                    </p>
-                    <p className="text-outline text-xs">
-                      {wine.vintage} • Qty: {wine.quantity} {wine.format || '750ml'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              {delivery.status !== 'completed' && !delivery.locked && (
+            return (
+              <div key={delivery.date} className="bg-surface-container rounded-lg border border-outline-variant overflow-hidden">
+                {/* Header — always visible, clickable to collapse */}
                 <button
-                  onClick={() => handleConfirmDelivery(delivery.date)}
-                  className="w-full px-4 py-2 bg-primary text-on-primary rounded font-medium hover:opacity-90"
+                  onClick={() => toggleCollapse(delivery.date)}
+                  className="w-full p-4 flex justify-between items-center hover:bg-surface-container-high transition-colors text-left"
                 >
-                  Confirm Delivery
+                  <div className="flex items-center gap-4">
+                    <span className="material-symbols-outlined text-outline text-sm transition-transform duration-200"
+                      style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+                      expand_more
+                    </span>
+                    <div>
+                      <h3 className="text-lg font-bold text-on-surface">
+                        {new Date(delivery.date).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </h3>
+                      <p className="text-xs text-outline mt-0.5">
+                        {totalWines} {totalWines === 1 ? 'wine' : 'wines'} · {totalBottles} {totalBottles === 1 ? 'bottle' : 'bottles'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded text-sm font-medium ${
+                      delivery.status === 'completed' ? 'bg-success/20 text-success' :
+                      delivery.status === 'in_transit' ? 'bg-warning/20 text-warning' :
+                      'bg-primary/20 text-primary'
+                    }`}>
+                      {delivery.status}
+                    </span>
+                    {delivery.locked && (
+                      <span className="px-3 py-1 rounded text-sm bg-outline/20 text-outline">
+                        🔒 Locked
+                      </span>
+                    )}
+                  </div>
                 </button>
-              )}
-            </div>
-          ))
+
+                {/* Collapsible content */}
+                {!isCollapsed && (
+                  <div className="px-4 pb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                      {delivery.wines.map(wine => (
+                        <div key={wine.id} className="bg-surface p-3 rounded border border-outline-variant text-sm">
+                          <p className="font-semibold text-on-surface">
+                            {wine.producer} {wine.name}
+                          </p>
+                          <p className="text-outline text-xs">
+                            {wine.vintage} • Qty: {wine.quantity} {wine.format || '750ml'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {delivery.status !== 'completed' && !delivery.locked && (
+                      <button
+                        onClick={() => handleConfirmDelivery(delivery.date)}
+                        className="w-full px-4 py-2 bg-primary text-on-primary rounded font-medium hover:opacity-90"
+                      >
+                        Confirm Delivery
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })
         )}
       </div>
 
