@@ -65,8 +65,12 @@ export class ScheduleService {
           // Extract YYYY-MM from delivery date (YYYY-MM-DD format)
           wineAvailability[w.id] = delivery.scheduled_date.substring(0, 7)
         } else {
-          // If no delivery scheduled, assume not available this period
-          wineAvailability[w.id] = '9999-12' // Far future
+          // No delivery scheduled yet — use next delivery window as earliest availability.
+          // This prevents wines from appearing in consumption schedule before they can be delivered.
+          const deliveryMonths = DELIVERY_CONFIG.months as [number, number]
+          const nextDeliveryMonth = deliveryMonths.find(m => m > currentMonth) ?? deliveryMonths[0]
+          const nextDeliveryYear = nextDeliveryMonth <= currentMonth ? currentYear + 1 : currentYear
+          wineAvailability[w.id] = `${nextDeliveryYear}-${String(nextDeliveryMonth).padStart(2, '0')}`
         }
       }
     })
