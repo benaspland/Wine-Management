@@ -463,7 +463,9 @@ export class ScheduleService {
         const shouldDeliver = (totalDelivered >= 24) || isFinalDelivery
 
         if (shouldDeliver && cases.length > 0) {
-          const scheduledDate = new Date(year, month - 1, 1)
+          // Format date as YYYY-MM-DD using local time (not UTC via toISOString,
+          // which shifts the date back one day in timezones ahead of UTC like BST)
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-01`
 
           // NOW move wines to home and record delivery
           cases.forEach(({ wine, bottles }) => {
@@ -472,7 +474,7 @@ export class ScheduleService {
             deliveries.push({
               wine_id: wine.id,
               quantity: bottles,
-              scheduled_date: scheduledDate.toISOString().split('T')[0],
+              scheduled_date: dateStr,
               tier: wine.tier,
               region: wine.region,
               status: 'pending',
