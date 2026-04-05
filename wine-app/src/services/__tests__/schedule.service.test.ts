@@ -269,5 +269,57 @@ describe('ScheduleService', () => {
         expect(bottles).toBeLessThanOrEqual(80)
       }
     })
+
+    it('should never schedule the same wine twice in the same month', () => {
+      const wines: Wine[] = Array.from({ length: 20 }, (_, i) =>
+        makeWine({
+          id: `w${i}`,
+          producer: `Producer ${i}`,
+          tier: ((i % 3) + 1) as 1 | 2 | 3,
+          name: `Wine ${i}`,
+          quantity_in_storage: 6,
+          quantity_at_home: 0,
+          drinking_window_start: 2026,
+          drinking_window_end: 2035,
+        })
+      )
+
+      const deliveries = ScheduleService.generateDeliverySchedule(wines, 100, 0, [3, 9], 45)
+      const schedule = ScheduleService.generateDrinkingSchedule(wines, deliveries, 2026, 5, 45)
+
+      // Group by year-month and check for duplicate wineIds
+      const byMonth: Record<string, string[]> = {}
+      schedule.forEach(e => {
+        const key = `${e.suggestedYear}-${String(e.suggestedMonth).padStart(2, '0')}`
+        if (!byMonth[key]) byMonth[key] = []
+        byMonth[key].push(e.wineId)
+      })
+
+      for (const [month, wineIds] of Object.entries(byMonth)) {
+        const unique = new Set(wineIds)
+        expect(unique.size).toBe(wineIds.length)
+      }
+    })
+
+    it('should not schedule more consumption than bottles available', () => {
+      const wines: Wine[] = [
+        makeWine({
+          id: 'limited',
+          producer: 'Limited',
+          tier: 1 as const,
+          quantity_in_storage: 3,
+          quantity_at_home: 0,
+          drinking_window_start: 2026,
+          drinking_window_end: 2035,
+        }),
+      ]
+
+      const deliveries = ScheduleService.generateDeliverySchedule(wines, 100, 0, [3, 9], 45)
+      const schedule = ScheduleService.generateDrinkingSchedule(wines, deliveries, 2026, 10, 45)
+
+      // Wine has 3 bottles — should appear at most 3 times total
+      const appearances = schedule.filter(e => e.wineId === 'limited').length
+      expect(appearances).toBeLessThanOrEqual(3)
+    })
   })
 })

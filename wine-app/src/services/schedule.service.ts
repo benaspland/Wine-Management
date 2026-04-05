@@ -99,6 +99,14 @@ export class ScheduleService {
     const yearlyConsumption: Record<number, number> = {}
     const wineLastConsumedYear: Record<string, number> = {} // Track last year each wine was scheduled
 
+    // Track total bottles scheduled per wine — never exceed actual inventory
+    const wineTotalScheduled: Record<string, number> = {}
+    const wineBottleLimit: Record<string, number> = {}
+    allWines.forEach(w => {
+      wineTotalScheduled[w.id] = 0
+      wineBottleLimit[w.id] = w.quantity_in_storage + w.quantity_at_home
+    })
+
     for (let year = startYear; year < startYear + yearsToSchedule; year++) {
       yearlyConsumption[year] = 0
 
@@ -133,6 +141,7 @@ export class ScheduleService {
           return (
             this.canConsumeThisYear(w, year) &&
             availabilityYearMonth <= monthYearMonth && // Wine available by this month
+            wineTotalScheduled[w.id] < wineBottleLimit[w.id] && // Still have bottles left
             !yearsConsumption.some(e => e.wineId === w.id) && // Not already scheduled this year
             !lastMonthProducers.includes(w.producer) // Avoid same producer clustering
           )
@@ -172,7 +181,7 @@ export class ScheduleService {
 
             if (!selectedWine) break
 
-            let monthNum = this.calculateConsumptionMonthDistributed(year, month, yearsConsumption.length)
+            let monthNum = this.calculateConsumptionMonth(month)
 
             // Ensure suggested month is never before the wine's availability month
             const avail = wineAvailability[selectedWine.id]
@@ -197,6 +206,7 @@ export class ScheduleService {
             })
 
             wineLastConsumedYear[selectedWine.id] = year
+            wineTotalScheduled[selectedWine.id]++
             slotsFilledThisMonth++
 
             // Remove from candidates
@@ -213,12 +223,14 @@ export class ScheduleService {
           w =>
             this.canConsumeThisYear(w, year) &&
             wineAvailability[w.id] <= `${year}-12` && // Available by end of year
+            wineTotalScheduled[w.id] < wineBottleLimit[w.id] && // Still have bottles left
             !yearsConsumption.some(e => e.wineId === w.id)
         )
 
-        for (let i = 0; i < padding && availableWinesForPadding.length > 0; i++) {
-          const wine = availableWinesForPadding[i % availableWinesForPadding.length]
-          let monthNum = this.calculateConsumptionMonthDistributed(year, (i % 12) + 1, yearsConsumption.length)
+        const maxPadding = Math.min(padding, availableWinesForPadding.length)
+        for (let i = 0; i < maxPadding; i++) {
+          const wine = availableWinesForPadding[i]
+          let monthNum = this.calculateConsumptionMonth((i % 12) + 1)
 
           // Ensure suggested month is never before the wine's availability month
           const avail = wineAvailability[wine.id]
@@ -243,6 +255,7 @@ export class ScheduleService {
           })
 
           wineLastConsumedYear[wine.id] = year
+          wineTotalScheduled[wine.id]++
         }
       }
 
@@ -606,11 +619,9 @@ export class ScheduleService {
     return true
   }
 
-  private static calculateConsumptionMonthDistributed(_year: number, targetMonth: number, indexInYear: number): number {
-    // Slight variation around target month to provide some spread
-    // But keep wines roughly in their intended month for user understanding
-    const monthVariation = indexInYear % 3 // Spread wines within target month's context
-    return Math.max(1, Math.min(12, targetMonth + monthVariation - 1))
+  private static calculateConsumptionMonth(targetMonth: number): number {
+    // Wine is consumed in the month it was selected for — no shifting
+    return Math.max(1, Math.min(12, targetMonth))
   }
 
   private static getConsumptionStatus(_wine: Wine, _year: number): string {
