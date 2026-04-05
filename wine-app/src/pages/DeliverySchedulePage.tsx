@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
-import type { DeliveryWindow } from '../types/index'
 import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 import { ScheduleService } from '../services/schedule.service'
@@ -29,7 +28,6 @@ export default function DeliverySchedulePage() {
   const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
   const loadWines = useWineStore(state => state.loadWines)
   const [deliverySchedule, setDeliverySchedule] = useState<DeliveryDisplayEntry[]>([])
-  const [isRegenerating, setIsRegenerating] = useState(false)
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [currentWinesAtHome, setCurrentWinesAtHome] = useState(0)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -55,7 +53,6 @@ export default function DeliverySchedulePage() {
   }, [scheduleUpdateTrigger])
 
   const generateDeliverySchedule = async () => {
-    setIsRegenerating(true)
     try {
       const config = await db.getCellarConfig()
       const totalAtHome = wines
@@ -115,8 +112,6 @@ export default function DeliverySchedulePage() {
         type: 'error',
         text: `Failed to generate delivery schedule: ${(error as Error).message}`,
       })
-    } finally {
-      setIsRegenerating(false)
     }
   }
 
@@ -244,7 +239,7 @@ export default function DeliverySchedulePage() {
         )}
       </div>
 
-      {message && <MessageModal message={message} onClose={() => setMessage(null)} />}
+      {message && <MessageModal type={message.type} text={message.text} onClose={() => setMessage(null)} />}
     </div>
   )
 }

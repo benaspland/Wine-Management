@@ -24,8 +24,8 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           wine_type: initialWine.wine_type,
           varietal: initialWine.varietal,
           tier: initialWine.tier,
-          location: initialWine.location,
-          quantity: initialWine.quantity,
+          location: 'storage' as const,
+          quantity: (initialWine.quantity_in_storage || 0) + (initialWine.quantity_at_home || 0),
           format: initialWine.format,
           drinking_window_start: initialWine.drinking_window_start,
           drinking_window_end: initialWine.drinking_window_end,
@@ -75,7 +75,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.producer.trim() || !formData.name.trim()) {
+    if (!(formData.producer || '').trim() || !formData.name.trim()) {
       alert('Producer and wine name are required')
       return
     }

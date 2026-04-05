@@ -11,13 +11,12 @@ export default function CollectionPage() {
   const loading = useWineStore(state => state.loading)
   const consumeWine = useWineStore(state => state.consumeWine)
   const moveWineToHome = useWineStore(state => state.moveWineToHome)
-  const updateWine = useWineStore(state => state.updateWine)
+  const editWineDetails = useWineStore(state => state.editWineDetails)
   const addWine = useWineStore(state => state.addWine)
 
   const [selectedWine, setSelectedWine] = useState<Wine | null>(null)
   const [editingWine, setEditingWine] = useState<Wine | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [stats, setStats] = useState<any>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [selectedWineScheduledDate, setSelectedWineScheduledDate] = useState<string | undefined>()
 
@@ -29,14 +28,7 @@ export default function CollectionPage() {
   const tierFilter = useWineStore(state => state.tierFilter)
   const setTierFilter = useWineStore(state => state.setTierFilter)
 
-  useEffect(() => {
-    loadStats()
-  }, [wines])
-
-  const loadStats = async () => {
-    const result = await useWineStore.getState().getStats()
-    setStats(result)
-  }
+  const totalBottles = wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)
 
   const handleAddWine = async (wineData: any) => {
     await addWine(wineData)
@@ -45,7 +37,7 @@ export default function CollectionPage() {
 
   const handleEditWine = async (wineData: any) => {
     if (editingWine) {
-      await updateWine(editingWine.id, wineData)
+      await editWineDetails(editingWine.id, wineData)
       setEditingWine(null)
       setSelectedWine(null)
     }
@@ -54,7 +46,7 @@ export default function CollectionPage() {
   const handleSelectWine = async (wine: Wine) => {
     setSelectedWine(wine)
     // Fetch scheduled delivery date from database
-    const scheduledDate = await db.getWineScheduledDeliveryDate(wine.id)
+    const scheduledDate = await db.getFirstDeliveryDateForWine(wine.id)
     setSelectedWineScheduledDate(scheduledDate)
   }
 
@@ -63,7 +55,7 @@ export default function CollectionPage() {
   }
 
   const handleMoveToHome = async (wineId: string) => {
-    await moveWineToHome(wineId)
+    await moveWineToHome(wineId, 1)
   }
 
   const handleEditClick = (wine: Wine) => {
@@ -178,7 +170,7 @@ export default function CollectionPage() {
           <h2 className="font-headline text-5xl md:text-7xl mb-4 text-on-surface">Private Collection</h2>
           <div className="flex items-baseline gap-4 mb-6">
             <span className="text-primary font-label tracking-widest text-sm uppercase">
-              {stats?.totalBottles || 0} Bottles
+              {totalBottles} Bottles
             </span>
             <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
             <span className="text-outline text-sm italic">
