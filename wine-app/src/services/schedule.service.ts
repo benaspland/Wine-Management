@@ -41,7 +41,8 @@ export class ScheduleService {
     allWines: Wine[],
     deliveryScheduleEntries?: DeliveryScheduleEntry[],
     startYear: number = new Date().getFullYear(),
-    yearsToSchedule: number = 3
+    yearsToSchedule: number = 3,
+    annualConsumptionTarget: number = DELIVERY_CONFIG.annualTarget
   ): DrinkingScheduleEntry[] {
     const schedule: DrinkingScheduleEntry[] = []
 
@@ -89,7 +90,7 @@ export class ScheduleService {
     }, {} as Record<string, number>))
 
     // Calculate consumption targets
-    const targetPerYear = DELIVERY_CONFIG.annualTarget
+    const targetPerYear = annualConsumptionTarget
     const tolerance = 5 // ±5
     const tier4_5MinSpacingYears = DELIVERY_CONFIG.tier45MinSpacingYears
 

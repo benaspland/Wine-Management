@@ -107,7 +107,7 @@ export default function DrinkingSchedulePage() {
       // Calculate years needed: assume ~30 wines/year consumption, so total wines / 30
       // Add buffer for spacing and tier constraints
       const yearsNeeded = Math.ceil((wines.length / 30) * 1.5) + 5
-      const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, yearsNeeded)
+      const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, yearsNeeded, config.annual_consumption_target || DELIVERY_CONFIG.annualTarget)
 
       if (drinkingSchedule.length === 0) {
         setSchedule([])
