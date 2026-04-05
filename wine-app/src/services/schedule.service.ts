@@ -127,38 +127,32 @@ export class ScheduleService {
 
       debugLog(`[ScheduleService] Processing year ${year}, target ${targetForYear} wines (${slotsPerMonth} per month)`)
 
-      // Distribute wines across 12 months with tier preference
-      for (let month = 1; month <= 12; month++) {
-        const slotsToFill = Math.min(slotsPerMonth, maxConsumption - yearsConsumption.length)
-        if (slotsToFill <= 0) break
-
+      // Helper: build candidate list for a given month with a max-per-year filter
+      const buildCandidates = (month: number, maxTimesThisYear: number) => {
         const monthYearMonth = `${year}-${String(month).padStart(2, '0')}`
-        const lastMonthProducers = yearsConsumption.slice(-2).map(e => e.producer) // Avoid clustering
+        const lastMonthProducers = yearsConsumption.slice(-2).map(e => e.producer)
 
-        // Build candidates available by this month
-        const candidates = allWines.filter(w => {
+        return allWines.filter(w => {
           const availabilityYearMonth = wineAvailability[w.id]
-          // Count how many times this wine is already scheduled this year
           const timesThisYear = yearsConsumption.filter(e => e.wineId === w.id).length
-          // Max 2 per year for normal bottles, 1 for magnums
-          const maxThisYear = w.format?.toLowerCase().includes('magnum') ? 1 : 2
-          // For Tier 4-5, respect spacing: max 1 per year
-          const effectiveMax = w.tier >= 4 ? 1 : maxThisYear
-          // Don't schedule same wine in same month
+          // Magnums and Tier 4-5 never get a 2nd bottle
+          const hardMax = (w.format?.toLowerCase().includes('magnum') || w.tier >= 4) ? 1 : maxTimesThisYear
           const alreadyThisMonth = yearsConsumption.some(
             e => e.wineId === w.id && e.suggestedMonth === month
           )
           return (
-            this.canConsumeThisYear(w, year) &&
-            availabilityYearMonth <= monthYearMonth && // Wine available by this month
-            wineTotalScheduled[w.id] < wineBottleLimit[w.id] && // Still have bottles left
-            timesThisYear < effectiveMax && // Not at yearly max
-            !alreadyThisMonth && // Not already in this month
-            !lastMonthProducers.includes(w.producer) // Avoid same producer clustering
+            ScheduleService.canConsumeThisYear(w, year) &&
+            availabilityYearMonth <= monthYearMonth &&
+            wineTotalScheduled[w.id] < wineBottleLimit[w.id] &&
+            timesThisYear < hardMax &&
+            !alreadyThisMonth &&
+            !lastMonthProducers.includes(w.producer)
           )
         })
+      }
 
-        // Sort candidates by tier preference (T1 > T2-3 > T4-5)
+      // Helper: pick wines from a candidate list by tier preference
+      const pickFromCandidates = (candidates: Wine[], slotsToFill: number, month: number) => {
         const candidatesByTier = {
           1: candidates.filter(w => w.tier === 1),
           2: candidates.filter(w => w.tier === 2),
@@ -167,22 +161,19 @@ export class ScheduleService {
           5: candidates.filter(w => w.tier === 5),
         }
 
-        // Fill month slots with tier preference: T1 > T2-3 > T4-5
-        let slotsFilledThisMonth = 0
+        let slotsFilled = 0
         for (const tier of [1, 2, 3, 4, 5]) {
           while (
-            slotsFilledThisMonth < slotsToFill &&
+            slotsFilled < slotsToFill &&
             candidatesByTier[tier as keyof typeof candidatesByTier].length > 0
           ) {
             const tierCandidates = candidatesByTier[tier as keyof typeof candidatesByTier]
 
-            // For Tier 4-5, prefer wines not scheduled in last 3 years (unless necessary)
             let selectedWine: Wine | undefined
             if (tier >= 4) {
               selectedWine = tierCandidates.find(
                 w => !wineLastConsumedYear[w.id] || year - wineLastConsumedYear[w.id] >= tier4_5MinSpacingYears
               )
-              // Fallback: if no wines respect spacing, take any available (spacing rule relaxed)
               if (!selectedWine && tierCandidates.length > 0) {
                 selectedWine = tierCandidates[0]
               }
@@ -192,9 +183,7 @@ export class ScheduleService {
 
             if (!selectedWine) break
 
-            let monthNum = this.calculateConsumptionMonth(month)
-
-            // Ensure suggested month is never before the wine's availability month
+            let monthNum = ScheduleService.calculateConsumptionMonth(month)
             const avail = wineAvailability[selectedWine.id]
             if (avail) {
               const [availYear, availMonth] = avail.split('-').map(Number)
@@ -213,17 +202,49 @@ export class ScheduleService {
               classification: selectedWine.classification,
               suggestedMonth: monthNum,
               suggestedYear: year,
-              status: this.getConsumptionStatus(selectedWine, year),
+              status: ScheduleService.getConsumptionStatus(selectedWine, year),
             })
 
             wineLastConsumedYear[selectedWine.id] = year
             wineTotalScheduled[selectedWine.id]++
-            slotsFilledThisMonth++
+            slotsFilled++
 
-            // Remove from candidates
             const idx = tierCandidates.indexOf(selectedWine)
             if (idx > -1) tierCandidates.splice(idx, 1)
           }
+        }
+        return slotsFilled
+      }
+
+      // Distribute wines across 12 months with tier preference
+      // Pass 1: unique wines only (each wine at most once this year)
+      for (let month = 1; month <= 12; month++) {
+        const slotsToFill = Math.min(slotsPerMonth, maxConsumption - yearsConsumption.length)
+        if (slotsToFill <= 0) break
+
+        const candidates = buildCandidates(month, 1) // max 1 per year = unique only
+        pickFromCandidates(candidates, slotsToFill, month)
+      }
+
+      // Pass 2: if slots remain, allow a 2nd bottle of wines already scheduled
+      // this year — but only because no unique wines were available.
+      // Prioritise months with fewest entries to fill gaps evenly.
+      if (yearsConsumption.length < minConsumption) {
+        // Count entries per month so we fill the emptiest months first
+        const monthOrder = Array.from({ length: 12 }, (_, i) => i + 1)
+          .sort((a, b) => {
+            const countA = yearsConsumption.filter(e => e.suggestedMonth === a).length
+            const countB = yearsConsumption.filter(e => e.suggestedMonth === b).length
+            return countA - countB
+          })
+
+        for (const month of monthOrder) {
+          const currentCount = yearsConsumption.filter(e => e.suggestedMonth === month).length
+          const slotsToFill = Math.min(slotsPerMonth - currentCount, maxConsumption - yearsConsumption.length)
+          if (slotsToFill <= 0) continue
+
+          const candidates = buildCandidates(month, 2) // allow 2nd bottles
+          pickFromCandidates(candidates, slotsToFill, month)
         }
       }
 
@@ -232,7 +253,7 @@ export class ScheduleService {
         const padding = minConsumption - yearsConsumption.length
         const availableWinesForPadding = allWines.filter(
           w =>
-            this.canConsumeThisYear(w, year) &&
+            ScheduleService.canConsumeThisYear(w, year) &&
             wineAvailability[w.id] <= `${year}-12` && // Available by end of year
             wineTotalScheduled[w.id] < wineBottleLimit[w.id] && // Still have bottles left
             !yearsConsumption.some(e => e.wineId === w.id)
