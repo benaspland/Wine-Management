@@ -66,8 +66,9 @@ export class ScheduleService {
           // Extract YYYY-MM from delivery date (YYYY-MM-DD format)
           wineAvailability[w.id] = delivery.scheduled_date.substring(0, 7)
         } else {
-          // If no delivery scheduled, assume not available this period
-          wineAvailability[w.id] = '9999-12' // Far future
+          // No delivery scheduled yet — still include in drinking schedule as a planning tool.
+          // The UI shows these as "In Storage (Pending Delivery)" so the user knows they need arranging.
+          wineAvailability[w.id] = currentYearMonth
         }
       }
     })
@@ -114,7 +115,7 @@ export class ScheduleService {
 
       // Build consumption for this year using month-slot distribution
       const yearsConsumption: DrinkingScheduleEntry[] = []
-      const slotsPerMonth = Math.ceil(targetForYear / 12) // ~2-3 wines per month
+      const slotsPerMonth = Math.ceil(targetForYear / monthsInYear) // slots across remaining months
 
       debugLog(`[ScheduleService] Processing year ${year}, target ${targetForYear} wines (${slotsPerMonth} per month)`)
 
