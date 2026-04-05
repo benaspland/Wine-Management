@@ -164,10 +164,10 @@ export default function DrinkingSchedulePage() {
 
         grouped[key].push({
           id: entry.wineId,
-          producer: entry.producer,
+          producer: entry.producer ?? '',
           name: entry.name,
           vintage: entry.vintage,
-          region: entry.region,
+          region: entry.region ?? '',
           tier: entry.tier,
           status: entry.status,
           consumed: consumptionInfo.consumed,

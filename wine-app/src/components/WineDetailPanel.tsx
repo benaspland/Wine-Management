@@ -23,11 +23,12 @@ export default function WineDetailPanel({
 }: WineDetailPanelProps) {
   const tierLabel = TIER_LABELS[wine.tier]
   const criticRatings = wine.critic_ratings || {}
+  const totalBottles = wine.quantity_in_storage + wine.quantity_at_home
 
   const handleConsume = async () => {
     try {
       await onConsume(wine.id)
-      if (wine.quantity <= 1) {
+      if (wine.quantity_at_home <= 1) {
         onClose()
       }
     } catch (error) {
@@ -179,13 +180,13 @@ export default function WineDetailPanel({
             {tierLabel}
           </span>
           <span className="text-[10px] text-outline uppercase tracking-wider ml-auto">
-            {wine.quantity} {wine.quantity === 1 ? 'Bottle' : 'Bottles'}
+            {totalBottles} {totalBottles === 1 ? 'Bottle' : 'Bottles'}
           </span>
         </div>
 
         {/* Actions */}
         <div className="pt-6 pb-12 flex flex-col gap-3">
-          {wine.location === 'home' && wine.quantity > 0 && (
+          {wine.quantity_at_home > 0 && (
             <button
               onClick={handleConsume}
               disabled={isLoading}
@@ -195,7 +196,7 @@ export default function WineDetailPanel({
             </button>
           )}
 
-          {wine.location === 'storage' && (
+          {wine.quantity_in_storage > 0 && (
             <button
               onClick={handleMoveToHome}
               disabled={isLoading}

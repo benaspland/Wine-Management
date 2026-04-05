@@ -18,6 +18,7 @@ interface WineStore {
   regionFilter: string | null
   countryFilter: string | null
   wineTypeFilter: string | null
+  formatFilter: string | null
   sortBy: 'vintage' | 'tier' | 'producer'
 
   // Actions
@@ -36,6 +37,7 @@ interface WineStore {
   setRegionFilter: (region: string | null) => void
   setCountryFilter: (country: string | null) => void
   setWineTypeFilter: (type: string | null) => void
+  setFormatFilter: (format: string | null) => void
   setSortBy: (sort: 'vintage' | 'tier' | 'producer') => void
   applyFilters: () => void
   clearFilters: () => void
@@ -59,6 +61,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
   regionFilter: null,
   countryFilter: null,
   wineTypeFilter: null,
+  formatFilter: null,
   sortBy: 'vintage',
 
   loadWines: async () => {
@@ -201,6 +204,11 @@ export const useWineStore = create<WineStore>((set, get) => ({
     get().applyFilters()
   },
 
+  setFormatFilter: (format) => {
+    set({ formatFilter: format })
+    get().applyFilters()
+  },
+
   setSortBy: (sort) => {
     set({ sortBy: sort })
     get().applyFilters()
@@ -214,6 +222,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       regionFilter: null,
       countryFilter: null,
       wineTypeFilter: null,
+      formatFilter: null,
     })
     get().applyFilters()
   },
@@ -227,6 +236,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       regionFilter,
       countryFilter,
       wineTypeFilter,
+      formatFilter,
       sortBy,
     } = get()
 
@@ -265,6 +275,10 @@ export const useWineStore = create<WineStore>((set, get) => ({
 
     if (wineTypeFilter) {
       filtered = filtered.filter((w) => w.wine_type === wineTypeFilter)
+    }
+
+    if (formatFilter) {
+      filtered = filtered.filter((w) => w.format === formatFilter)
     }
 
     // Apply sorting

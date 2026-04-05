@@ -5,7 +5,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import * as db from '../database'
-import type { Wine, CellarConfig, DeliveryWindow } from '../../types/index'
 
 // Mock localStorage for tests
 const localStorageMock = (() => {

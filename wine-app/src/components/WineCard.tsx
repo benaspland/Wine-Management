@@ -25,9 +25,11 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
     wine.tier === 3 ? 'border border-primary/40 text-primary' :
     'bg-surface-container-high text-on-surface-variant'
 
+  const totalBottles = wine.quantity_in_storage + wine.quantity_at_home
+
   const handleConsume = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (wine.quantity === 0) return
+    if (wine.quantity_at_home === 0) return
     try {
       await onConsume(wine.id)
     } catch (error) {
@@ -77,8 +79,8 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
             </div>
             <button
               onClick={handleConsume}
-              disabled={wine.quantity === 0 || isLoading}
-              title={wine.quantity === 0 ? 'No bottles available' : 'Mark as consumed'}
+              disabled={wine.quantity_at_home === 0 || isLoading}
+              title={wine.quantity_at_home === 0 ? 'No bottles available' : 'Mark as consumed'}
               className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-highest text-outline-variant hover:text-error disabled:opacity-50 transition-colors"
             >
               <span className="material-symbols-outlined">wine_bar</span>
@@ -105,7 +107,7 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
                 liquor
               </span>
               <span className="text-xs text-on-surface/80 font-medium">
-                {wine.quantity} {wine.quantity === 1 ? 'Bottle' : 'Bottles'}
+                {totalBottles} {totalBottles === 1 ? 'Bottle' : 'Bottles'}
               </span>
             </div>
             <div className="flex items-center gap-1.5 bg-surface-container-highest px-2 py-1 rounded text-[10px] text-outline font-bold tracking-widest uppercase">
