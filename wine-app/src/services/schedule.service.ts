@@ -352,12 +352,8 @@ export class ScheduleService {
         if (!deliveriesPerYear[year]) deliveriesPerYear[year] = 0
         if (deliveriesPerYear[year] >= 2) continue
 
-        // 4.1 Check space
-        const homeTotal = Object.values(home).reduce((a, b) => a + b, 0)
-        const space = cellarCapacity - homeTotal
-        if (space < 3) break // Skip this and any subsequent delivery
-
-        // 4.2 Build candidate list
+        // 4.1 Build candidate list — all wines should be scheduled for delivery
+        // The schedule is a plan; capacity constraints are handled at execution time
         const unscheduledWines = candidateWines.filter(w => remaining[w.id] > 0)
         const candidates: Array<{ wine: Wine; priority: number }> = []
 
@@ -365,19 +361,17 @@ export class ScheduleService {
           const timeLeft = wine.drinking_window_end - year
           const timeToOpen = Math.max(0, wine.drinking_window_start - year)
 
-          // Exclusion filters
-          if (timeLeft <= 0) return // Window closed
+          // Exclusion filters (window-closed wines are still included — better delivered late than never)
           if (wine.tier >= 4 && year < tier45StartYear) return // Category 4-5 before 2029
           const maxLead = wine.tier <= 2 ? 2 : 1
-          if (timeToOpen > maxLead) return // Too early
-          const cs = caseSize(wine)
-          if (cs > space) return // Case size exceeds available space
+          if (timeLeft > 0 && timeToOpen > maxLead) return // Too early (only if window hasn't closed)
 
           // Priority scoring (based on prototype)
           let priority = 500
 
-          // URGENCY
-          if (timeLeft <= 3) priority = 3000 - timeLeft
+          // URGENCY — past-window wines get highest priority (deliver ASAP)
+          if (timeLeft <= 0) priority = 5000
+          else if (timeLeft <= 3) priority = 3000 - timeLeft
           else if (timeLeft <= 6) priority = 2000 - timeLeft
           else if (timeLeft <= 10) priority = 1000 - timeLeft
 
@@ -428,13 +422,11 @@ export class ScheduleService {
         let totalDelivered = 0
 
         for (const { wine } of candidates) {
-          if (totalDelivered >= space) break
-
           const cs = caseSize(wine)
           if (remaining[wine.id] === 0) continue
 
           const deliverAmount = remaining[wine.id] >= cs ? cs : remaining[wine.id]
-          if (deliverAmount <= 0 || deliverAmount > space - totalDelivered) continue
+          if (deliverAmount <= 0) continue
 
           cases.push({ wine, bottles: deliverAmount })
           totalDelivered += deliverAmount
