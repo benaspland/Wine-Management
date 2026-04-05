@@ -41,7 +41,8 @@ export class ScheduleService {
     allWines: Wine[],
     deliveryScheduleEntries?: DeliveryScheduleEntry[],
     startYear: number = new Date().getFullYear(),
-    yearsToSchedule: number = 3
+    yearsToSchedule: number = 3,
+    annualConsumptionTarget: number = DELIVERY_CONFIG.annualTarget
   ): DrinkingScheduleEntry[] {
     const schedule: DrinkingScheduleEntry[] = []
 
@@ -65,12 +66,9 @@ export class ScheduleService {
           // Extract YYYY-MM from delivery date (YYYY-MM-DD format)
           wineAvailability[w.id] = delivery.scheduled_date.substring(0, 7)
         } else {
-          // No delivery scheduled yet — use next delivery window as earliest availability.
-          // This prevents wines from appearing in consumption schedule before they can be delivered.
-          const deliveryMonths = DELIVERY_CONFIG.months as [number, number]
-          const nextDeliveryMonth = deliveryMonths.find(m => m > currentMonth) ?? deliveryMonths[0]
-          const nextDeliveryYear = nextDeliveryMonth <= currentMonth ? currentYear + 1 : currentYear
-          wineAvailability[w.id] = `${nextDeliveryYear}-${String(nextDeliveryMonth).padStart(2, '0')}`
+          // No delivery scheduled — exclude from drinking schedule entirely.
+          // All storage wines should be assigned a delivery window by the delivery algorithm.
+          wineAvailability[w.id] = '9999-12'
         }
       }
     })
@@ -93,13 +91,21 @@ export class ScheduleService {
     }, {} as Record<string, number>))
 
     // Calculate consumption targets
-    const targetPerYear = DELIVERY_CONFIG.annualTarget
+    const targetPerYear = annualConsumptionTarget
     const tolerance = 5 // ±5
     const tier4_5MinSpacingYears = DELIVERY_CONFIG.tier45MinSpacingYears
 
     // Track consumption per year and per wine (for Tier 4-5 spacing)
     const yearlyConsumption: Record<number, number> = {}
     const wineLastConsumedYear: Record<string, number> = {} // Track last year each wine was scheduled
+
+    // Track total bottles scheduled per wine — never exceed actual inventory
+    const wineTotalScheduled: Record<string, number> = {}
+    const wineBottleLimit: Record<string, number> = {}
+    allWines.forEach(w => {
+      wineTotalScheduled[w.id] = 0
+      wineBottleLimit[w.id] = w.quantity_in_storage + w.quantity_at_home
+    })
 
     for (let year = startYear; year < startYear + yearsToSchedule; year++) {
       yearlyConsumption[year] = 0
@@ -117,7 +123,7 @@ export class ScheduleService {
 
       // Build consumption for this year using month-slot distribution
       const yearsConsumption: DrinkingScheduleEntry[] = []
-      const slotsPerMonth = Math.ceil(targetForYear / 12) // ~2-3 wines per month
+      const slotsPerMonth = Math.ceil(targetForYear / monthsInYear) // slots across remaining months
 
       debugLog(`[ScheduleService] Processing year ${year}, target ${targetForYear} wines (${slotsPerMonth} per month)`)
 
@@ -132,10 +138,22 @@ export class ScheduleService {
         // Build candidates available by this month
         const candidates = allWines.filter(w => {
           const availabilityYearMonth = wineAvailability[w.id]
+          // Count how many times this wine is already scheduled this year
+          const timesThisYear = yearsConsumption.filter(e => e.wineId === w.id).length
+          // Max 2 per year for normal bottles, 1 for magnums
+          const maxThisYear = w.format?.toLowerCase().includes('magnum') ? 1 : 2
+          // For Tier 4-5, respect spacing: max 1 per year
+          const effectiveMax = w.tier >= 4 ? 1 : maxThisYear
+          // Don't schedule same wine in same month
+          const alreadyThisMonth = yearsConsumption.some(
+            e => e.wineId === w.id && e.suggestedMonth === month
+          )
           return (
             this.canConsumeThisYear(w, year) &&
             availabilityYearMonth <= monthYearMonth && // Wine available by this month
-            !yearsConsumption.some(e => e.wineId === w.id) && // Not already scheduled this year
+            wineTotalScheduled[w.id] < wineBottleLimit[w.id] && // Still have bottles left
+            timesThisYear < effectiveMax && // Not at yearly max
+            !alreadyThisMonth && // Not already in this month
             !lastMonthProducers.includes(w.producer) // Avoid same producer clustering
           )
         })
@@ -174,7 +192,16 @@ export class ScheduleService {
 
             if (!selectedWine) break
 
-            const monthNum = this.calculateConsumptionMonthDistributed(year, month, yearsConsumption.length)
+            let monthNum = this.calculateConsumptionMonth(month)
+
+            // Ensure suggested month is never before the wine's availability month
+            const avail = wineAvailability[selectedWine.id]
+            if (avail) {
+              const [availYear, availMonth] = avail.split('-').map(Number)
+              if (year === availYear && monthNum < availMonth) {
+                monthNum = availMonth
+              }
+            }
 
             yearsConsumption.push({
               wineId: selectedWine.id,
@@ -190,6 +217,7 @@ export class ScheduleService {
             })
 
             wineLastConsumedYear[selectedWine.id] = year
+            wineTotalScheduled[selectedWine.id]++
             slotsFilledThisMonth++
 
             // Remove from candidates
@@ -206,12 +234,23 @@ export class ScheduleService {
           w =>
             this.canConsumeThisYear(w, year) &&
             wineAvailability[w.id] <= `${year}-12` && // Available by end of year
+            wineTotalScheduled[w.id] < wineBottleLimit[w.id] && // Still have bottles left
             !yearsConsumption.some(e => e.wineId === w.id)
         )
 
-        for (let i = 0; i < padding && availableWinesForPadding.length > 0; i++) {
-          const wine = availableWinesForPadding[i % availableWinesForPadding.length]
-          const monthNum = this.calculateConsumptionMonthDistributed(year, (i % 12) + 1, yearsConsumption.length)
+        const maxPadding = Math.min(padding, availableWinesForPadding.length)
+        for (let i = 0; i < maxPadding; i++) {
+          const wine = availableWinesForPadding[i]
+          let monthNum = this.calculateConsumptionMonth((i % 12) + 1)
+
+          // Ensure suggested month is never before the wine's availability month
+          const avail = wineAvailability[wine.id]
+          if (avail) {
+            const [availYear, availMonth] = avail.split('-').map(Number)
+            if (year === availYear && monthNum < availMonth) {
+              monthNum = availMonth
+            }
+          }
 
           yearsConsumption.push({
             wineId: wine.id,
@@ -227,6 +266,7 @@ export class ScheduleService {
           })
 
           wineLastConsumedYear[wine.id] = year
+          wineTotalScheduled[wine.id]++
         }
       }
 
@@ -338,9 +378,94 @@ export class ScheduleService {
 
       const drunkThisYear: Record<string, number> = {}
 
+      // Helper: simulate drinking for a given number of months
+      // This allows us to simulate consumption BETWEEN delivery slots
+      const simulateDrinking = (monthsToSimulate: number) => {
+        const target = Math.round((annualConsumptionTarget * monthsToSimulate) / 12)
+
+        const getDrinkable = (): Array<{ id: string; urgency: number; tier: number }> => {
+          const pool: Array<{ id: string; urgency: number; tier: number }> = []
+          candidateWines.forEach(wine => {
+            if (home[wine.id] <= 0) return
+            if (wine.drinking_window_start > year || wine.drinking_window_end < year) return
+            const maxY = maxPerYear(wine)
+            const drunk = drunkThisYear[wine.id] || 0
+            if (drunk >= maxY) return
+            if (wine.tier >= 4) {
+              const bottlesLeft = home[wine.id] + (remaining[wine.id] || 0)
+              const yearsLeft = Math.max(1, wine.drinking_window_end - year)
+              const idealGap = Math.max(1, Math.floor(yearsLeft / Math.max(1, bottlesLeft)))
+              if (lastDrunk[wine.id] && year - lastDrunk[wine.id] < idealGap && bottlesLeft > 2) return
+            }
+            const timeLeft = wine.drinking_window_end - year
+            let urgency = 1.0 / Math.max(1, timeLeft)
+            if (wine.tier === 1) urgency += 0.3
+            else if (wine.tier === 2) urgency += 0.15
+            pool.push({ id: wine.id, urgency, tier: wine.tier })
+          })
+          return pool.sort((a, b) => b.urgency - a.urgency || a.tier - b.tier)
+        }
+
+        let drinkCount = 0
+
+        // Pass 0: One of each (variety)
+        if (drinkCount < target) {
+          const pool = getDrinkable()
+          pool.forEach(({ id }) => {
+            if (drinkCount >= target) return
+            const drunk = drunkThisYear[id] || 0
+            if (drunk >= 1) return
+            if (home[id] <= 0) return
+            home[id]--
+            drunkThisYear[id] = (drunkThisYear[id] || 0) + 1
+            lastDrunk[id] = year
+            drinkCount++
+          })
+        }
+
+        // Pass 1: Second bottles for Cat 1-3
+        if (drinkCount < target) {
+          const pool = getDrinkable()
+          pool.forEach(({ id, tier }) => {
+            if (drinkCount >= target) return
+            const wine = wineMap[id]
+            if (wine.format?.toLowerCase().includes('magnum')) return
+            const drunk = drunkThisYear[id] || 0
+            if (drunk !== 1 || drunk >= 2) return
+            if (tier > 3) return
+            if (home[id] <= 0) return
+            home[id]--
+            drunkThisYear[id] = 2
+            lastDrunk[id] = year
+            drinkCount++
+          })
+        }
+
+        // Pass 2: Second bottles for Cat 4-5
+        if (drinkCount < target) {
+          const pool = getDrinkable()
+          pool.forEach(({ id }) => {
+            if (drinkCount >= target) return
+            const wine = wineMap[id]
+            if (wine.format?.toLowerCase().includes('magnum')) return
+            const drunk = drunkThisYear[id] || 0
+            if (drunk !== 1 || drunk >= 2) return
+            if (home[id] <= 0) return
+            home[id]--
+            drunkThisYear[id] = 2
+            lastDrunk[id] = year
+            drinkCount++
+          })
+        }
+      }
+
       // ════════════════════════════════════════════
       // DELIVERY PHASE (up to 2 deliveries per year)
+      // Drinking is simulated BETWEEN delivery slots so space calculations
+      // account for bottles consumed since the last check point.
       // ════════════════════════════════════════════
+      let lastSimulatedMonth = (year === currentYear) ? currentMonth : 1
+
       for (let deliverySlot = 0; deliverySlot < 2; deliverySlot++) {
         loopIterations++
         if (loopIterations > maxLoopIterations) break
@@ -350,14 +475,22 @@ export class ScheduleService {
         // Skip past months in current year
         if (year === currentYear && month < currentMonth) continue
 
+        // Simulate drinking from last check point up to this delivery month
+        // so the space calculation reflects bottles consumed in the interim
+        const monthsSinceLastSim = month - lastSimulatedMonth
+        if (monthsSinceLastSim > 0) {
+          simulateDrinking(monthsSinceLastSim)
+          lastSimulatedMonth = month
+        }
+
         // Max 2 deliveries per year
         if (!deliveriesPerYear[year]) deliveriesPerYear[year] = 0
         if (deliveriesPerYear[year] >= 2) continue
 
-        // 4.1 Check space
+        // 4.1 Check available space at home
         const homeTotal = Object.values(home).reduce((a, b) => a + b, 0)
         const space = cellarCapacity - homeTotal
-        if (space < 3) break // Skip this and any subsequent delivery
+        if (space < 3) break // Not enough room for any case — wait for consumption to free space
 
         // 4.2 Build candidate list
         const unscheduledWines = candidateWines.filter(w => remaining[w.id] > 0)
@@ -367,19 +500,17 @@ export class ScheduleService {
           const timeLeft = wine.drinking_window_end - year
           const timeToOpen = Math.max(0, wine.drinking_window_start - year)
 
-          // Exclusion filters
-          if (timeLeft <= 0) return // Window closed
+          // Exclusion filters (window-closed wines are still included — better delivered late than never)
           if (wine.tier >= 4 && year < tier45StartYear) return // Category 4-5 before 2029
           const maxLead = wine.tier <= 2 ? 2 : 1
-          if (timeToOpen > maxLead) return // Too early
-          const cs = caseSize(wine)
-          if (cs > space) return // Case size exceeds available space
+          if (timeLeft > 0 && timeToOpen > maxLead) return // Too early (only if window hasn't closed)
 
           // Priority scoring (based on prototype)
           let priority = 500
 
-          // URGENCY
-          if (timeLeft <= 3) priority = 3000 - timeLeft
+          // URGENCY — past-window wines get highest priority (deliver ASAP)
+          if (timeLeft <= 0) priority = 5000
+          else if (timeLeft <= 3) priority = 3000 - timeLeft
           else if (timeLeft <= 6) priority = 2000 - timeLeft
           else if (timeLeft <= 10) priority = 1000 - timeLeft
 
@@ -430,7 +561,7 @@ export class ScheduleService {
         let totalDelivered = 0
 
         for (const { wine } of candidates) {
-          if (totalDelivered >= space) break
+          if (totalDelivered >= space) break // Cellar full for this delivery
 
           const cs = caseSize(wine)
           if (remaining[wine.id] === 0) continue
@@ -444,12 +575,17 @@ export class ScheduleService {
 
         // Check if this delivery should be recorded
         // Only move wines to home if delivery meets criteria
+        // Adaptive minimum: when space is limited (cellar nearly full from recent delivery),
+        // accept a smaller delivery rather than missing the window entirely.
         const totalRemaining = Object.values(remaining).reduce((a, b) => a + b, 0)
         const isFinalDelivery = totalRemaining > 0 && totalRemaining < 24
-        const shouldDeliver = (totalDelivered >= 24) || isFinalDelivery
+        const minDeliverySize = Math.min(24, Math.max(6, Math.floor(space * 0.8)))
+        const shouldDeliver = (totalDelivered >= minDeliverySize) || isFinalDelivery
 
         if (shouldDeliver && cases.length > 0) {
-          const scheduledDate = new Date(year, month - 1, 1)
+          // Format date as YYYY-MM-DD using local time (not UTC via toISOString,
+          // which shifts the date back one day in timezones ahead of UTC like BST)
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-01`
 
           // NOW move wines to home and record delivery
           cases.forEach(({ wine, bottles }) => {
@@ -458,7 +594,7 @@ export class ScheduleService {
             deliveries.push({
               wine_id: wine.id,
               quantity: bottles,
-              scheduled_date: scheduledDate.toISOString().split('T')[0],
+              scheduled_date: dateStr,
               tier: wine.tier,
               region: wine.region,
               status: 'pending',
@@ -470,93 +606,10 @@ export class ScheduleService {
         }
       }
 
-      // ════════════════════════════════════════════
-      // DRINKING PHASE (target 30 bottles/year)
-      // ════════════════════════════════════════════
-
-      const getDrinkable = (): Array<{ id: string; urgency: number; tier: number }> => {
-        const pool: Array<{ id: string; urgency: number; tier: number }> = []
-
-        candidateWines.forEach(wine => {
-          if (home[wine.id] <= 0) return
-          if (wine.drinking_window_start > year || wine.drinking_window_end < year) return
-
-          const maxY = maxPerYear(wine)
-          const drunk = drunkThisYear[wine.id] || 0
-          if (drunk >= maxY) return
-
-          // Category 4/5 spacing
-          if (wine.tier >= 4) {
-            const bottlesLeft = home[wine.id] + (remaining[wine.id] || 0)
-            const yearsLeft = Math.max(1, wine.drinking_window_end - year)
-            const idealGap = Math.max(1, Math.floor(yearsLeft / Math.max(1, bottlesLeft)))
-            if (lastDrunk[wine.id] && year - lastDrunk[wine.id] < idealGap && bottlesLeft > 2) return
-          }
-
-          const timeLeft = wine.drinking_window_end - year
-          let urgency = 1.0 / Math.max(1, timeLeft)
-          if (wine.tier === 1) urgency += 0.3
-          else if (wine.tier === 2) urgency += 0.15
-
-          pool.push({ id: wine.id, urgency, tier: wine.tier })
-        })
-
-        return pool.sort((a, b) => b.urgency - a.urgency || a.tier - b.tier)
-      }
-
-      let drinkCount = 0
-
-      // Pass 0: One of each (variety)
-      if (drinkCount < annualConsumptionTarget) {
-        const pool = getDrinkable()
-        pool.forEach(({ id }) => {
-          if (drinkCount >= annualConsumptionTarget) return
-          const drunk = drunkThisYear[id] || 0
-          if (drunk >= 1) return
-          if (home[id] <= 0) return
-
-          home[id]--
-          drunkThisYear[id] = 1
-          lastDrunk[id] = year
-          drinkCount++
-        })
-      }
-
-      // Pass 1: Second bottles for Cat 1-3
-      if (drinkCount < annualConsumptionTarget) {
-        const pool = getDrinkable()
-        pool.forEach(({ id, tier }) => {
-          if (drinkCount >= annualConsumptionTarget) return
-          const wine = wineMap[id]
-          if (wine.format?.toLowerCase().includes('magnum')) return
-          const drunk = drunkThisYear[id] || 0
-          if (drunk !== 1 || drunk >= 2) return
-          if (tier > 3) return
-          if (home[id] <= 0) return
-
-          home[id]--
-          drunkThisYear[id] = 2
-          lastDrunk[id] = year
-          drinkCount++
-        })
-      }
-
-      // Pass 2: Second bottles for Cat 4-5
-      if (drinkCount < annualConsumptionTarget) {
-        const pool = getDrinkable()
-        pool.forEach(({ id }) => {
-          if (drinkCount >= annualConsumptionTarget) return
-          const wine = wineMap[id]
-          if (wine.format?.toLowerCase().includes('magnum')) return
-          const drunk = drunkThisYear[id] || 0
-          if (drunk !== 1 || drunk >= 2) return
-          if (home[id] <= 0) return
-
-          home[id]--
-          drunkThisYear[id] = 2
-          lastDrunk[id] = year
-          drinkCount++
-        })
+      // Simulate remaining months of drinking after all delivery slots
+      const remainingMonths = 12 - lastSimulatedMonth
+      if (remainingMonths > 0) {
+        simulateDrinking(remainingMonths)
       }
     }
 
@@ -590,11 +643,9 @@ export class ScheduleService {
     return true
   }
 
-  private static calculateConsumptionMonthDistributed(_year: number, targetMonth: number, indexInYear: number): number {
-    // Slight variation around target month to provide some spread
-    // But keep wines roughly in their intended month for user understanding
-    const monthVariation = indexInYear % 3 // Spread wines within target month's context
-    return Math.max(1, Math.min(12, targetMonth + monthVariation - 1))
+  private static calculateConsumptionMonth(targetMonth: number): number {
+    // Wine is consumed in the month it was selected for — no shifting
+    return Math.max(1, Math.min(12, targetMonth))
   }
 
   private static getConsumptionStatus(_wine: Wine, _year: number): string {
