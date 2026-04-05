@@ -218,7 +218,16 @@ export class ScheduleService {
 
         for (let i = 0; i < padding && availableWinesForPadding.length > 0; i++) {
           const wine = availableWinesForPadding[i % availableWinesForPadding.length]
-          const monthNum = this.calculateConsumptionMonthDistributed(year, (i % 12) + 1, yearsConsumption.length)
+          let monthNum = this.calculateConsumptionMonthDistributed(year, (i % 12) + 1, yearsConsumption.length)
+
+          // Ensure suggested month is never before the wine's availability month
+          const avail = wineAvailability[wine.id]
+          if (avail) {
+            const [availYear, availMonth] = avail.split('-').map(Number)
+            if (year === availYear && monthNum < availMonth) {
+              monthNum = availMonth
+            }
+          }
 
           yearsConsumption.push({
             wineId: wine.id,
