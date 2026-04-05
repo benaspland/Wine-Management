@@ -190,7 +190,7 @@ export default function DrinkingSchedulePage() {
             wines: winesInPeriod.sort((a, b) => b.tier - a.tier),
           }
         })
-        .sort((a, b) => a.year !== b.year ? a.year - b.year : 0)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : (MONTH_TO_NUMBER[a.month] || 0) - (MONTH_TO_NUMBER[b.month] || 0))
 
       setSchedule(timeline)
       setLastRegenerated(new Date().toLocaleTimeString())
@@ -258,8 +258,23 @@ export default function DrinkingSchedulePage() {
 
           {/* Timeline entries */}
           <div className="space-y-16">
-            {schedule.map((entry, idx) => (
+            {schedule.map((entry, idx) => {
+              const prevEntry = idx > 0 ? schedule[idx - 1] : null
+              const showYearSeparator = !prevEntry || prevEntry.year !== entry.year
+
+              return (
               <section key={`${entry.year}-${idx}`} className="relative">
+                {/* Year separator */}
+                {showYearSeparator && (
+                  <div className="flex items-center mb-10 ml-10">
+                    <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
+                    <span className="px-4 font-headline text-lg tracking-widest text-primary-container font-bold">
+                      {entry.year}
+                    </span>
+                    <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
+                  </div>
+                )}
+
                 {/* Timeline dot and month header */}
                 <div className="flex items-center mb-8">
                   <div
@@ -334,7 +349,8 @@ export default function DrinkingSchedulePage() {
                   })}
                 </div>
               </section>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
