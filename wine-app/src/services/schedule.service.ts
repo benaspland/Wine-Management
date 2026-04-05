@@ -500,8 +500,22 @@ export class ScheduleService {
       }
 
       // ════════════════════════════════════════════
-      // DRINKING PHASE (target 30 bottles/year)
+      // DRINKING PHASE — pro-rate for partial years to match actual drinking schedule
       // ════════════════════════════════════════════
+
+      // For the first year, only count months from the earliest delivery onward
+      let drinkingMonthsThisYear = 12
+      if (year === currentYear) {
+        // Find the earliest delivery month this year
+        const yearDeliveries = deliveries.filter(d => d.scheduled_date.startsWith(`${year}-`))
+        if (yearDeliveries.length > 0) {
+          const earliestMonth = Math.min(...yearDeliveries.map(d => parseInt(d.scheduled_date.split('-')[1])))
+          drinkingMonthsThisYear = 12 - earliestMonth + 1
+        } else {
+          drinkingMonthsThisYear = 12 - currentMonth + 1
+        }
+      }
+      const proRatedTarget = Math.round((annualConsumptionTarget * drinkingMonthsThisYear) / 12)
 
       const getDrinkable = (): Array<{ id: string; urgency: number; tier: number }> => {
         const pool: Array<{ id: string; urgency: number; tier: number }> = []
@@ -536,10 +550,10 @@ export class ScheduleService {
       let drinkCount = 0
 
       // Pass 0: One of each (variety)
-      if (drinkCount < annualConsumptionTarget) {
+      if (drinkCount < proRatedTarget) {
         const pool = getDrinkable()
         pool.forEach(({ id }) => {
-          if (drinkCount >= annualConsumptionTarget) return
+          if (drinkCount >= proRatedTarget) return
           const drunk = drunkThisYear[id] || 0
           if (drunk >= 1) return
           if (home[id] <= 0) return
@@ -552,10 +566,10 @@ export class ScheduleService {
       }
 
       // Pass 1: Second bottles for Cat 1-3
-      if (drinkCount < annualConsumptionTarget) {
+      if (drinkCount < proRatedTarget) {
         const pool = getDrinkable()
         pool.forEach(({ id, tier }) => {
-          if (drinkCount >= annualConsumptionTarget) return
+          if (drinkCount >= proRatedTarget) return
           const wine = wineMap[id]
           if (wine.format?.toLowerCase().includes('magnum')) return
           const drunk = drunkThisYear[id] || 0
@@ -571,10 +585,10 @@ export class ScheduleService {
       }
 
       // Pass 2: Second bottles for Cat 4-5
-      if (drinkCount < annualConsumptionTarget) {
+      if (drinkCount < proRatedTarget) {
         const pool = getDrinkable()
         pool.forEach(({ id }) => {
-          if (drinkCount >= annualConsumptionTarget) return
+          if (drinkCount >= proRatedTarget) return
           const wine = wineMap[id]
           if (wine.format?.toLowerCase().includes('magnum')) return
           const drunk = drunkThisYear[id] || 0
