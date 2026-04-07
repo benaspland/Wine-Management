@@ -234,7 +234,11 @@ export class ScheduleService {
           candidateWines.forEach(wine => {
             if (home[wine.id] <= 0) return
             if (wine.drinking_window_start > year || wine.drinking_window_end < year) return
-            if ((drunkThisYear[wine.id] || 0) >= maxPerYear(wine)) return
+            // Hard caps: magnums and Tier 4-5 limited to 1/year. Normal wines
+            // have no per-year cap here — sim plans for the actual target.
+            const isHardCapped = wine.format?.toLowerCase().includes('magnum') || wine.tier >= 4
+            const maxY = isHardCapped ? 1 : Infinity
+            if ((drunkThisYear[wine.id] || 0) >= maxY) return
             if (wine.tier >= 4) {
               const bottlesLeft = home[wine.id] + (remaining[wine.id] || 0)
               const yearsLeft = Math.max(1, wine.drinking_window_end - year)
@@ -254,21 +258,25 @@ export class ScheduleService {
           if (drinkCount >= target || (drunkThisYear[id] || 0) >= 1 || home[id] <= 0) return
           home[id]--; drunkThisYear[id] = (drunkThisYear[id] || 0) + 1; lastDrunk[id] = year; drinkCount++
         })
-        if (drinkCount < target) {
-          getDrinkable().forEach(({ id, tier }) => {
-            if (drinkCount >= target) return
-            const wine = wineMap[id]
-            if (wine.format?.toLowerCase().includes('magnum') || (drunkThisYear[id] || 0) !== 1 || tier > 3 || home[id] <= 0) return
-            home[id]--; drunkThisYear[id] = 2; lastDrunk[id] = year; drinkCount++
-          })
-        }
-        if (drinkCount < target) {
-          getDrinkable().forEach(({ id }) => {
-            if (drinkCount >= target) return
-            const wine = wineMap[id]
-            if (wine.format?.toLowerCase().includes('magnum') || (drunkThisYear[id] || 0) !== 1 || home[id] <= 0) return
-            home[id]--; drunkThisYear[id] = 2; lastDrunk[id] = year; drinkCount++
-          })
+        // Top-up passes: keep adding bottles (by urgency) until the target for
+        // this window is reached or no more drinkable bottles exist. Magnums
+        // and Tier 4-5 are excluded via the hard cap in getDrinkable.
+        let topUpGuard = 0
+        while (drinkCount < target && topUpGuard < 1000) {
+          topUpGuard++
+          const pool = getDrinkable()
+          if (pool.length === 0) break
+          let drankThisPass = 0
+          for (const { id } of pool) {
+            if (drinkCount >= target) break
+            if (home[id] <= 0) continue
+            home[id]--
+            drunkThisYear[id] = (drunkThisYear[id] || 0) + 1
+            lastDrunk[id] = year
+            drinkCount++
+            drankThisPass++
+          }
+          if (drankThisPass === 0) break
         }
       }
 
