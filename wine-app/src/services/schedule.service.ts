@@ -409,7 +409,11 @@ export class ScheduleService {
           candidateWines.forEach(wine => {
             if (home[wine.id] <= 0) return
             if (wine.drinking_window_start > year || wine.drinking_window_end < year) return
-            const maxY = maxPerYear(wine)
+            // Hard caps (real constraints): magnums and Tier 4-5 limited to 1/year.
+            // Normal wines have no per-year cap in the delivery sim — we plan to
+            // meet the user's actual consumption target.
+            const isHardCapped = wine.format?.toLowerCase().includes('magnum') || wine.tier >= 4
+            const maxY = isHardCapped ? 1 : Infinity
             const drunk = drunkThisYear[wine.id] || 0
             if (drunk >= maxY) return
             if (wine.tier >= 4) {
@@ -444,39 +448,26 @@ export class ScheduleService {
           })
         }
 
-        // Pass 1: Second bottles for Cat 1-3
-        if (drinkCount < target) {
+        // Top-up passes: keep cycling through drinkable wines (by urgency) adding
+        // additional bottles until the target for this window is reached or no
+        // more drinkable bottles exist. Magnums and Tier 4-5 are excluded from
+        // top-ups via the hard cap in getDrinkable.
+        let topUpGuard = 0
+        while (drinkCount < target && topUpGuard < 1000) {
+          topUpGuard++
           const pool = getDrinkable()
-          pool.forEach(({ id, tier }) => {
-            if (drinkCount >= target) return
-            const wine = wineMap[id]
-            if (wine.format?.toLowerCase().includes('magnum')) return
-            const drunk = drunkThisYear[id] || 0
-            if (drunk !== 1 || drunk >= 2) return
-            if (tier > 3) return
-            if (home[id] <= 0) return
+          if (pool.length === 0) break
+          let drankThisPass = 0
+          for (const { id } of pool) {
+            if (drinkCount >= target) break
+            if (home[id] <= 0) continue
             home[id]--
-            drunkThisYear[id] = 2
+            drunkThisYear[id] = (drunkThisYear[id] || 0) + 1
             lastDrunk[id] = year
             drinkCount++
-          })
-        }
-
-        // Pass 2: Second bottles for Cat 4-5
-        if (drinkCount < target) {
-          const pool = getDrinkable()
-          pool.forEach(({ id }) => {
-            if (drinkCount >= target) return
-            const wine = wineMap[id]
-            if (wine.format?.toLowerCase().includes('magnum')) return
-            const drunk = drunkThisYear[id] || 0
-            if (drunk !== 1 || drunk >= 2) return
-            if (home[id] <= 0) return
-            home[id]--
-            drunkThisYear[id] = 2
-            lastDrunk[id] = year
-            drinkCount++
-          })
+            drankThisPass++
+          }
+          if (drankThisPass === 0) break
         }
       }
 
