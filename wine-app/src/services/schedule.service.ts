@@ -375,13 +375,24 @@ export class ScheduleService {
     const wineMap: Record<string, Wine> = {}
     const lastDrunk: Record<string, number> = {}
 
+    // Include storage wines in the sim
     storageWines.forEach(w => {
       remaining[w.id] = w.quantity_in_storage
-      home[w.id] = 0
+      home[w.id] = w.quantity_at_home  // start with bottles already at home
       wineMap[w.id] = w
     })
 
-    const candidateWines = Object.values(wineMap).filter(w => w.quantity_in_storage > 0)
+    // Also include wines that are ONLY at home (storage = 0) so they occupy
+    // cellar space and get consumed in the drinking sim
+    allWines.forEach(w => {
+      if (w.quantity_at_home > 0 && w.quantity_in_storage === 0) {
+        remaining[w.id] = 0
+        home[w.id] = w.quantity_at_home
+        wineMap[w.id] = w
+      }
+    })
+
+    const candidateWines = Object.values(wineMap)
     const totalBottlesAvailable = candidateWines.reduce((sum, w) => sum + w.quantity_in_storage, 0)
 
     console.log(`[ScheduleService] ${candidateWines.length} wines available, ${totalBottlesAvailable} bottles total`)
