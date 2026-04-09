@@ -126,7 +126,7 @@ export default function DeliverySchedulePage() {
         const newWindow = await db.createDeliveryWindow({
           scheduled_date: date,
           locked: false,
-          status: 'pending',
+          status: 'planned',
         })
         windowId = newWindow.id
       }
