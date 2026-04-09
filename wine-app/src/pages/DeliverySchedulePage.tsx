@@ -130,18 +130,26 @@ export default function DeliverySchedulePage() {
 
   const handleConfirmDelivery = async (date: string) => {
     try {
-      const window = await db.getDeliveryWindowById(
-        deliverySchedule.find(d => d.date === date)?.windowId || ''
-      )
+      const entry = deliverySchedule.find(d => d.date === date)
+      if (!entry) throw new Error('Delivery not found in schedule')
+
+      // If no DB record exists yet for this scheduled date, create one now
+      let windowId = entry.windowId
+      if (!windowId) {
+        const newWindow = await db.createDeliveryWindow({
+          scheduled_date: date,
+          locked: false,
+          status: 'pending',
+        })
+        windowId = newWindow.id
+      }
+
+      const window = await db.getDeliveryWindowById(windowId)
       if (!window) throw new Error('Delivery window not found')
 
       // Move wines from storage to home
-      for (const entry of deliverySchedule) {
-        if (entry.date === date) {
-          for (const wine of entry.wines) {
-            await workflows.moveToHome(wine.id, wine.quantity)
-          }
-        }
+      for (const wine of entry.wines) {
+        await workflows.moveToHome(wine.id, wine.quantity)
       }
 
       // Update window status
