@@ -21,6 +21,7 @@ export default function SettingsPage() {
     db.getCellarConfig().then(config => {
       setCellarCapacity(config.max_home_capacity)
       setAnnualConsumptionTarget(config.annual_consumption_target || 30)
+      setMinDeliveryBottles(config.min_delivery_bottles || 24)
     })
   }, [])
 
@@ -50,11 +51,17 @@ export default function SettingsPage() {
       return
     }
 
+    if (minDeliveryBottles <= 0) {
+      setMessage({ type: 'error', text: 'Minimum delivery bottles must be greater than 0' })
+      return
+    }
+
     setIsLoading(true)
     try {
       await db.updateCellarConfig({
         max_home_capacity: cellarCapacity,
         annual_consumption_target: annualConsumptionTarget,
+        min_delivery_bottles: minDeliveryBottles,
       })
       // Regenerate schedules with new parameters
       triggerScheduleUpdate()

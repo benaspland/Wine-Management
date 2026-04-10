@@ -50,6 +50,7 @@ export interface CellarConfig {
   id: 1;
   max_home_capacity: number; // Maximum bottles allowed at home
   annual_consumption_target: number; // Target bottles/year for scheduling algorithm
+  min_delivery_bottles: number; // Minimum bottles required for a delivery window to be created
   created_at?: string;
   updated_at?: string;
 }
