@@ -31,6 +31,8 @@ export default function DeliverySchedulePage() {
   const [cellarCapacity, setCellarCapacity] = useState(80)
   const [currentWinesAtHome, setCurrentWinesAtHome] = useState(0)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [isPromoting, setIsPromoting] = useState(false)
+  const [isDelaying, setIsDelaying] = useState(false)
 
   // Load cellar config on mount
   useEffect(() => {
@@ -107,12 +109,132 @@ export default function DeliverySchedulePage() {
         }
       }
 
+      // For locked windows, overlay DB-backed wine lists (manual curation)
+      for (const [, entry] of grouped) {
+        if (entry.locked && entry.windowId) {
+          const dbWines = await db.getDeliveryWindowWines(entry.windowId)
+          if (dbWines.length > 0) {
+            entry.wines = dbWines
+              .map(dw => {
+                const wine = wines.find(w => w.id === dw.wine_id)
+                return wine ? {
+                  id: wine.id,
+                  name: wine.name,
+                  producer: wine.producer,
+                  vintage: wine.vintage,
+                  region: wine.region,
+                  tier: wine.tier,
+                  quantity: dw.quantity,
+                  format: wine.format,
+                } : null
+              })
+              .filter((w): w is NonNullable<typeof w> => w !== null)
+          }
+        }
+      }
+
       setDeliverySchedule(Array.from(grouped.values()).sort((a, b) => a.date.localeCompare(b.date)))
     } catch (error) {
       setMessage({
         type: 'error',
         text: `Failed to generate delivery schedule: ${(error as Error).message}`,
       })
+    }
+  }
+
+  const ensureLockedWindow = async (delivery: DeliveryDisplayEntry): Promise<string> => {
+    let windowId = delivery.windowId
+    if (!windowId) {
+      const newWindow = await db.createDeliveryWindow({
+        scheduled_date: delivery.date,
+        locked: false,
+        status: 'planned',
+      })
+      windowId = newWindow.id
+    }
+
+    const window = await db.getDeliveryWindowById(windowId)
+    if (window && !window.locked) {
+      // Persist current in-memory wines to DB before locking
+      for (const wine of delivery.wines) {
+        const existing = await db.queryAll(
+          'SELECT * FROM delivery_window_wines WHERE delivery_window_id = ? AND wine_id = ?',
+          [windowId, wine.id]
+        )
+        if (existing.length === 0) {
+          await db.addWineToDeliveryWindow(windowId, wine.id, wine.quantity)
+        }
+      }
+      await db.updateDeliveryWindow(windowId, { locked: true })
+    }
+
+    return windowId
+  }
+
+  const handlePromoteWine = async (wineId: string, quantity: number, wineName: string) => {
+    setIsPromoting(true)
+    try {
+      const firstDelivery = deliverySchedule[0]
+      if (!firstDelivery) throw new Error('No delivery scheduled')
+
+      // Check capacity
+      const config = await db.getCellarConfig()
+      const freshWines = await db.getAllWines()
+      const currentHome = freshWines.reduce((sum, w) => sum + w.quantity_at_home, 0)
+      const firstDeliveryTotal = firstDelivery.wines.reduce((sum, w) => sum + w.quantity, 0)
+      const projectedHome = currentHome + firstDeliveryTotal + quantity
+      if (projectedHome > config.max_home_capacity) {
+        throw new Error(
+          `Promoting would exceed home capacity. ` +
+          `Current: ${currentHome}, Delivery: ${firstDeliveryTotal}, Adding: ${quantity}, Max: ${config.max_home_capacity}`
+        )
+      }
+
+      const windowId = await ensureLockedWindow(firstDelivery)
+
+      // Add promoted wine to the first delivery window
+      const existing = await db.queryAll(
+        'SELECT * FROM delivery_window_wines WHERE delivery_window_id = ? AND wine_id = ?',
+        [windowId, wineId]
+      )
+      if (existing.length > 0) {
+        await db.updateDeliveryWindowWine(windowId, wineId, quantity)
+      } else {
+        await db.addWineToDeliveryWindow(windowId, wineId, quantity)
+      }
+
+      await generateDeliverySchedule()
+      setMessage({ type: 'success', text: `${wineName} promoted to next delivery` })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      setMessage({ type: 'error', text: `Failed to promote: ${(error as Error).message}` })
+    } finally {
+      setIsPromoting(false)
+    }
+  }
+
+  const handleDeferWine = async (wineId: string, date: string, wineName: string) => {
+    setIsDelaying(true)
+    try {
+      const delivery = deliverySchedule.find(d => d.date === date)
+      if (!delivery) throw new Error('Delivery not found')
+
+      if (delivery.wines.length <= 1) {
+        throw new Error('Cannot defer the only wine in this delivery')
+      }
+
+      const windowId = await ensureLockedWindow(delivery)
+
+      // Remove the deferred wine from the locked window
+      await db.removeWineFromDeliveryWindow(windowId, wineId)
+
+      await generateDeliverySchedule()
+      setMessage({ type: 'success', text: `${wineName} deferred to a future delivery` })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      setMessage({ type: 'error', text: `Failed to defer: ${(error as Error).message}` })
+    } finally {
+      setIsDelaying(false)
     }
   }
 
@@ -223,6 +345,9 @@ export default function DeliverySchedulePage() {
                   })}
                 </h3>
                 <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded text-sm font-medium bg-surface-container-high text-on-surface">
+                    {delivery.wines.reduce((sum, w) => sum + w.quantity, 0)} bottles
+                  </span>
                   <span className={`px-3 py-1 rounded text-sm font-medium ${
                     delivery.status === 'completed' ? 'bg-success/20 text-success' :
                     delivery.status === 'in_transit' ? 'bg-warning/20 text-warning' :
@@ -232,26 +357,58 @@ export default function DeliverySchedulePage() {
                   </span>
                   {delivery.locked && (
                     <span className="px-3 py-1 rounded text-sm bg-outline/20 text-outline">
-                      🔒 Locked
+                      Curated
                     </span>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                {delivery.wines.map(wine => (
-                  <div key={wine.id} className="bg-surface p-3 rounded border border-outline-variant text-sm">
-                    <p className="font-semibold text-on-surface">
-                      {wine.producer} {wine.name}
-                    </p>
-                    <p className="text-outline text-xs">
-                      {wine.vintage} • Qty: {wine.quantity} {wine.format || '750ml'}
-                    </p>
-                  </div>
-                ))}
+                {delivery.wines.map(wine => {
+                  const isFirstDelivery = delivery.date === deliverySchedule[0]?.date
+                  const canModify = delivery.status !== 'completed'
+
+                  return (
+                    <div key={wine.id} className="bg-surface p-3 rounded border border-outline-variant text-sm">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-on-surface">
+                            {wine.producer} {wine.name}
+                          </p>
+                          <p className="text-outline text-xs">
+                            {wine.vintage} • Qty: {wine.quantity} {wine.format || '750ml'}
+                          </p>
+                        </div>
+                        {canModify && (
+                          <div className="shrink-0">
+                            {isFirstDelivery ? (
+                              <button
+                                onClick={() => handleDeferWine(wine.id, delivery.date, `${wine.producer} ${wine.name}`)}
+                                disabled={isDelaying || delivery.wines.length <= 1}
+                                className="px-2 py-1 bg-surface-container-high text-on-surface rounded text-xs font-medium hover:bg-outline/20 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                title="Defer this wine to a future delivery"
+                              >
+                                {isDelaying ? '...' : 'Defer'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handlePromoteWine(wine.id, wine.quantity, `${wine.producer} ${wine.name}`)}
+                                disabled={isPromoting}
+                                className="px-2 py-1 bg-primary text-on-primary rounded text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                title="Promote to next delivery"
+                              >
+                                {isPromoting ? '...' : 'Promote'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
 
-              {delivery.status !== 'completed' && !delivery.locked && (
+              {delivery.status !== 'completed' && (
                 <button
                   onClick={() => handleConfirmDelivery(delivery.date)}
                   className="w-full px-4 py-2 bg-primary text-on-primary rounded font-medium hover:opacity-90"
