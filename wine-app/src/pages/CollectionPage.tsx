@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Wine } from '../types/index'
 import { useWineStore } from '../store/wineStore'
 import WineCard from '../components/WineCard'
@@ -47,7 +47,7 @@ export default function CollectionPage() {
     setSelectedWine(wine)
     // Fetch scheduled delivery date from database
     const scheduledDate = await db.getFirstDeliveryDateForWine(wine.id)
-    setSelectedWineScheduledDate(scheduledDate)
+    setSelectedWineScheduledDate(scheduledDate ?? undefined)
   }
 
   const handleConsume = async (wineId: string) => {

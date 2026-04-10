@@ -368,8 +368,6 @@ export class ScheduleService {
       return 6
     }
 
-    const maxPerYear = (wine: Wine): number => (wine.format?.toLowerCase().includes('magnum') ? 1 : 2)
-
     // State tracking
     const remaining: Record<string, number> = {}
     const home: Record<string, number> = {}

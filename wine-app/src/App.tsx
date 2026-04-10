@@ -66,7 +66,7 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <div className="min-h-screen bg-background text-on-surface dark">
         <TopAppBar />
         <main className="pt-16 pb-24 md:pb-0">
