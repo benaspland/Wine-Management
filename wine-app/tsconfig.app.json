@@ -25,5 +25,5 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.integration.test.ts", "src/**/*.integration.test.tsx"]
+  "exclude": ["src/**/*.integration.test.ts", "src/**/*.integration.test.tsx", "src/**/simulate-schedule.test.ts"]
 }

@@ -61,7 +61,7 @@ describe('ScheduleService', () => {
       })
 
       // No single delivery date should exceed cellar capacity (80)
-      for (const [date, bottles] of Object.entries(byDate)) {
+      for (const bottles of Object.values(byDate)) {
         expect(bottles).toBeLessThanOrEqual(80)
       }
     })
@@ -404,7 +404,7 @@ describe('ScheduleService', () => {
       console.log('Deliveries by date:', byDate)
 
       // No delivery should be absurdly large (more than capacity)
-      for (const [date, bottles] of Object.entries(byDate)) {
+      for (const bottles of Object.values(byDate)) {
         expect(bottles).toBeLessThanOrEqual(80)
       }
     })
@@ -434,7 +434,7 @@ describe('ScheduleService', () => {
         byMonth[key].push(e.wineId)
       })
 
-      for (const [month, wineIds] of Object.entries(byMonth)) {
+      for (const wineIds of Object.values(byMonth)) {
         const unique = new Set(wineIds)
         expect(unique.size).toBe(wineIds.length)
       }
