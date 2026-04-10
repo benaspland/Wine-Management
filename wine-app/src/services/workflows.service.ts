@@ -351,6 +351,10 @@ export async function updateCellarConfig(updates: Partial<CellarConfig>): Promis
     throw new Error('Annual consumption target must be > 0')
   }
 
+  if (updates.min_delivery_bottles !== undefined && updates.min_delivery_bottles <= 0) {
+    throw new Error('Minimum delivery bottles must be > 0')
+  }
+
   // Check current home inventory vs new capacity
   if (updates.max_home_capacity !== undefined) {
     const wines = await db.getAllWines()

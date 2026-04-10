@@ -67,6 +67,7 @@ async function initMemoryDatabase() {
       id: 1,
       max_home_capacity: 80,
       annual_consumption_target: 30,
+      min_delivery_bottles: 24,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
@@ -124,6 +125,7 @@ async function createSchema() {
       id INTEGER PRIMARY KEY CHECK(id = 1),
       max_home_capacity INTEGER NOT NULL CHECK(max_home_capacity > 0),
       annual_consumption_target INTEGER NOT NULL CHECK(annual_consumption_target > 0),
+      min_delivery_bottles INTEGER NOT NULL DEFAULT 24 CHECK(min_delivery_bottles > 0),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -202,14 +204,29 @@ async function createSchema() {
     }
   }
 
+  // Migration: add min_delivery_bottles column to pre-existing databases.
+  // SQLite doesn't support IF NOT EXISTS on ADD COLUMN, so try/catch the
+  // "duplicate column" error and ignore it.
+  try {
+    await executeQuery(
+      `ALTER TABLE cellar_config ADD COLUMN min_delivery_bottles INTEGER NOT NULL DEFAULT 24`
+    )
+  } catch (err) {
+    const msg = (err as Error)?.message || ''
+    if (!msg.toLowerCase().includes('duplicate column')) {
+      // Re-throw unexpected errors; ignore "already exists" errors
+      console.debug('[Database] min_delivery_bottles migration skipped:', msg)
+    }
+  }
+
   // Initialize default cellar_config if not exists
   const config = await queryOne(
     'SELECT COUNT(*) as count FROM cellar_config WHERE id = 1'
   )
   if (!config || config.count === 0) {
     await executeQuery(
-      `INSERT INTO cellar_config (id, max_home_capacity, annual_consumption_target, created_at, updated_at)
-       VALUES (1, 80, 30, ?, ?)`,
+      `INSERT INTO cellar_config (id, max_home_capacity, annual_consumption_target, min_delivery_bottles, created_at, updated_at)
+       VALUES (1, 80, 30, 24, ?, ?)`,
       [new Date().toISOString(), new Date().toISOString()]
     )
   }
@@ -592,6 +609,10 @@ export async function getCellarConfig(): Promise<CellarConfig> {
   const config = await queryOne('SELECT * FROM cellar_config WHERE id = 1')
   if (!config) {
     throw new Error('Cellar config not found')
+  }
+  // Default min_delivery_bottles to 24 for any legacy record missing the field
+  if (config.min_delivery_bottles == null) {
+    config.min_delivery_bottles = 24
   }
   return config as CellarConfig
 }

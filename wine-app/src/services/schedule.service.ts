@@ -339,7 +339,8 @@ export class ScheduleService {
     cellarCapacity: number = 80,
     currentBottlesAtHome: number = 0,
     deliveryMonths: [number, number] = [3, 9],
-    annualConsumptionTarget: number = 30
+    annualConsumptionTarget: number = 30,
+    minDeliveryBottles: number = 24
   ): DeliveryScheduleEntry[] {
     console.log('[ScheduleService] ✓ generateDeliverySchedule called')
     const storageWines = allWines.filter(w => w.quantity_in_storage > 0)
@@ -583,27 +584,64 @@ export class ScheduleService {
         const cases: Array<{ wine: Wine; bottles: number }> = []
         let totalDelivered = 0
 
+        // Track committed quantities per wine across multi-pass case building
+        const committed: Record<string, number> = {}
+
+        // Pass 1: diversity — one case per wine, in priority order
         for (const { wine } of candidates) {
           if (totalDelivered >= space) break // Cellar full for this delivery
 
           const cs = caseSize(wine)
-          if (remaining[wine.id] === 0) continue
+          const available = remaining[wine.id] - (committed[wine.id] || 0)
+          if (available <= 0) continue
 
-          const deliverAmount = remaining[wine.id] >= cs ? cs : remaining[wine.id]
+          const deliverAmount = available >= cs ? cs : available
           if (deliverAmount <= 0 || deliverAmount > space - totalDelivered) continue
 
           cases.push({ wine, bottles: deliverAmount })
+          committed[wine.id] = (committed[wine.id] || 0) + deliverAmount
           totalDelivered += deliverAmount
         }
 
-        // Check if this delivery should be recorded
-        // Only move wines to home if delivery meets criteria
-        // Adaptive minimum: when space is limited (cellar nearly full from recent delivery),
-        // accept a smaller delivery rather than missing the window entirely.
+        // Pass 2: filler — after every candidate has had its first case,
+        // keep adding additional cases from wines with remaining stock to
+        // fully use the available space. Matters when a wine has multiple
+        // cases and the cellar can accommodate them, so a small remainder
+        // isn't orphaned across future windows.
+        let madeProgress = true
+        while (madeProgress && totalDelivered < space) {
+          madeProgress = false
+          for (const { wine } of candidates) {
+            if (totalDelivered >= space) break
+
+            const cs = caseSize(wine)
+            const available = remaining[wine.id] - (committed[wine.id] || 0)
+            if (available <= 0) continue
+
+            const deliverAmount = available >= cs ? cs : available
+            if (deliverAmount <= 0 || deliverAmount > space - totalDelivered) continue
+
+            cases.push({ wine, bottles: deliverAmount })
+            committed[wine.id] = (committed[wine.id] || 0) + deliverAmount
+            totalDelivered += deliverAmount
+            madeProgress = true
+          }
+        }
+
+        // Check if this delivery should be recorded.
+        // Enforce the configured minimum strictly — if not enough space has
+        // freed up to meet the minimum, skip this window and wait for the
+        // next one. The only exception is the TRULY final delivery: when
+        // all remaining storage bottles fit in this one delivery (and nothing
+        // will be left behind), allow it even if below minimum so we don't
+        // orphan the last few bottles. Do NOT allow dribbling sub-minimum
+        // partial deliveries — that's the "bypass the minimum" bug.
         const totalRemaining = Object.values(remaining).reduce((a, b) => a + b, 0)
-        const isFinalDelivery = totalRemaining > 0 && totalRemaining < 24
-        const minDeliverySize = Math.min(24, Math.max(6, Math.floor(space * 0.8)))
-        const shouldDeliver = (totalDelivered >= minDeliverySize) || isFinalDelivery
+        const isFinalDelivery =
+          totalDelivered > 0 &&
+          totalDelivered >= totalRemaining &&
+          totalRemaining < minDeliveryBottles
+        const shouldDeliver = (totalDelivered >= minDeliveryBottles) || isFinalDelivery
 
         if (shouldDeliver && cases.length > 0) {
           // Format date as YYYY-MM-DD using local time (not UTC via toISOString,

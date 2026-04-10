@@ -118,6 +118,145 @@ describe('ScheduleService', () => {
       const totalInStorage = wines.reduce((sum, w) => sum + w.quantity_in_storage, 0)
       expect(totalDelivered).toBe(totalInStorage)
     })
+
+    // ════════════════════════════════════════════
+    // REGRESSION TESTS for min_delivery_bottles plumbing
+    // ════════════════════════════════════════════
+
+    it('regression: target=30, min=24, cap=80 → schedules a first delivery (not blocked by minimum)', () => {
+      // This is the original bug: with target=30 / cap=80 / min=24, the very
+      // first delivery window was being skipped because the adaptive-minimum
+      // hack had already been removed but space wasn't being freed fast enough.
+      // The load-bearing fix is the inter-slot drinking simulation, which
+      // should always free enough space for the first delivery to meet the
+      // 24-bottle minimum.
+      const wines: Wine[] = Array.from({ length: 40 }, (_, i) =>
+        makeWine({
+          id: `w${i}`,
+          producer: `Producer ${i}`,
+          tier: ((i % 3) + 1) as 1 | 2 | 3,
+          quantity_in_storage: 6,
+          quantity_at_home: 0,
+          drinking_window_start: 2025,
+          drinking_window_end: 2035,
+        })
+      )
+
+      const deliveries = ScheduleService.generateDeliverySchedule(
+        wines, 80, 0, [3, 9], 30, 24
+      )
+
+      // Must produce at least one delivery
+      expect(deliveries.length).toBeGreaterThan(0)
+
+      // Group by date and check the first delivery respects the minimum
+      const byDate: Record<string, number> = {}
+      deliveries.forEach(d => {
+        byDate[d.scheduled_date] = (byDate[d.scheduled_date] || 0) + d.quantity
+      })
+      const firstDate = Object.keys(byDate).sort()[0]
+      expect(byDate[firstDate]).toBeGreaterThanOrEqual(24)
+    })
+
+    it('enforces the configured minimum — no sub-minimum deliveries except the final one', () => {
+      // Low consumption target (10/yr): without proper enforcement, deliveries
+      // would be scheduled at whatever fits as space trickles open — e.g. 6
+      // bottles, 12 bottles, etc. With min=24 enforced, every delivery must
+      // be ≥24 bottles OR it's the final sub-24 delivery of remaining stock.
+      const wines: Wine[] = Array.from({ length: 20 }, (_, i) =>
+        makeWine({
+          id: `w${i}`,
+          producer: `Producer ${i}`,
+          tier: ((i % 3) + 1) as 1 | 2 | 3,
+          quantity_in_storage: 6,
+          quantity_at_home: 0,
+          drinking_window_start: 2025,
+          drinking_window_end: 2040,
+        })
+      )
+
+      const deliveries = ScheduleService.generateDeliverySchedule(
+        wines, 80, 0, [3, 9], 10, 24
+      )
+
+      // Group by date
+      const byDate: Record<string, number> = {}
+      deliveries.forEach(d => {
+        byDate[d.scheduled_date] = (byDate[d.scheduled_date] || 0) + d.quantity
+      })
+
+      const sortedDates = Object.keys(byDate).sort()
+      // Every delivery except (possibly) the last must be >= 24 bottles
+      for (let i = 0; i < sortedDates.length - 1; i++) {
+        const date = sortedDates[i]
+        expect(byDate[date]).toBeGreaterThanOrEqual(24)
+      }
+      // The final delivery may be smaller (it's the "mop up the last few
+      // bottles" exception), but all earlier ones must meet the minimum.
+    })
+
+    it('respects a custom minDeliveryBottles value (plumbing test)', () => {
+      // Verify the minDeliveryBottles parameter is actually threaded through
+      // the algorithm by comparing two runs with the same wines but different
+      // minimums. With min=50 we should see FEWER deliveries (the middle
+      // delivery is held back until it can reach 50 bottles) than with min=24.
+      const makeWines = () =>
+        Array.from({ length: 20 }, (_, i) =>
+          makeWine({
+            id: `w${i}`,
+            producer: `Producer ${i}`,
+            tier: ((i % 3) + 1) as 1 | 2 | 3,
+            quantity_in_storage: 6,
+            quantity_at_home: 0,
+            drinking_window_start: 2025,
+            drinking_window_end: 2040,
+          })
+        )
+
+      const deliveriesWithMin24 = ScheduleService.generateDeliverySchedule(
+        makeWines(), 80, 0, [3, 9], 10, 24
+      )
+      const deliveriesWithMin50 = ScheduleService.generateDeliverySchedule(
+        makeWines(), 80, 0, [3, 9], 10, 50
+      )
+
+      const byDate24: Record<string, number> = {}
+      deliveriesWithMin24.forEach(d => {
+        byDate24[d.scheduled_date] = (byDate24[d.scheduled_date] || 0) + d.quantity
+      })
+      const byDate50: Record<string, number> = {}
+      deliveriesWithMin50.forEach(d => {
+        byDate50[d.scheduled_date] = (byDate50[d.scheduled_date] || 0) + d.quantity
+      })
+
+      // Both should eventually deliver ALL 120 bottles (20 wines × 6)
+      const total24 = Object.values(byDate24).reduce((a, b) => a + b, 0)
+      const total50 = Object.values(byDate50).reduce((a, b) => a + b, 0)
+      expect(total24).toBe(120)
+      expect(total50).toBe(120)
+
+      // Every non-final delivery must respect the corresponding minimum
+      const sortedDates24 = Object.keys(byDate24).sort()
+      for (let i = 0; i < sortedDates24.length - 1; i++) {
+        expect(byDate24[sortedDates24[i]]).toBeGreaterThanOrEqual(24)
+      }
+      const sortedDates50 = Object.keys(byDate50).sort()
+      for (let i = 0; i < sortedDates50.length - 1; i++) {
+        expect(byDate50[sortedDates50[i]]).toBeGreaterThanOrEqual(50)
+      }
+
+      // Plumbing check: min=50 must produce a materially different schedule
+      // than min=24. Specifically, min=50 should have fewer or equal distinct
+      // delivery dates (since small deliveries get held back and batched).
+      // If the parameter were ignored, both runs would be identical.
+      expect(sortedDates50.length).toBeLessThanOrEqual(sortedDates24.length)
+      // And at least one of the schedules must differ (proving the parameter
+      // has real effect). With this wine set the schedules should diverge.
+      const schedulesDiffer =
+        sortedDates24.length !== sortedDates50.length ||
+        sortedDates24.some((d, i) => byDate24[d] !== byDate50[sortedDates50[i]])
+      expect(schedulesDiffer).toBe(true)
+    })
   })
 
   describe('generateDrinkingSchedule', () => {

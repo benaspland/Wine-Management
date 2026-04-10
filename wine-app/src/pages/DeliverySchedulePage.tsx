@@ -65,7 +65,8 @@ export default function DeliverySchedulePage() {
         config.max_home_capacity,
         totalAtHome,
         DELIVERY_CONFIG.months as [number, number],
-        config.annual_consumption_target || 30
+        config.annual_consumption_target || 30,
+        config.min_delivery_bottles || 24
       )
 
       // Get all delivery windows from database
@@ -119,6 +120,22 @@ export default function DeliverySchedulePage() {
     try {
       const entry = deliverySchedule.find(d => d.date === date)
       if (!entry) throw new Error('Delivery not found in schedule')
+
+      // Validate the FULL delivery fits in home space before touching anything.
+      // Without this, moveToHome would fail mid-loop on the first wine and
+      // report its quantity (e.g. "6 bottles") instead of the full delivery
+      // size (e.g. "19 bottles"), leaving the cellar in a partial state.
+      const totalToDeliver = entry.wines.reduce((sum, w) => sum + w.quantity, 0)
+      const config = await db.getCellarConfig()
+      const freshWines = await db.getAllWines()
+      const currentHome = freshWines.reduce((sum, w) => sum + w.quantity_at_home, 0)
+      const availableSpace = config.max_home_capacity - currentHome
+      if (totalToDeliver > availableSpace) {
+        throw new Error(
+          `Delivery of ${totalToDeliver} bottles exceeds home capacity. ` +
+          `Current: ${currentHome}, Max: ${config.max_home_capacity}, Available: ${availableSpace}`
+        )
+      }
 
       // If no DB record exists yet for this scheduled date, create one now
       let windowId = entry.windowId

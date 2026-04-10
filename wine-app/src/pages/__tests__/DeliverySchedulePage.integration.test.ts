@@ -84,12 +84,28 @@ describe('DeliverySchedulePage Integration Tests', () => {
         quantity_at_home: 60,
       })
 
-      // With capacity 80 and 60 at home, only 20 can be delivered
+      // With capacity 80 and 60 at home, the first delivery is constrained
+      // by available space. Over multiple windows, as consumption frees space,
+      // all storage bottles eventually get delivered.
       const wines = await db.getAllWines()
       const schedule = ScheduleService.generateDeliverySchedule(wines, 80, 60)
 
+      // All storage bottles should eventually be delivered
       const totalDelivered = schedule.reduce((sum, s) => sum + s.quantity, 0)
-      expect(totalDelivered).toBeLessThanOrEqual(20)
+      expect(totalDelivered).toBe(50)
+
+      // No single delivery window should exceed cellar capacity
+      const byDate: Record<string, number> = {}
+      schedule.forEach(d => {
+        byDate[d.scheduled_date] = (byDate[d.scheduled_date] || 0) + d.quantity
+      })
+      for (const qty of Object.values(byDate)) {
+        expect(qty).toBeLessThanOrEqual(80)
+      }
+
+      // First delivery should be less than full capacity (constrained by home)
+      const firstDate = Object.keys(byDate).sort()[0]
+      expect(byDate[firstDate]).toBeLessThan(80)
     })
   })
 
