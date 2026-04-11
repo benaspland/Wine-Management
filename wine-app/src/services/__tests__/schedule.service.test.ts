@@ -461,4 +461,334 @@ describe('ScheduleService', () => {
       expect(appearances).toBeLessThanOrEqual(3)
     })
   })
+
+  describe('buildDisplaySchedule', () => {
+    const wineA = makeWine({
+      id: 'a',
+      name: 'Wine A',
+      producer: 'Producer A',
+      tier: 1,
+      quantity_in_storage: 6,
+    })
+    const wineB = makeWine({
+      id: 'b',
+      name: 'Wine B',
+      producer: 'Producer B',
+      tier: 1,
+      quantity_in_storage: 6,
+    })
+    const wineC = makeWine({
+      id: 'c',
+      name: 'Wine C',
+      producer: 'Producer C',
+      tier: 2,
+      quantity_in_storage: 6,
+    })
+    const wineD = makeWine({
+      id: 'd',
+      name: 'Wine D',
+      producer: 'Producer D',
+      tier: 2,
+      quantity_in_storage: 6,
+    })
+
+    const makeDelivery = (
+      wineId: string,
+      date: string,
+      quantity = 6
+    ): DeliveryScheduleEntry => ({
+      wine_id: wineId,
+      quantity,
+      scheduled_date: date,
+      tier: 1,
+      region: 'Test',
+      status: 'pending',
+    })
+
+    it('preserves unlocked schedule unchanged when no DB windows exist', () => {
+      const deliveries: DeliveryScheduleEntry[] = [
+        makeDelivery('a', '2026-03-01'),
+        makeDelivery('b', '2026-03-01'),
+        makeDelivery('c', '2026-09-01'),
+      ]
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        [wineA, wineB, wineC],
+        [],
+        new Map(),
+        [3, 9]
+      )
+
+      expect(result).toHaveLength(2)
+      expect(result[0].date).toBe('2026-03-01')
+      expect(result[0].locked).toBe(false)
+      expect(result[0].wines.map(w => w.id).sort()).toEqual(['a', 'b'])
+      expect(result[1].date).toBe('2026-09-01')
+      expect(result[1].wines.map(w => w.id)).toEqual(['c'])
+    })
+
+    it('uses DB curation as source of truth for locked windows', () => {
+      const deliveries: DeliveryScheduleEntry[] = [
+        makeDelivery('a', '2026-03-01'),
+        makeDelivery('b', '2026-03-01'),
+        makeDelivery('c', '2026-03-01'),
+      ]
+      const dbWindows = [
+        {
+          id: 'win1',
+          scheduled_date: '2026-03-01',
+          status: 'planned',
+          locked: true,
+        },
+      ]
+      const lockedWindowWines = new Map([
+        [
+          'win1',
+          [
+            { wine_id: 'b', quantity: 6 },
+            { wine_id: 'c', quantity: 6 },
+          ],
+        ],
+      ])
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        [wineA, wineB, wineC],
+        dbWindows,
+        lockedWindowWines,
+        [3, 9]
+      )
+
+      // The locked window should show DB-curated wines (b, c) — not a.
+      const march = result.find(e => e.date === '2026-03-01')
+      expect(march).toBeDefined()
+      expect(march!.locked).toBe(true)
+      expect(march!.windowId).toBe('win1')
+      expect(march!.wines.map(w => w.id).sort()).toEqual(['b', 'c'])
+    })
+
+    it('relocates a deferred wine to the next unlocked delivery (regression)', () => {
+      // Scheduler originally placed A, B, C at March 2026 and D at September.
+      // User deferred A from March 2026 (now locked with [B, C]). After
+      // reconciliation, A must still appear — in the September delivery.
+      const deliveries: DeliveryScheduleEntry[] = [
+        makeDelivery('a', '2026-03-01'),
+        makeDelivery('b', '2026-03-01'),
+        makeDelivery('c', '2026-03-01'),
+        makeDelivery('d', '2026-09-01'),
+      ]
+      const dbWindows = [
+        {
+          id: 'win-march',
+          scheduled_date: '2026-03-01',
+          status: 'planned',
+          locked: true,
+        },
+      ]
+      const lockedWindowWines = new Map([
+        [
+          'win-march',
+          [
+            { wine_id: 'b', quantity: 6 },
+            { wine_id: 'c', quantity: 6 },
+          ],
+        ],
+      ])
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        [wineA, wineB, wineC, wineD],
+        dbWindows,
+        lockedWindowWines,
+        [3, 9]
+      )
+
+      // March is locked with B + C only
+      const march = result.find(e => e.date === '2026-03-01')!
+      expect(march.wines.map(w => w.id).sort()).toEqual(['b', 'c'])
+
+      // Deferred wine A must appear somewhere LATER in the schedule
+      const allShownIds = new Set(result.flatMap(e => e.wines.map(w => w.id)))
+      expect(allShownIds.has('a')).toBe(true)
+
+      // Specifically, A should be in the next unlocked delivery (September)
+      const september = result.find(e => e.date === '2026-09-01')!
+      expect(september.wines.map(w => w.id).sort()).toEqual(['a', 'd'])
+    })
+
+    it('creates a new delivery date when there is no later unlocked delivery', () => {
+      // Scheduler placed A, B at March 2026. User deferred A. There is no
+      // later unlocked delivery — we should create one at September 2026.
+      const deliveries: DeliveryScheduleEntry[] = [
+        makeDelivery('a', '2026-03-01'),
+        makeDelivery('b', '2026-03-01'),
+      ]
+      const dbWindows = [
+        {
+          id: 'win-march',
+          scheduled_date: '2026-03-01',
+          status: 'planned',
+          locked: true,
+        },
+      ]
+      const lockedWindowWines = new Map([
+        ['win-march', [{ wine_id: 'b', quantity: 6 }]],
+      ])
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        [wineA, wineB],
+        dbWindows,
+        lockedWindowWines,
+        [3, 9]
+      )
+
+      expect(result).toHaveLength(2)
+      expect(result[0].date).toBe('2026-03-01')
+      expect(result[0].locked).toBe(true)
+      expect(result[0].wines.map(w => w.id)).toEqual(['b'])
+
+      // A relocated to a newly created September window
+      expect(result[1].date).toBe('2026-09-01')
+      expect(result[1].locked).toBe(false)
+      expect(result[1].wines.map(w => w.id)).toEqual(['a'])
+    })
+
+    it('skips subsequent locked deliveries when relocating a deferred wine', () => {
+      // Both March and September are locked. A deferred wine from March
+      // should bypass September (also locked) and go to a new delivery.
+      const deliveries: DeliveryScheduleEntry[] = [
+        makeDelivery('a', '2026-03-01'),
+        makeDelivery('b', '2026-03-01'),
+        makeDelivery('c', '2026-09-01'),
+      ]
+      const dbWindows = [
+        {
+          id: 'win-march',
+          scheduled_date: '2026-03-01',
+          status: 'planned',
+          locked: true,
+        },
+        {
+          id: 'win-sept',
+          scheduled_date: '2026-09-01',
+          status: 'planned',
+          locked: true,
+        },
+      ]
+      const lockedWindowWines = new Map([
+        ['win-march', [{ wine_id: 'b', quantity: 6 }]],
+        ['win-sept', [{ wine_id: 'c', quantity: 6 }]],
+      ])
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        [wineA, wineB, wineC],
+        dbWindows,
+        lockedWindowWines,
+        [3, 9]
+      )
+
+      // A should end up in a new unlocked delivery — March 2027 (next March
+      // after September 2026).
+      const allShownIds = new Set(result.flatMap(e => e.wines.map(w => w.id)))
+      expect(allShownIds.has('a')).toBe(true)
+
+      const aEntry = result.find(e => e.wines.some(w => w.id === 'a'))!
+      expect(aEntry.locked).toBe(false)
+      expect(aEntry.date > '2026-09-01').toBe(true)
+    })
+
+    it('removes promoted wines from their original scheduler date to avoid duplication', () => {
+      // Scheduler placed wine C at September 2026. User promoted it to
+      // March 2026 (now locked with [A, C]). After reconciliation, C
+      // should appear ONLY in March — not also in September.
+      const deliveries: DeliveryScheduleEntry[] = [
+        makeDelivery('a', '2026-03-01'),
+        makeDelivery('b', '2026-09-01'),
+        makeDelivery('c', '2026-09-01'),
+      ]
+      const dbWindows = [
+        {
+          id: 'win-march',
+          scheduled_date: '2026-03-01',
+          status: 'planned',
+          locked: true,
+        },
+      ]
+      const lockedWindowWines = new Map([
+        [
+          'win-march',
+          [
+            { wine_id: 'a', quantity: 6 },
+            { wine_id: 'c', quantity: 6 },
+          ],
+        ],
+      ])
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        [wineA, wineB, wineC],
+        dbWindows,
+        lockedWindowWines,
+        [3, 9]
+      )
+
+      // C must appear exactly once
+      const cCount = result
+        .flatMap(e => e.wines)
+        .filter(w => w.id === 'c').length
+      expect(cCount).toBe(1)
+
+      // C should be in the March (locked) window
+      const march = result.find(e => e.date === '2026-03-01')!
+      expect(march.wines.map(w => w.id).sort()).toEqual(['a', 'c'])
+
+      // September should only have B
+      const september = result.find(e => e.date === '2026-09-01')!
+      expect(september.wines.map(w => w.id)).toEqual(['b'])
+    })
+
+    it('preserves an empty locked window so the user can still see it', () => {
+      // User deferred the only wine from a locked window — it's now empty
+      // but should still appear in the schedule (so the user can confirm it
+      // or add something back).
+      const deliveries: DeliveryScheduleEntry[] = [
+        makeDelivery('a', '2026-03-01'),
+      ]
+      const dbWindows = [
+        {
+          id: 'win-march',
+          scheduled_date: '2026-03-01',
+          status: 'planned',
+          locked: true,
+        },
+      ]
+      const lockedWindowWines = new Map<
+        string,
+        Array<{ wine_id: string; quantity: number }>
+      >([['win-march', []]])
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        [wineA],
+        dbWindows,
+        lockedWindowWines,
+        [3, 9]
+      )
+
+      const march = result.find(e => e.date === '2026-03-01')!
+      expect(march).toBeDefined()
+      expect(march.locked).toBe(true)
+      expect(march.wines).toHaveLength(0)
+
+      // A (displaced) should also appear somewhere later
+      const laterEntries = result.filter(e => e.date > '2026-03-01')
+      const aShownLater = laterEntries.some(e =>
+        e.wines.some(w => w.id === 'a')
+      )
+      expect(aShownLater).toBe(true)
+    })
+  })
 })
