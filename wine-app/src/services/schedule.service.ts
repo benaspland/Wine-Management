@@ -929,6 +929,36 @@ export class ScheduleService {
     return `${year + 1}-${String(sortedMonths[0]).padStart(2, '0')}-01`
   }
 
+  /**
+   * Estimate how many bottles will be at home on a future date, assuming
+   * consumption proceeds at the configured annual rate from `now` until
+   * `targetDate`. Used to validate manual promote/delivery decisions
+   * against the cellar capacity on the *day of the delivery* rather than
+   * today — the scheduler itself already plans around this assumption.
+   *
+   * Never returns less than 0. If the target is in the past or equal to
+   * `now`, no consumption is subtracted.
+   */
+  static projectHomeAtDate(
+    currentHome: number,
+    targetDate: string,
+    annualConsumptionTarget: number,
+    now: Date = new Date()
+  ): number {
+    const target = new Date(targetDate)
+    if (isNaN(target.getTime())) return currentHome
+
+    const msPerMonth = (365.25 * 24 * 60 * 60 * 1000) / 12
+    const monthsUntil = Math.max(
+      0,
+      (target.getTime() - now.getTime()) / msPerMonth
+    )
+    const estimatedConsumption = Math.floor(
+      (annualConsumptionTarget * monthsUntil) / 12
+    )
+    return Math.max(0, currentHome - estimatedConsumption)
+  }
+
   // Helper methods
   private static groupWinesByTier(wines: Wine[]): Record<number, Wine[]> {
     const grouped: Record<number, Wine[]> = {}
