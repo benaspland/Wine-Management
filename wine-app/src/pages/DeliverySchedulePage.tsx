@@ -3,25 +3,9 @@ import { useWineStore } from '../store/wineStore'
 import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 import { ScheduleService } from '../services/schedule.service'
+import type { DeliveryDisplayEntry } from '../services/schedule.service'
 import MessageModal from '../components/MessageModal'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
-
-interface DeliveryDisplayEntry {
-  date: string
-  windowId: string
-  status: string
-  locked: boolean
-  wines: Array<{
-    id: string
-    name: string
-    producer?: string
-    vintage: number
-    region?: string
-    tier: number
-    quantity: number
-    format?: string
-  }>
-}
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
@@ -61,7 +45,7 @@ export default function DeliverySchedulePage() {
         .filter(w => w.quantity_at_home > 0)
         .reduce((sum, w) => sum + w.quantity_at_home, 0)
 
-      // Generate delivery schedule for storage wines
+      // Generate in-memory delivery schedule for storage wines
       const deliveries = ScheduleService.generateDeliverySchedule(
         wines,
         config.max_home_capacity,
@@ -71,69 +55,34 @@ export default function DeliverySchedulePage() {
         config.min_delivery_bottles || 24
       )
 
-      // Get all delivery windows from database
-      const windows = await db.getAllDeliveryWindows()
-      const windowMap = new Map(windows.map(w => [w.scheduled_date, w]))
-
-      // Build display entries from generated schedule
-      const displayEntries: DeliveryDisplayEntry[] = deliveries.map(delivery => {
-        const wine = wines.find(w => w.id === delivery.wine_id)
-        const window = windowMap.get(delivery.scheduled_date)
-
-        return {
-          date: delivery.scheduled_date,
-          windowId: window?.id || '',
-          status: delivery.status,
-          locked: window?.locked || false,
-          wines: wine ? [{
-            id: wine.id,
-            name: wine.name,
-            producer: wine.producer,
-            vintage: wine.vintage,
-            region: wine.region,
-            tier: wine.tier,
-            quantity: delivery.quantity,
-            format: wine.format,
-          }] : [],
-        }
-      })
-
-      // Group by date
-      const grouped = new Map<string, DeliveryDisplayEntry>()
-      for (const entry of displayEntries) {
-        const existing = grouped.get(entry.date)
-        if (existing) {
-          existing.wines.push(...entry.wines)
-        } else {
-          grouped.set(entry.date, entry)
+      // Fetch DB windows and their curated wine lists (for locked windows)
+      const dbWindows = await db.getAllDeliveryWindows()
+      const lockedWindowWines = new Map<
+        string,
+        Array<{ wine_id: string; quantity: number }>
+      >()
+      for (const w of dbWindows) {
+        if (w.locked) {
+          const wws = await db.getDeliveryWindowWines(w.id)
+          lockedWindowWines.set(
+            w.id,
+            wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
+          )
         }
       }
 
-      // For locked windows, overlay DB-backed wine lists (manual curation)
-      for (const [, entry] of grouped) {
-        if (entry.locked && entry.windowId) {
-          const dbWines = await db.getDeliveryWindowWines(entry.windowId)
-          if (dbWines.length > 0) {
-            entry.wines = dbWines
-              .map(dw => {
-                const wine = wines.find(w => w.id === dw.wine_id)
-                return wine ? {
-                  id: wine.id,
-                  name: wine.name,
-                  producer: wine.producer,
-                  vintage: wine.vintage,
-                  region: wine.region,
-                  tier: wine.tier,
-                  quantity: dw.quantity,
-                  format: wine.format,
-                } : null
-              })
-              .filter((w): w is NonNullable<typeof w> => w !== null)
-          }
-        }
-      }
+      // Reconcile the in-memory schedule with DB-backed locked windows.
+      // Displaced wines (deferred out of a locked window) are relocated to
+      // the next unlocked delivery so they don't vanish from the schedule.
+      const displaySchedule = ScheduleService.buildDisplaySchedule(
+        deliveries,
+        wines,
+        dbWindows,
+        lockedWindowWines,
+        DELIVERY_CONFIG.months as [number, number]
+      )
 
-      setDeliverySchedule(Array.from(grouped.values()).sort((a, b) => a.date.localeCompare(b.date)))
+      setDeliverySchedule(displaySchedule)
     } catch (error) {
       setMessage({
         type: 'error',

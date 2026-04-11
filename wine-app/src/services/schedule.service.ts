@@ -26,6 +26,32 @@ export interface DrinkingScheduleEntry {
   status: string
 }
 
+export interface DeliveryDisplayWine {
+  id: string
+  name: string
+  producer?: string
+  vintage: number
+  region?: string
+  tier: number
+  quantity: number
+  format?: string
+}
+
+export interface DeliveryDisplayEntry {
+  date: string
+  windowId: string
+  status: string
+  locked: boolean
+  wines: DeliveryDisplayWine[]
+}
+
+export interface DisplayDbWindow {
+  id: string
+  scheduled_date: string
+  status: string
+  locked: boolean
+}
+
 export class ScheduleService {
   /**
    * Generate drinking schedule based on user's rules:
@@ -684,6 +710,225 @@ export class ScheduleService {
     return deliveries
   }
 
+  /**
+   * Build the display-ready delivery schedule by reconciling the in-memory
+   * scheduler output with DB-backed delivery windows.
+   *
+   * For locked windows, the DB curation is the source of truth. This means:
+   * - Wines the scheduler placed at a locked date but aren't in the curation
+   *   (e.g. the user deferred them) get relocated to the next unlocked
+   *   delivery so they don't silently disappear from the schedule.
+   * - Wines committed to a locked window (e.g. via promote) are removed from
+   *   other delivery dates the scheduler would otherwise put them at, to
+   *   avoid double-counting.
+   *
+   * If no unlocked delivery exists after a displaced wine's original date,
+   * a new delivery entry is created at the next configured delivery month.
+   */
+  static buildDisplaySchedule(
+    deliveries: DeliveryScheduleEntry[],
+    wines: Wine[],
+    dbWindows: DisplayDbWindow[],
+    lockedWindowWines: Map<string, Array<{ wine_id: string; quantity: number }>>,
+    deliveryMonths: [number, number] = [3, 9]
+  ): DeliveryDisplayEntry[] {
+    const wineMap = new Map(wines.map(w => [w.id, w]))
+
+    const toDisplayWine = (
+      wineId: string,
+      quantity: number
+    ): DeliveryDisplayWine | null => {
+      const wine = wineMap.get(wineId)
+      if (!wine) return null
+      return {
+        id: wine.id,
+        name: wine.name,
+        producer: wine.producer,
+        vintage: wine.vintage,
+        region: wine.region,
+        tier: wine.tier,
+        quantity,
+        format: wine.format,
+      }
+    }
+
+    // 1. Group scheduler output by date
+    const grouped = new Map<string, DeliveryDisplayEntry>()
+    const dbByDate = new Map(dbWindows.map(w => [w.scheduled_date, w]))
+
+    for (const d of deliveries) {
+      const displayWine = toDisplayWine(d.wine_id, d.quantity)
+      if (!displayWine) continue
+
+      const existing = grouped.get(d.scheduled_date)
+      if (existing) {
+        existing.wines.push(displayWine)
+      } else {
+        const dbWindow = dbByDate.get(d.scheduled_date)
+        grouped.set(d.scheduled_date, {
+          date: d.scheduled_date,
+          windowId: dbWindow?.id || '',
+          status: d.status,
+          locked: dbWindow?.locked || false,
+          wines: [displayWine],
+        })
+      }
+    }
+
+    // 2. Ensure locked DB windows always appear, even if scheduler produced
+    //    nothing for them (e.g. all their wines were already delivered).
+    for (const dbWindow of dbWindows) {
+      if (dbWindow.locked && !grouped.has(dbWindow.scheduled_date)) {
+        grouped.set(dbWindow.scheduled_date, {
+          date: dbWindow.scheduled_date,
+          windowId: dbWindow.id,
+          status: dbWindow.status,
+          locked: true,
+          wines: [],
+        })
+      }
+    }
+
+    // 3. Collect all wine IDs committed to any locked window (for dedupe)
+    const committedWineIds = new Set<string>()
+    for (const dbWindow of dbWindows) {
+      if (!dbWindow.locked) continue
+      const dbWines = lockedWindowWines.get(dbWindow.id) || []
+      for (const dw of dbWines) committedWineIds.add(dw.wine_id)
+    }
+
+    // 4. Reconcile locked windows: replace scheduler output with DB curation,
+    //    collecting displaced wines (present in scheduler output but not in
+    //    the DB curation for that locked date).
+    const displaced: Array<{
+      wineId: string
+      quantity: number
+      afterDate: string
+    }> = []
+
+    for (const entry of grouped.values()) {
+      if (!entry.locked || !entry.windowId) continue
+      const dbWines = lockedWindowWines.get(entry.windowId) || []
+      const dbWineIds = new Set(dbWines.map(w => w.wine_id))
+
+      // Collect wines the scheduler placed here that aren't in DB curation.
+      // Skip any wine already committed to another locked window — that's
+      // not a defer, it's a promote conflict handled below.
+      for (const sw of entry.wines) {
+        if (!dbWineIds.has(sw.id) && !committedWineIds.has(sw.id)) {
+          displaced.push({
+            wineId: sw.id,
+            quantity: sw.quantity,
+            afterDate: entry.date,
+          })
+        }
+      }
+
+      // Replace entry wines with DB curation (source of truth for locked)
+      entry.wines = dbWines
+        .map(dw => toDisplayWine(dw.wine_id, dw.quantity))
+        .filter((w): w is DeliveryDisplayWine => w !== null)
+    }
+
+    // 5. Remove committed wines from unlocked entries. The scheduler doesn't
+    //    know about locked windows, so it may have placed a committed wine
+    //    at both its original date and also at a locked date. Strip the
+    //    duplicate from the unlocked entry to avoid double-counting.
+    for (const entry of grouped.values()) {
+      if (entry.locked) continue
+      entry.wines = entry.wines.filter(w => !committedWineIds.has(w.id))
+    }
+
+    // 6. Relocate displaced wines to the next unlocked delivery after the
+    //    locked date. If none exists, create a new delivery entry at the
+    //    next configured delivery month.
+    const sortedDates = () =>
+      Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b))
+
+    for (const d of displaced) {
+      const displayWine = toDisplayWine(d.wineId, d.quantity)
+      if (!displayWine) continue
+
+      let targetEntry: DeliveryDisplayEntry | null = null
+
+      // First, try to find an existing unlocked delivery after afterDate
+      for (const date of sortedDates()) {
+        if (date <= d.afterDate) continue
+        const entry = grouped.get(date)!
+        if (!entry.locked) {
+          targetEntry = entry
+          break
+        }
+      }
+
+      // Otherwise, walk forward through successive delivery-month dates
+      // until we find one that either doesn't exist yet or isn't locked.
+      if (!targetEntry) {
+        let candidate = ScheduleService.nextDeliveryDate(
+          d.afterDate,
+          deliveryMonths
+        )
+        let guard = 0
+        while (guard++ < 50) {
+          const existing = grouped.get(candidate)
+          if (!existing) {
+            targetEntry = {
+              date: candidate,
+              windowId: '',
+              status: 'pending',
+              locked: false,
+              wines: [],
+            }
+            grouped.set(candidate, targetEntry)
+            break
+          }
+          if (!existing.locked) {
+            targetEntry = existing
+            break
+          }
+          candidate = ScheduleService.nextDeliveryDate(
+            candidate,
+            deliveryMonths
+          )
+        }
+      }
+
+      if (!targetEntry) continue
+
+      // Merge with any existing entry for the same wine at the target
+      const existing = targetEntry.wines.find(w => w.id === d.wineId)
+      if (existing) {
+        existing.quantity += d.quantity
+      } else {
+        targetEntry.wines.push(displayWine)
+      }
+    }
+
+    // 7. Sort and drop empty unlocked entries (keep empty locked ones so
+    //    the user can still see/manage them).
+    return Array.from(grouped.values())
+      .filter(e => e.wines.length > 0 || e.locked)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  /**
+   * Compute the next delivery date after the given date, using the
+   * configured delivery months. Returns YYYY-MM-01.
+   */
+  private static nextDeliveryDate(
+    afterDate: string,
+    deliveryMonths: [number, number]
+  ): string {
+    const [year, month] = afterDate.split('-').map(Number)
+    const sortedMonths = [...deliveryMonths].sort((a, b) => a - b)
+    for (const m of sortedMonths) {
+      if (m > month) {
+        return `${year}-${String(m).padStart(2, '0')}-01`
+      }
+    }
+    return `${year + 1}-${String(sortedMonths[0]).padStart(2, '0')}-01`
+  }
+
   // Helper methods
   private static groupWinesByTier(wines: Wine[]): Record<number, Wine[]> {
     const grouped: Record<number, Wine[]> = {}
@@ -712,8 +957,4 @@ export class ScheduleService {
     // Avoids "THIS YEAR" / "NEXT YEAR" clutter per user feedback
     return ''
   }
-
-  /**
-   * Calculate months between two delivery slots
-   */
 }
