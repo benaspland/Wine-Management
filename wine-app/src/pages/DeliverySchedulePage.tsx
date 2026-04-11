@@ -126,16 +126,25 @@ export default function DeliverySchedulePage() {
       const firstDelivery = deliverySchedule[0]
       if (!firstDelivery) throw new Error('No delivery scheduled')
 
-      // Check capacity
+      // Check capacity at the delivery date, not today: we assume the user
+      // will continue drinking at their configured annual rate between now
+      // and the delivery, freeing space for the incoming bottles. Without
+      // this projection, long-dated deliveries get rejected even when
+      // they'd comfortably fit by the time they actually arrive.
       const config = await db.getCellarConfig()
       const freshWines = await db.getAllWines()
       const currentHome = freshWines.reduce((sum, w) => sum + w.quantity_at_home, 0)
       const firstDeliveryTotal = firstDelivery.wines.reduce((sum, w) => sum + w.quantity, 0)
-      const projectedHome = currentHome + firstDeliveryTotal + quantity
-      if (projectedHome > config.max_home_capacity) {
+      const projectedHomeAtDelivery = ScheduleService.projectHomeAtDate(
+        currentHome,
+        firstDelivery.date,
+        config.annual_consumption_target || 30
+      )
+      const projectedAfterDelivery = projectedHomeAtDelivery + firstDeliveryTotal + quantity
+      if (projectedAfterDelivery > config.max_home_capacity) {
         throw new Error(
-          `Promoting would exceed home capacity. ` +
-          `Current: ${currentHome}, Delivery: ${firstDeliveryTotal}, Adding: ${quantity}, Max: ${config.max_home_capacity}`
+          `Promoting would exceed home capacity on ${firstDelivery.date}. ` +
+          `Projected at delivery: ${projectedHomeAtDelivery}, Delivery: ${firstDeliveryTotal}, Adding: ${quantity}, Max: ${config.max_home_capacity}`
         )
       }
 

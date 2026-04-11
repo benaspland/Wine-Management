@@ -750,6 +750,70 @@ describe('ScheduleService', () => {
       expect(september.wines.map(w => w.id)).toEqual(['b'])
     })
 
+    describe('projectHomeAtDate', () => {
+      it('returns currentHome when target date is today', () => {
+        const now = new Date('2026-03-01T00:00:00Z')
+        const result = ScheduleService.projectHomeAtDate(60, '2026-03-01', 30, now)
+        expect(result).toBe(60)
+      })
+
+      it('returns currentHome when target date is in the past', () => {
+        const now = new Date('2026-06-01T00:00:00Z')
+        const result = ScheduleService.projectHomeAtDate(60, '2026-01-01', 30, now)
+        expect(result).toBe(60)
+      })
+
+      it('subtracts pro-rated consumption for a future delivery', () => {
+        // 6 months away at 30/year → expect ~15 bottles consumed
+        const now = new Date('2026-03-01T00:00:00Z')
+        const result = ScheduleService.projectHomeAtDate(72, '2026-09-01', 30, now)
+        expect(result).toBeGreaterThanOrEqual(56)
+        expect(result).toBeLessThanOrEqual(58)
+      })
+
+      it('clamps to zero when projected consumption exceeds current home', () => {
+        // 12 months away at 30/year → 30 bottles expected; only 10 at home
+        const now = new Date('2026-03-01T00:00:00Z')
+        const result = ScheduleService.projectHomeAtDate(10, '2027-03-01', 30, now)
+        expect(result).toBe(0)
+      })
+
+      it('ignores consumption when annual target is 0', () => {
+        const now = new Date('2026-03-01T00:00:00Z')
+        const result = ScheduleService.projectHomeAtDate(60, '2027-03-01', 0, now)
+        expect(result).toBe(60)
+      })
+
+      it('regression: a long-dated promote that would fit after consumption is not blocked', () => {
+        // Scenario: 72 at home, delivery 11 months away, 12-bottle delivery,
+        // promoting 6 more. Old check: 72 + 12 + 6 = 90 > 80 → rejected.
+        // New check: project consumption of ~27 bottles → ~45 at delivery,
+        // + 12 + 6 = 63 → allowed.
+        const now = new Date('2026-04-01T00:00:00Z')
+        const projectedHome = ScheduleService.projectHomeAtDate(
+          72,
+          '2027-03-01',
+          30,
+          now
+        )
+        const projectedAfterDelivery = projectedHome + 12 + 6
+        expect(projectedAfterDelivery).toBeLessThanOrEqual(80)
+      })
+
+      it('still blocks a near-term promote that would genuinely overflow', () => {
+        // Delivery in 2 weeks → only ~1 bottle consumed; projection stays close to current.
+        const now = new Date('2026-03-01T00:00:00Z')
+        const projectedHome = ScheduleService.projectHomeAtDate(
+          72,
+          '2026-03-15',
+          30,
+          now
+        )
+        const projectedAfterDelivery = projectedHome + 12 + 6
+        expect(projectedAfterDelivery).toBeGreaterThan(80)
+      })
+    })
+
     it('preserves an empty locked window so the user can still see it', () => {
       // User deferred the only wine from a locked window — it's now empty
       // but should still appear in the schedule (so the user can confirm it
