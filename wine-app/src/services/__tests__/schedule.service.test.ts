@@ -501,6 +501,53 @@ describe('ScheduleService', () => {
         expect(deliveryTotals[i]).toBeGreaterThanOrEqual(24)
       }
     })
+
+    it('respects home capacity when a locked delivery occupies a slot', () => {
+      // Scenario: capacity=100, consumption=60/year. A locked first delivery
+      // has 94 bottles. The scheduler should simulate those 94 arriving, and
+      // only schedule subsequent deliveries that fit within remaining capacity
+      // (accounting for consumption between deliveries).
+      const wines: Wine[] = Array.from({ length: 20 }, (_, i) =>
+        makeWine({
+          id: `w${i}`,
+          producer: `Producer ${i}`,
+          tier: 1 as const,
+          quantity_in_storage: 6,
+        })
+      )
+      // 20 wines × 6 = 120 total. First 16 wines (96 bottles) committed to locked delivery.
+      const committedQuantities: Record<string, number> = {}
+      const lockedWineList: Array<{ wine_id: string; quantity: number }> = []
+      for (let i = 0; i < 16; i++) {
+        committedQuantities[`w${i}`] = 6
+        lockedWineList.push({ wine_id: `w${i}`, quantity: 6 })
+      }
+      // Locked delivery at first delivery month
+      const lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>> = {
+        '2026-09-01': lockedWineList,
+      }
+
+      const deliveries = ScheduleService.generateDeliverySchedule(
+        wines, 100, 0, [3, 9], 60, 24,
+        committedQuantities, lockedDeliveries
+      )
+
+      // Remaining: 4 wines × 6 = 24 bottles to schedule.
+      // After locked delivery at Sep 2026 (96 bottles), home has 96.
+      // Space = 100 - 96 = 4. Not enough for 24 bottles.
+      // Scheduler must wait for consumption to free space before delivering.
+      const totalScheduled = deliveries.reduce((sum, d) => sum + d.quantity, 0)
+      expect(totalScheduled).toBe(24)
+
+      // No delivery should be at the locked date
+      const atLockedDate = deliveries.filter(d => d.scheduled_date === '2026-09-01')
+      expect(atLockedDate).toHaveLength(0)
+
+      // The scheduled delivery must be after Sep 2026 (needs time for consumption)
+      for (const d of deliveries) {
+        expect(d.scheduled_date > '2026-09-01').toBe(true)
+      }
+    })
   })
 
   describe('buildDisplaySchedule', () => {

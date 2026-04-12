@@ -367,7 +367,8 @@ export class ScheduleService {
     deliveryMonths: [number, number] = [3, 9],
     annualConsumptionTarget: number = 30,
     minDeliveryBottles: number = 24,
-    committedQuantities: Record<string, number> = {}
+    committedQuantities: Record<string, number> = {},
+    lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>> = {}
   ): DeliveryScheduleEntry[] {
     console.log('[ScheduleService] ✓ generateDeliverySchedule called')
     const storageWines = allWines.filter(w => w.quantity_in_storage > 0)
@@ -544,6 +545,23 @@ export class ScheduleService {
         // Max 2 deliveries per year
         if (!deliveriesPerYear[year]) deliveriesPerYear[year] = 0
         if (deliveriesPerYear[year] >= 2) continue
+
+        // If a locked delivery exists for this date, simulate those bottles
+        // arriving at home and skip — the locked window IS the delivery for
+        // this slot, so the scheduler shouldn't plan its own.
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-01`
+        const lockedWines = lockedDeliveries[dateStr]
+        if (lockedWines && lockedWines.length > 0) {
+          for (const lw of lockedWines) {
+            if (home[lw.wine_id] !== undefined) {
+              home[lw.wine_id] += lw.quantity
+            } else if (wineMap[lw.wine_id]) {
+              home[lw.wine_id] = lw.quantity
+            }
+          }
+          deliveriesPerYear[year]++
+          continue
+        }
 
         // 4.1 Check available space at home
         const homeTotal = Object.values(home).reduce((a, b) => a + b, 0)
