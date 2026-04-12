@@ -730,7 +730,8 @@ export class ScheduleService {
     wines: Wine[],
     dbWindows: DisplayDbWindow[],
     lockedWindowWines: Map<string, Array<{ wine_id: string; quantity: number }>>,
-    deliveryMonths: [number, number] = [3, 9]
+    deliveryMonths: [number, number] = [3, 9],
+    minDeliveryBottles: number = 24
   ): DeliveryDisplayEntry[] {
     const wineMap = new Map(wines.map(w => [w.id, w]))
 
@@ -904,7 +905,51 @@ export class ScheduleService {
       }
     }
 
-    // 7. Sort and drop empty unlocked entries (keep empty locked ones so
+    // 7. Consolidate sub-minimum unlocked entries. After removing committed
+    //    wines (step 5) and relocating displaced wines (step 6), some
+    //    unlocked entries may have dropped below the configured minimum
+    //    bottle count. Merge their wines forward into the next unlocked
+    //    entry so we don't produce unrealistically small deliveries.
+    const sortedForMerge = Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+    const deletedDates = new Set<string>()
+
+    for (let i = 0; i < sortedForMerge.length; i++) {
+      const [date, entry] = sortedForMerge[i]
+      if (deletedDates.has(date) || entry.locked || entry.wines.length === 0) continue
+
+      const totalBottles = entry.wines.reduce((sum, w) => sum + w.quantity, 0)
+      if (totalBottles >= minDeliveryBottles) continue
+
+      // Find next unlocked entry with wines
+      let targetEntry: DeliveryDisplayEntry | null = null
+      for (let j = i + 1; j < sortedForMerge.length; j++) {
+        const [nextDate, nextEntry] = sortedForMerge[j]
+        if (deletedDates.has(nextDate)) continue
+        if (!nextEntry.locked) {
+          targetEntry = nextEntry
+          break
+        }
+      }
+
+      // No later unlocked entry — this is effectively the final delivery; keep it
+      if (!targetEntry) continue
+
+      // Merge wines into target entry
+      for (const wine of entry.wines) {
+        const existing = targetEntry.wines.find(w => w.id === wine.id)
+        if (existing) {
+          existing.quantity += wine.quantity
+        } else {
+          targetEntry.wines.push(wine)
+        }
+      }
+
+      grouped.delete(date)
+      deletedDates.add(date)
+    }
+
+    // 8. Sort and drop empty unlocked entries (keep empty locked ones so
     //    the user can still see/manage them).
     return Array.from(grouped.values())
       .filter(e => e.wines.length > 0 || e.locked)
