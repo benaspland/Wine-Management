@@ -55,31 +55,37 @@ export default function DeliverySchedulePage() {
         .filter(w => w.quantity_at_home > 0)
         .reduce((sum, w) => sum + w.quantity_at_home, 0)
 
-      // Generate in-memory delivery schedule for storage wines
+      // Fetch DB windows and their curated wine lists (for locked windows)
+      // before generating the schedule so committed quantities can be
+      // excluded from the scheduler — it then plans around them naturally.
+      const dbWindows = await db.getAllDeliveryWindows()
+      const lockedWindowWines = new Map<
+        string,
+        Array<{ wine_id: string; quantity: number }>
+      >()
+      const committedQuantities: Record<string, number> = {}
+      for (const w of dbWindows) {
+        if (w.locked) {
+          const wws = await db.getDeliveryWindowWines(w.id)
+          const wineList = wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
+          lockedWindowWines.set(w.id, wineList)
+          for (const ww of wineList) {
+            committedQuantities[ww.wine_id] = (committedQuantities[ww.wine_id] || 0) + ww.quantity
+          }
+        }
+      }
+
+      // Generate in-memory delivery schedule for storage wines, excluding
+      // bottles already committed to locked windows
       const deliveries = ScheduleService.generateDeliverySchedule(
         wines,
         config.max_home_capacity,
         totalAtHome,
         DELIVERY_CONFIG.months as [number, number],
         config.annual_consumption_target || 30,
-        config.min_delivery_bottles || 24
+        config.min_delivery_bottles || 24,
+        committedQuantities
       )
-
-      // Fetch DB windows and their curated wine lists (for locked windows)
-      const dbWindows = await db.getAllDeliveryWindows()
-      const lockedWindowWines = new Map<
-        string,
-        Array<{ wine_id: string; quantity: number }>
-      >()
-      for (const w of dbWindows) {
-        if (w.locked) {
-          const wws = await db.getDeliveryWindowWines(w.id)
-          lockedWindowWines.set(
-            w.id,
-            wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
-          )
-        }
-      }
 
       // Reconcile the in-memory schedule with DB-backed locked windows.
       // Displaced wines (deferred out of a locked window) are relocated to
@@ -89,8 +95,7 @@ export default function DeliverySchedulePage() {
         wines,
         dbWindows,
         lockedWindowWines,
-        DELIVERY_CONFIG.months as [number, number],
-        config.min_delivery_bottles || 24
+        DELIVERY_CONFIG.months as [number, number]
       )
 
       setDeliverySchedule(displaySchedule)

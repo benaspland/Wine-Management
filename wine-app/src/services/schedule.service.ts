@@ -366,7 +366,8 @@ export class ScheduleService {
     currentBottlesAtHome: number = 0,
     deliveryMonths: [number, number] = [3, 9],
     annualConsumptionTarget: number = 30,
-    minDeliveryBottles: number = 24
+    minDeliveryBottles: number = 24,
+    committedQuantities: Record<string, number> = {}
   ): DeliveryScheduleEntry[] {
     console.log('[ScheduleService] ✓ generateDeliverySchedule called')
     const storageWines = allWines.filter(w => w.quantity_in_storage > 0)
@@ -416,6 +417,15 @@ export class ScheduleService {
         wineMap[w.id] = w
       }
     })
+
+    // Subtract bottles already committed to locked delivery windows
+    // (e.g. via promote). These are spoken for and shouldn't be
+    // re-scheduled into other deliveries.
+    for (const [wineId, qty] of Object.entries(committedQuantities)) {
+      if (remaining[wineId] !== undefined) {
+        remaining[wineId] = Math.max(0, remaining[wineId] - qty)
+      }
+    }
 
     const candidateWines = Object.values(wineMap)
     const totalBottlesAvailable = candidateWines.reduce((sum, w) => sum + w.quantity_in_storage, 0)
@@ -730,8 +740,7 @@ export class ScheduleService {
     wines: Wine[],
     dbWindows: DisplayDbWindow[],
     lockedWindowWines: Map<string, Array<{ wine_id: string; quantity: number }>>,
-    deliveryMonths: [number, number] = [3, 9],
-    minDeliveryBottles: number = 24
+    deliveryMonths: [number, number] = [3, 9]
   ): DeliveryDisplayEntry[] {
     const wineMap = new Map(wines.map(w => [w.id, w]))
 
@@ -790,17 +799,11 @@ export class ScheduleService {
       }
     }
 
-    // 3. Collect all wine IDs committed to any locked window (for dedupe)
-    const committedWineIds = new Set<string>()
-    for (const dbWindow of dbWindows) {
-      if (!dbWindow.locked) continue
-      const dbWines = lockedWindowWines.get(dbWindow.id) || []
-      for (const dw of dbWines) committedWineIds.add(dw.wine_id)
-    }
-
-    // 4. Reconcile locked windows: replace scheduler output with DB curation,
+    // 3. Reconcile locked windows: replace scheduler output with DB curation,
     //    collecting displaced wines (present in scheduler output but not in
-    //    the DB curation for that locked date).
+    //    the DB curation for that locked date). Since committed wines are now
+    //    excluded from the scheduler via committedQuantities, they won't
+    //    appear in unlocked entries — no stripping needed.
     const displaced: Array<{
       wineId: string
       quantity: number
@@ -812,11 +815,10 @@ export class ScheduleService {
       const dbWines = lockedWindowWines.get(entry.windowId) || []
       const dbWineIds = new Set(dbWines.map(w => w.wine_id))
 
-      // Collect wines the scheduler placed here that aren't in DB curation.
-      // Skip any wine already committed to another locked window — that's
-      // not a defer, it's a promote conflict handled below.
+      // Collect wines the scheduler placed here that aren't in DB curation
+      // (e.g. the user deferred them out of this locked window).
       for (const sw of entry.wines) {
-        if (!dbWineIds.has(sw.id) && !committedWineIds.has(sw.id)) {
+        if (!dbWineIds.has(sw.id)) {
           displaced.push({
             wineId: sw.id,
             quantity: sw.quantity,
@@ -831,16 +833,7 @@ export class ScheduleService {
         .filter((w): w is DeliveryDisplayWine => w !== null)
     }
 
-    // 5. Remove committed wines from unlocked entries. The scheduler doesn't
-    //    know about locked windows, so it may have placed a committed wine
-    //    at both its original date and also at a locked date. Strip the
-    //    duplicate from the unlocked entry to avoid double-counting.
-    for (const entry of grouped.values()) {
-      if (entry.locked) continue
-      entry.wines = entry.wines.filter(w => !committedWineIds.has(w.id))
-    }
-
-    // 6. Relocate displaced wines to the next unlocked delivery after the
+    // 4. Relocate displaced wines to the next unlocked delivery after the
     //    locked date. If none exists, create a new delivery entry at the
     //    next configured delivery month.
     const sortedDates = () =>
@@ -905,51 +898,7 @@ export class ScheduleService {
       }
     }
 
-    // 7. Consolidate sub-minimum unlocked entries. After removing committed
-    //    wines (step 5) and relocating displaced wines (step 6), some
-    //    unlocked entries may have dropped below the configured minimum
-    //    bottle count. Merge their wines forward into the next unlocked
-    //    entry so we don't produce unrealistically small deliveries.
-    const sortedForMerge = Array.from(grouped.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-    const deletedDates = new Set<string>()
-
-    for (let i = 0; i < sortedForMerge.length; i++) {
-      const [date, entry] = sortedForMerge[i]
-      if (deletedDates.has(date) || entry.locked || entry.wines.length === 0) continue
-
-      const totalBottles = entry.wines.reduce((sum, w) => sum + w.quantity, 0)
-      if (totalBottles >= minDeliveryBottles) continue
-
-      // Find next unlocked entry with wines
-      let targetEntry: DeliveryDisplayEntry | null = null
-      for (let j = i + 1; j < sortedForMerge.length; j++) {
-        const [nextDate, nextEntry] = sortedForMerge[j]
-        if (deletedDates.has(nextDate)) continue
-        if (!nextEntry.locked) {
-          targetEntry = nextEntry
-          break
-        }
-      }
-
-      // No later unlocked entry — this is effectively the final delivery; keep it
-      if (!targetEntry) continue
-
-      // Merge wines into target entry
-      for (const wine of entry.wines) {
-        const existing = targetEntry.wines.find(w => w.id === wine.id)
-        if (existing) {
-          existing.quantity += wine.quantity
-        } else {
-          targetEntry.wines.push(wine)
-        }
-      }
-
-      grouped.delete(date)
-      deletedDates.add(date)
-    }
-
-    // 8. Sort and drop empty unlocked entries (keep empty locked ones so
+    // 5. Sort and drop empty unlocked entries (keep empty locked ones so
     //    the user can still see/manage them).
     return Array.from(grouped.values())
       .filter(e => e.wines.length > 0 || e.locked)
