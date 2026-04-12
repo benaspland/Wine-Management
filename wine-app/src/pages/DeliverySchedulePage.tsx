@@ -408,7 +408,7 @@ export default function DeliverySchedulePage() {
                 )}
               </div>
             )
-          }))
+          })
         )}
       </div>
 
