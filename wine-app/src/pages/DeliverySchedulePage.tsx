@@ -89,7 +89,8 @@ export default function DeliverySchedulePage() {
         wines,
         dbWindows,
         lockedWindowWines,
-        DELIVERY_CONFIG.months as [number, number]
+        DELIVERY_CONFIG.months as [number, number],
+        config.min_delivery_bottles || 24
       )
 
       setDeliverySchedule(displaySchedule)

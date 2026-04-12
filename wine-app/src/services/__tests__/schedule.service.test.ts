@@ -517,7 +517,8 @@ describe('ScheduleService', () => {
         [wineA, wineB, wineC],
         [],
         new Map(),
-        [3, 9]
+        [3, 9],
+        1
       )
 
       expect(result).toHaveLength(2)
@@ -557,7 +558,8 @@ describe('ScheduleService', () => {
         [wineA, wineB, wineC],
         dbWindows,
         lockedWindowWines,
-        [3, 9]
+        [3, 9],
+        1
       )
 
       // The locked window should show DB-curated wines (b, c) — not a.
@@ -601,7 +603,8 @@ describe('ScheduleService', () => {
         [wineA, wineB, wineC, wineD],
         dbWindows,
         lockedWindowWines,
-        [3, 9]
+        [3, 9],
+        1
       )
 
       // March is locked with B + C only
@@ -641,7 +644,8 @@ describe('ScheduleService', () => {
         [wineA, wineB],
         dbWindows,
         lockedWindowWines,
-        [3, 9]
+        [3, 9],
+        1
       )
 
       expect(result).toHaveLength(2)
@@ -687,7 +691,8 @@ describe('ScheduleService', () => {
         [wineA, wineB, wineC],
         dbWindows,
         lockedWindowWines,
-        [3, 9]
+        [3, 9],
+        1
       )
 
       // A should end up in a new unlocked delivery — March 2027 (next March
@@ -732,7 +737,8 @@ describe('ScheduleService', () => {
         [wineA, wineB, wineC],
         dbWindows,
         lockedWindowWines,
-        [3, 9]
+        [3, 9],
+        1
       )
 
       // C must appear exactly once
@@ -748,6 +754,102 @@ describe('ScheduleService', () => {
       // September should only have B
       const september = result.find(e => e.date === '2026-09-01')!
       expect(september.wines.map(w => w.id)).toEqual(['b'])
+    })
+
+    it('consolidates sub-minimum unlocked entries after committed wine removal', () => {
+      // Scenario: scheduler created three deliveries. March is locked and wine e
+      // was promoted into it from September, dropping September to 18 bottles
+      // (below the 24-bottle minimum). September's wines should merge into
+      // the next unlocked delivery (March 2027).
+      const wines = [
+        makeWine({ id: 'a', producer: 'A', quantity_in_storage: 6 }),
+        makeWine({ id: 'b', producer: 'B', quantity_in_storage: 6 }),
+        makeWine({ id: 'c', producer: 'C', quantity_in_storage: 6 }),
+        makeWine({ id: 'd', producer: 'D', quantity_in_storage: 6 }),
+        makeWine({ id: 'e', producer: 'E', quantity_in_storage: 6 }),
+        makeWine({ id: 'f', producer: 'F', quantity_in_storage: 6 }),
+        makeWine({ id: 'g', producer: 'G', quantity_in_storage: 6 }),
+        makeWine({ id: 'h', producer: 'H', quantity_in_storage: 6 }),
+        makeWine({ id: 'i', producer: 'I', quantity_in_storage: 6 }),
+        makeWine({ id: 'j', producer: 'J', quantity_in_storage: 6 }),
+        makeWine({ id: 'k', producer: 'K', quantity_in_storage: 6 }),
+        makeWine({ id: 'l', producer: 'L', quantity_in_storage: 6 }),
+      ]
+
+      // Scheduler placed a-d in March (24), e-h in September (24), i-l in March 2027 (24)
+      const deliveries: DeliveryScheduleEntry[] = [
+        { wine_id: 'a', quantity: 6, scheduled_date: '2026-03-01', tier: 1, status: 'pending' },
+        { wine_id: 'b', quantity: 6, scheduled_date: '2026-03-01', tier: 1, status: 'pending' },
+        { wine_id: 'c', quantity: 6, scheduled_date: '2026-03-01', tier: 1, status: 'pending' },
+        { wine_id: 'd', quantity: 6, scheduled_date: '2026-03-01', tier: 1, status: 'pending' },
+        { wine_id: 'e', quantity: 6, scheduled_date: '2026-09-01', tier: 1, status: 'pending' },
+        { wine_id: 'f', quantity: 6, scheduled_date: '2026-09-01', tier: 1, status: 'pending' },
+        { wine_id: 'g', quantity: 6, scheduled_date: '2026-09-01', tier: 1, status: 'pending' },
+        { wine_id: 'h', quantity: 6, scheduled_date: '2026-09-01', tier: 1, status: 'pending' },
+        { wine_id: 'i', quantity: 6, scheduled_date: '2027-03-01', tier: 1, status: 'pending' },
+        { wine_id: 'j', quantity: 6, scheduled_date: '2027-03-01', tier: 1, status: 'pending' },
+        { wine_id: 'k', quantity: 6, scheduled_date: '2027-03-01', tier: 1, status: 'pending' },
+        { wine_id: 'l', quantity: 6, scheduled_date: '2027-03-01', tier: 1, status: 'pending' },
+      ]
+
+      // March is locked with a-d PLUS wine e was promoted into it
+      const dbWindows = [
+        { id: 'win-march', scheduled_date: '2026-03-01', status: 'planned', locked: true },
+      ]
+      const lockedWindowWines = new Map([
+        ['win-march', [
+          { wine_id: 'a', quantity: 6 },
+          { wine_id: 'b', quantity: 6 },
+          { wine_id: 'c', quantity: 6 },
+          { wine_id: 'd', quantity: 6 },
+          { wine_id: 'e', quantity: 6 }, // promoted from September
+        ]],
+      ])
+
+      // With min=24, September (now only f,g,h = 18 bottles) should merge into March 2027
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries, wines, dbWindows, lockedWindowWines, [3, 9], 24
+      )
+
+      // March should have 5 wines (a-e)
+      const march = result.find(e => e.date === '2026-03-01')!
+      expect(march.wines.length).toBe(5)
+      expect(march.wines.reduce((sum, w) => sum + w.quantity, 0)).toBe(30)
+
+      // September (18 bottles) should NOT appear as its own delivery
+      const september = result.find(e => e.date === '2026-09-01')
+      expect(september).toBeUndefined()
+
+      // March 2027 should now have f,g,h merged in alongside i,j,k,l
+      const march2027 = result.find(e => e.date === '2027-03-01')!
+      expect(march2027).toBeDefined()
+      const allIds = march2027.wines.map(w => w.id).sort()
+      expect(allIds).toEqual(['f', 'g', 'h', 'i', 'j', 'k', 'l'])
+      expect(march2027.wines.reduce((sum, w) => sum + w.quantity, 0)).toBe(42)
+    })
+
+    it('keeps sub-minimum entry when it is the last unlocked delivery', () => {
+      // If the sub-minimum entry is the final delivery, keep it (final delivery exception)
+      const wines = [
+        makeWine({ id: 'a', producer: 'A', quantity_in_storage: 6 }),
+        makeWine({ id: 'b', producer: 'B', quantity_in_storage: 6 }),
+        makeWine({ id: 'c', producer: 'C', quantity_in_storage: 6 }),
+      ]
+
+      // Only one delivery with 18 bottles (< 24 min)
+      const deliveries: DeliveryScheduleEntry[] = [
+        { wine_id: 'a', quantity: 6, scheduled_date: '2026-09-01', tier: 1, status: 'pending' },
+        { wine_id: 'b', quantity: 6, scheduled_date: '2026-09-01', tier: 1, status: 'pending' },
+        { wine_id: 'c', quantity: 6, scheduled_date: '2026-09-01', tier: 1, status: 'pending' },
+      ]
+
+      const result = ScheduleService.buildDisplaySchedule(
+        deliveries, wines, [], new Map(), [3, 9], 24
+      )
+
+      // Should keep the entry even though below minimum — it's the last one
+      expect(result.length).toBe(1)
+      expect(result[0].wines.length).toBe(3)
     })
 
     describe('projectHomeAtDate', () => {
@@ -839,7 +941,8 @@ describe('ScheduleService', () => {
         [wineA],
         dbWindows,
         lockedWindowWines,
-        [3, 9]
+        [3, 9],
+        1
       )
 
       const march = result.find(e => e.date === '2026-03-01')!
