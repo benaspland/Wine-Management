@@ -64,11 +64,13 @@ export default function DeliverySchedulePage() {
         Array<{ wine_id: string; quantity: number }>
       >()
       const committedQuantities: Record<string, number> = {}
+      const lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>> = {}
       for (const w of dbWindows) {
         if (w.locked) {
           const wws = await db.getDeliveryWindowWines(w.id)
           const wineList = wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
           lockedWindowWines.set(w.id, wineList)
+          lockedDeliveries[w.scheduled_date] = wineList
           for (const ww of wineList) {
             committedQuantities[ww.wine_id] = (committedQuantities[ww.wine_id] || 0) + ww.quantity
           }
@@ -76,7 +78,8 @@ export default function DeliverySchedulePage() {
       }
 
       // Generate in-memory delivery schedule for storage wines, excluding
-      // bottles already committed to locked windows
+      // bottles already committed to locked windows and simulating locked
+      // deliveries arriving so capacity calculations stay accurate.
       const deliveries = ScheduleService.generateDeliverySchedule(
         wines,
         config.max_home_capacity,
@@ -84,7 +87,8 @@ export default function DeliverySchedulePage() {
         DELIVERY_CONFIG.months as [number, number],
         config.annual_consumption_target || 30,
         config.min_delivery_bottles || 24,
-        committedQuantities
+        committedQuantities,
+        lockedDeliveries
       )
 
       // Reconcile the in-memory schedule with DB-backed locked windows.
