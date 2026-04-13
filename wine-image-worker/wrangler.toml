@@ -1,3 +1,6 @@
 name = "wine-image-search"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
+
+[vars]
+GOOGLE_CX = "670b39b9c98e64fc0"
