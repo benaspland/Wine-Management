@@ -47,7 +47,7 @@ export default {
       const data = (await response.json()) as GoogleSearchResponse
 
       if (!response.ok) {
-        return jsonResponse({ error: 'Search API error', status: response.status }, 502)
+        return jsonResponse({ error: 'Search API error', status: response.status, details: data }, 502)
       }
 
       const images = (data.items || []).map((item) => ({
@@ -60,7 +60,7 @@ export default {
 
       return jsonResponse({ images })
     } catch (error) {
-      return jsonResponse({ error: 'Internal error' }, 500)
+      return jsonResponse({ error: 'Internal error', message: (error as Error).message }, 500)
     }
   },
 }
