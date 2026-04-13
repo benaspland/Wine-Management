@@ -66,7 +66,7 @@ export default function DeliverySchedulePage() {
       const committedQuantities: Record<string, number> = {}
       const lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>> = {}
       for (const w of dbWindows) {
-        if (w.locked) {
+        if (w.locked && w.status !== 'completed') {
           const wws = await db.getDeliveryWindowWines(w.id)
           const wineList = wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
           lockedWindowWines.set(w.id, wineList)
@@ -256,8 +256,13 @@ export default function DeliverySchedulePage() {
         await workflows.moveToHome(wine.id, wine.quantity)
       }
 
-      // Update window status
-      await db.updateDeliveryWindow(window.id, { status: 'completed' })
+      // Update window status and record actual delivery date
+      const today = new Date()
+      const actualDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      await db.updateDeliveryWindow(window.id, {
+        status: 'completed',
+        scheduled_date: actualDate,
+      })
 
       // Reload wines and regenerate schedule
       await loadWines()
