@@ -803,10 +803,12 @@ export class ScheduleService {
       }
     }
 
-    // 2. Ensure locked DB windows always appear, even if scheduler produced
-    //    nothing for them (e.g. all their wines were already delivered).
+    // 2. Ensure non-completed locked DB windows always appear, even if
+    //    scheduler produced nothing for them (e.g. all their wines were
+    //    deferred). Completed windows are excluded — their wines are
+    //    already at home and reflected in the live wine quantities.
     for (const dbWindow of dbWindows) {
-      if (dbWindow.locked && !grouped.has(dbWindow.scheduled_date)) {
+      if (dbWindow.locked && dbWindow.status !== 'completed' && !grouped.has(dbWindow.scheduled_date)) {
         grouped.set(dbWindow.scheduled_date, {
           date: dbWindow.scheduled_date,
           windowId: dbWindow.id,

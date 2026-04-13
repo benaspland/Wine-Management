@@ -840,12 +840,35 @@ export async function getDeliveryCompletionByWineId(wineId: string): Promise<Del
 }
 
 export async function getFirstDeliveryDateForWine(wineId: string): Promise<string | null> {
-  // Get all deliveries for the wine and find the earliest
-  const deliveries = await queryAll(
-    'SELECT delivered_date FROM delivery_completion_log WHERE wine_id = ? ORDER BY delivered_date ASC',
+  // Check completion log first — actual delivery dates take precedence
+  // (used by consumption validation to allow drinking after delivery)
+  const completed = await queryAll(
+    'SELECT delivered_date FROM delivery_completion_log WHERE wine_id = ? ORDER BY delivered_date ASC LIMIT 1',
     [wineId]
   )
-  return deliveries.length > 0 ? deliveries[0].delivered_date : null
+  if (completed.length > 0) return completed[0].delivered_date
+
+  // Fall back to scheduled (non-completed) delivery windows
+  const scheduled = await queryAll(
+    `SELECT dw.scheduled_date FROM delivery_window dw
+     JOIN delivery_window_wines dww ON dw.id = dww.delivery_window_id
+     WHERE dww.wine_id = ? AND dw.status != 'completed'
+     ORDER BY dw.scheduled_date ASC LIMIT 1`,
+    [wineId]
+  )
+  return scheduled.length > 0 ? scheduled[0].scheduled_date : null
+}
+
+export async function getNextScheduledDeliveryDateForWine(wineId: string): Promise<string | null> {
+  // Return the next non-completed delivery window date for this wine
+  const scheduled = await queryAll(
+    `SELECT dw.scheduled_date FROM delivery_window dw
+     JOIN delivery_window_wines dww ON dw.id = dww.delivery_window_id
+     WHERE dww.wine_id = ? AND dw.status != 'completed'
+     ORDER BY dw.scheduled_date ASC LIMIT 1`,
+    [wineId]
+  )
+  return scheduled.length > 0 ? scheduled[0].scheduled_date : null
 }
 
 // AUDIT LOG OPERATIONS
