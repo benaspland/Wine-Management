@@ -35,7 +35,7 @@ export default {
     }
 
     try {
-      const searchUrl = new URL('https://www.googleapis.com/customsearch/v1')
+      const searchUrl = new URL('https://customsearch.googleapis.com/customsearch/v1')
       searchUrl.searchParams.set('key', env.GOOGLE_API_KEY)
       searchUrl.searchParams.set('cx', env.GOOGLE_CX)
       searchUrl.searchParams.set('q', `${query} wine bottle`)
