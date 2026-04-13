@@ -143,8 +143,8 @@ export default function DeliverySchedulePage() {
   const handlePromoteWine = async (wineId: string, quantity: number, wineName: string) => {
     setIsPromoting(true)
     try {
-      const firstDelivery = deliverySchedule[0]
-      if (!firstDelivery) throw new Error('No delivery scheduled')
+      const firstDelivery = deliverySchedule.find(d => d.status !== 'completed')
+      if (!firstDelivery) throw new Error('No upcoming delivery scheduled')
 
       // Check capacity at the delivery date, not today: we assume the user
       // will continue drinking at their configured annual rate between now
@@ -368,7 +368,8 @@ export default function DeliverySchedulePage() {
                   <div className="px-4 pb-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                       {delivery.wines.map(wine => {
-                        const isFirstDelivery = delivery.date === deliverySchedule[0]?.date
+                        const firstUpcoming = deliverySchedule.find(d => d.status !== 'completed')
+                        const isFirstDelivery = delivery.date === firstUpcoming?.date
                         const canModify = delivery.status !== 'completed'
 
                         return (

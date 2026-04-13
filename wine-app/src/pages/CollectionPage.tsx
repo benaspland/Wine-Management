@@ -46,7 +46,7 @@ export default function CollectionPage() {
   const handleSelectWine = async (wine: Wine) => {
     setSelectedWine(wine)
     // Fetch scheduled delivery date from database
-    const scheduledDate = await db.getFirstDeliveryDateForWine(wine.id)
+    const scheduledDate = await db.getNextScheduledDeliveryDateForWine(wine.id)
     setSelectedWineScheduledDate(scheduledDate ?? undefined)
   }
 

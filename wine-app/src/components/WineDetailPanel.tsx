@@ -22,7 +22,9 @@ export default function WineDetailPanel({
   scheduledDeliveryDate,
 }: WineDetailPanelProps) {
   const tierLabel = TIER_LABELS[wine.tier]
-  const criticRatings = wine.critic_ratings || {}
+  const criticRatings: Record<string, number> = typeof wine.critic_ratings === 'string'
+    ? JSON.parse(wine.critic_ratings || '{}')
+    : (wine.critic_ratings || {})
   const totalBottles = wine.quantity_in_storage + wine.quantity_at_home
 
   const handleConsume = async () => {
