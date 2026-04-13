@@ -1,21 +1,17 @@
 interface Env {
-  GOOGLE_API_KEY: string
-  GOOGLE_CX: string
+  BING_API_KEY: string
 }
 
-interface GoogleSearchItem {
-  title: string
-  link: string
-  image?: {
-    contextLink: string
-    thumbnailLink: string
-    width: number
-    height: number
-  }
+interface BingImageResult {
+  name: string
+  contentUrl: string
+  thumbnailUrl: string
+  width: number
+  height: number
 }
 
-interface GoogleSearchResponse {
-  items?: GoogleSearchItem[]
+interface BingSearchResponse {
+  value?: BingImageResult[]
 }
 
 export default {
@@ -35,27 +31,28 @@ export default {
     }
 
     try {
-      const searchUrl = new URL('https://customsearch.googleapis.com/customsearch/v1')
-      searchUrl.searchParams.set('key', env.GOOGLE_API_KEY)
-      searchUrl.searchParams.set('cx', env.GOOGLE_CX)
+      const searchUrl = new URL('https://api.bing.microsoft.com/v7.0/images/search')
       searchUrl.searchParams.set('q', `${query} wine bottle`)
-      searchUrl.searchParams.set('searchType', 'image')
-      searchUrl.searchParams.set('num', '8')
-      searchUrl.searchParams.set('imgType', 'photo')
+      searchUrl.searchParams.set('count', '8')
+      searchUrl.searchParams.set('imageType', 'Photo')
 
-      const response = await fetch(searchUrl.toString())
-      const data = (await response.json()) as GoogleSearchResponse
+      const response = await fetch(searchUrl.toString(), {
+        headers: {
+          'Ocp-Apim-Subscription-Key': env.BING_API_KEY,
+        },
+      })
+      const data = (await response.json()) as BingSearchResponse
 
       if (!response.ok) {
         return jsonResponse({ error: 'Search API error', status: response.status, details: data }, 502)
       }
 
-      const images = (data.items || []).map((item) => ({
-        url: item.link,
-        thumbnail: item.image?.thumbnailLink || item.link,
-        title: item.title,
-        width: item.image?.width || 0,
-        height: item.image?.height || 0,
+      const images = (data.value || []).map((item) => ({
+        url: item.contentUrl,
+        thumbnail: item.thumbnailUrl,
+        title: item.name,
+        width: item.width || 0,
+        height: item.height || 0,
       }))
 
       return jsonResponse({ images })
