@@ -147,7 +147,9 @@ export default function WineDetailPanel({
           </div>
           {scheduledDeliveryDate && (
             <div>
-              <p className="text-[10px] text-outline uppercase tracking-wider">Scheduled Delivery</p>
+              <p className="text-[10px] text-outline uppercase tracking-wider">
+                {new Date(scheduledDeliveryDate) <= new Date() ? 'Delivered' : 'Scheduled Delivery'}
+              </p>
               <p className="text-sm font-medium">
                 {new Date(scheduledDeliveryDate).toLocaleDateString('en-US', {
                   month: 'short',
