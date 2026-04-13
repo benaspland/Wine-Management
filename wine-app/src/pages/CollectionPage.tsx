@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import type { Wine } from '../types/index'
 import { useWineStore } from '../store/wineStore'
+import { ScheduleService } from '../services/schedule.service'
+import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 import WineCard from '../components/WineCard'
 import WineDetailPanel from '../components/WineDetailPanel'
 import WineForm from '../components/WineForm'
 import * as db from '../services/database'
 
 export default function CollectionPage() {
+  const allWines = useWineStore(state => state.wines)
   const wines = useWineStore(state => state.filteredWines)
   const loading = useWineStore(state => state.loading)
   const consumeWine = useWineStore(state => state.consumeWine)
@@ -45,8 +48,33 @@ export default function CollectionPage() {
 
   const handleSelectWine = async (wine: Wine) => {
     setSelectedWine(wine)
-    // Fetch scheduled delivery date from database
-    const scheduledDate = await db.getNextScheduledDeliveryDateForWine(wine.id)
+
+    // Check DB first (locked/completed delivery windows)
+    let scheduledDate = await db.getNextScheduledDeliveryDateForWine(wine.id)
+
+    // Fall back to the in-memory schedule for wines the algorithm placed
+    // but that haven't been locked into a DB window yet
+    if (!scheduledDate && wine.quantity_in_storage > 0) {
+      try {
+        const config = await db.getCellarConfig()
+        const totalAtHome = allWines.reduce(
+          (sum, w) => sum + w.quantity_at_home, 0
+        )
+        const deliveries = ScheduleService.generateDeliverySchedule(
+          allWines,
+          config.max_home_capacity,
+          totalAtHome,
+          DELIVERY_CONFIG.months as [number, number],
+          config.annual_consumption_target || 30,
+          config.min_delivery_bottles || 24
+        )
+        const entry = deliveries.find(d => d.wine_id === wine.id)
+        if (entry) scheduledDate = entry.scheduled_date
+      } catch {
+        // Silently fail — delivery date is informational
+      }
+    }
+
     setSelectedWineScheduledDate(scheduledDate ?? undefined)
   }
 
