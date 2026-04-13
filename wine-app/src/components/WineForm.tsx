@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Wine, Tier, WineType } from '../types/index'
 import { TIER_LABELS } from '../types/index'
+import { searchWineImages, type ImageResult } from '../services/imageSearch.service'
 import Modal from './Modal'
 
 interface WineFormProps {
@@ -70,6 +71,36 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       ...prev,
       [name]: numFields.includes(name) ? (value ? parseInt(value) : 0) : value,
     }))
+  }
+
+  const [imageResults, setImageResults] = useState<ImageResult[]>([])
+  const [imageSearching, setImageSearching] = useState(false)
+  const [showImagePicker, setShowImagePicker] = useState(false)
+
+  const handleImageSearch = async () => {
+    if (!formData.producer && !formData.name) {
+      alert('Enter a producer or wine name first')
+      return
+    }
+    setImageSearching(true)
+    setShowImagePicker(true)
+    try {
+      const results = await searchWineImages(
+        formData.producer || '',
+        formData.name,
+        formData.vintage
+      )
+      setImageResults(results)
+    } catch {
+      setImageResults([])
+    } finally {
+      setImageSearching(false)
+    }
+  }
+
+  const handleSelectImage = (url: string) => {
+    setFormData(prev => ({ ...prev, image_url: url }))
+    setShowImagePicker(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -343,6 +374,87 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             placeholder="e.g., Blackberry : Cassis : Graphite"
             className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
           />
+        </div>
+
+        {/* Image */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-on-surface mb-1">Bottle Image</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              name="image_url"
+              value={formData.image_url}
+              onChange={handleChange}
+              placeholder="Image URL or search..."
+              className="flex-1 bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
+            />
+            <button
+              type="button"
+              onClick={handleImageSearch}
+              disabled={imageSearching}
+              className="px-3 py-2 bg-primary-container text-on-primary rounded hover:bg-primary transition-colors disabled:opacity-50 flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-sm">image_search</span>
+              {imageSearching ? 'Searching...' : 'Search'}
+            </button>
+          </div>
+
+          {/* Image preview */}
+          {formData.image_url && (
+            <div className="flex items-center gap-3 mt-2">
+              <img
+                src={formData.image_url}
+                alt="Wine bottle"
+                className="h-20 w-auto object-contain rounded border border-outline-variant/20"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                className="text-xs text-red-400 hover:text-red-300"
+              >
+                Remove
+              </button>
+            </div>
+          )}
+
+          {/* Image picker grid */}
+          {showImagePicker && (
+            <div className="mt-2 p-3 bg-surface-container-low rounded border border-outline-variant/20">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-outline uppercase tracking-wider">Select an image</span>
+                <button
+                  type="button"
+                  onClick={() => setShowImagePicker(false)}
+                  className="text-outline hover:text-on-surface text-sm"
+                >
+                  Close
+                </button>
+              </div>
+              {imageSearching ? (
+                <p className="text-sm text-outline py-4 text-center">Searching for images...</p>
+              ) : imageResults.length === 0 ? (
+                <p className="text-sm text-outline py-4 text-center">No images found</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                  {imageResults.map((img, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectImage(img.url)}
+                      className="relative group border border-outline-variant/20 rounded overflow-hidden hover:border-primary transition-colors aspect-square"
+                    >
+                      <img
+                        src={img.thumbnail}
+                        alt={img.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Submit */}
