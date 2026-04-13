@@ -8,6 +8,7 @@ interface WineDetailPanelProps {
   onConsume: (wineId: string) => Promise<void>
   onMoveToHome: (wineId: string) => Promise<void>
   onEdit: (wine: Wine) => void
+  onDelete: (wineId: string) => Promise<void>
   isLoading?: boolean
   scheduledDeliveryDate?: string
 }
@@ -18,6 +19,7 @@ export default function WineDetailPanel({
   onConsume,
   onMoveToHome,
   onEdit,
+  onDelete,
   isLoading,
   scheduledDeliveryDate,
 }: WineDetailPanelProps) {
@@ -41,6 +43,18 @@ export default function WineDetailPanel({
   const handleMoveToHome = async () => {
     try {
       await onMoveToHome(wine.id)
+    } catch (error) {
+      alert(`Error: ${(error as Error).message}`)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete "${wine.producer} ${wine.name} ${wine.vintage}"? This cannot be undone.`)) {
+      return
+    }
+    try {
+      await onDelete(wine.id)
+      onClose()
     } catch (error) {
       alert(`Error: ${(error as Error).message}`)
     }
@@ -217,6 +231,13 @@ export default function WineDetailPanel({
               className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded disabled:opacity-50 transition-colors"
             >
               Edit
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isLoading}
+              className="flex-1 border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/50 py-3 text-xs tracking-widest uppercase font-bold rounded disabled:opacity-50 transition-colors"
+            >
+              Delete
             </button>
           </div>
         </div>

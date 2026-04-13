@@ -16,6 +16,7 @@ export default function CollectionPage() {
   const moveWineToHome = useWineStore(state => state.moveWineToHome)
   const editWineDetails = useWineStore(state => state.editWineDetails)
   const addWine = useWineStore(state => state.addWine)
+  const deleteWine = useWineStore(state => state.deleteWine)
 
   const [selectedWine, setSelectedWine] = useState<Wine | null>(null)
   const [editingWine, setEditingWine] = useState<Wine | null>(null)
@@ -84,6 +85,10 @@ export default function CollectionPage() {
 
   const handleMoveToHome = async (wineId: string) => {
     await moveWineToHome(wineId, 1)
+  }
+
+  const handleDelete = async (wineId: string) => {
+    await deleteWine(wineId)
   }
 
   const handleEditClick = (wine: Wine) => {
@@ -264,6 +269,7 @@ export default function CollectionPage() {
           onConsume={handleConsume}
           onMoveToHome={handleMoveToHome}
           onEdit={handleEditClick}
+          onDelete={handleDelete}
           isLoading={loading}
           scheduledDeliveryDate={selectedWineScheduledDate}
         />
