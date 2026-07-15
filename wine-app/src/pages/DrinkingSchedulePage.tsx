@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { ScheduleService } from '../services/schedule.service'
+import { buildDeliveryScheduleEntries } from '../services/deliveryPlanning.service'
 import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 import WineInfo from '../components/WineInfo'
@@ -37,11 +38,6 @@ export default function DrinkingSchedulePage() {
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([])
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [lastRegenerated, setLastRegenerated] = useState<string>('')
-
-  // Generate schedule on mount and when data changes
-  useEffect(() => {
-    generateDrinkingSchedule()
-  }, [scheduleUpdateTrigger])
 
   const handleMarkConsumed = async (
     wineId: string,
@@ -85,17 +81,9 @@ export default function DrinkingSchedulePage() {
     setIsRegenerating(true)
     try {
       const config = await db.getCellarConfig()
-      const cellarCapacity = config.max_home_capacity
-      const totalBottlesAtHome = wines
-        .filter(w => w.quantity_at_home > 0)
-        .reduce((sum, w) => sum + w.quantity_at_home, 0)
-      const deliverySchedule = ScheduleService.generateDeliverySchedule(
-        wines,
-        cellarCapacity,
-        totalBottlesAtHome,
-        DELIVERY_CONFIG.months as [number, number],
-        config.annual_consumption_target || DELIVERY_CONFIG.annualTarget
-      )
+      // Shared planner: same locked-window handling as the delivery page,
+      // so wine availability here matches the delivery schedule exactly.
+      const deliverySchedule = await buildDeliveryScheduleEntries(wines)
 
       if (wines.length === 0) {
         setSchedule([])
@@ -140,7 +128,7 @@ export default function DrinkingSchedulePage() {
       // Load consumption status for each period's wines
       const consumptionStatus = new Map<string, { consumed: boolean; consumedDate?: string }>()
 
-      for (const [_, period] of periodMap) {
+      for (const period of periodMap.values()) {
         // Get consumption logs for each year represented in period wines
         const logs = await db.getConsumptionLogByYear(period.year)
         for (const wineId of period.wineIds) {
@@ -198,6 +186,12 @@ export default function DrinkingSchedulePage() {
       setIsRegenerating(false)
     }
   }
+
+  // Generate schedule on mount and when data changes
+  useEffect(() => {
+    generateDrinkingSchedule()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleUpdateTrigger])
 
   const getTierColor = (tier: number): string => {
     if (tier === 5) return 'text-primary-container'

@@ -1,14 +1,15 @@
 /**
  * Workflow Service Layer
- * Implements all 10 workflows defined in the design document.
- * Each workflow follows the exact logic and validation rules specified.
+ * Implements the inventory and delivery workflows defined in the design
+ * document. Each workflow follows the exact logic and validation rules
+ * specified. Schedule generation lives in ScheduleService and the
+ * deliveryPlanning service.
  */
 
 import type {
   Wine,
   CellarConfig,
   DeliveryScheduleEntry,
-  ConsumptionScheduleEntry,
   DeliveryWindowWine,
   Tier,
   WineType,
@@ -114,12 +115,13 @@ export async function importWineCollection(wines: ImportWineRow[]): Promise<Impo
     }
 
     // Check for duplicates
-    const existing = await db.queryAll(
-      `SELECT * FROM wines WHERE name = ? AND vintage = ? AND producer = ?`,
-      [row.name, row.vintage, row.producer || null]
+    const existing = await db.findWineByNameVintageProducer(
+      row.name,
+      row.vintage,
+      row.producer
     )
 
-    if (existing.length > 0) {
+    if (existing) {
       result.skipped++
       continue
     }
@@ -372,51 +374,6 @@ export async function updateCellarConfig(updates: Partial<CellarConfig>): Promis
 }
 
 // ============================================================================
-// WORKFLOW 4: GENERATE INITIAL DELIVERY SCHEDULE (IN-MEMORY)
-// ============================================================================
-
-export async function generateDeliverySchedule(): Promise<DeliveryScheduleEntry[]> {
-  const wines = await db.getAllWines()
-  const schedule: DeliveryScheduleEntry[] = []
-
-  // Filter wines available in storage
-  const storageWines = wines.filter((w) => w.quantity_in_storage > 0)
-
-  if (storageWines.length === 0) {
-    return schedule
-  }
-
-  // Simple distribution: assign wines to windows in batches of 6-8 bottles
-  let windowDate = new Date()
-  windowDate.setDate(windowDate.getDate() + 30) // First window in 30 days
-
-  // Group wines by tier (80/20 distribution: 80% tier 1-3, 20% tier 4-5)
-  const tier1to3 = storageWines.filter((w) => w.tier <= 3)
-  const tier4to5 = storageWines.filter((w) => w.tier > 3)
-
-  // Simple scheduling without complex algorithm
-  const allToSchedule = [...tier1to3.sort(() => Math.random() - 0.5), ...tier4to5]
-
-  for (const wine of allToSchedule) {
-    schedule.push({
-      wine_id: wine.id,
-      quantity: wine.quantity_in_storage,
-      scheduled_date: windowDate.toISOString().split('T')[0],
-      tier: wine.tier,
-      region: wine.region,
-      status: 'pending',
-    })
-
-    // Move to next window every ~monthlyQuota bottles
-    if (schedule.filter((e) => e.scheduled_date === windowDate.toISOString().split('T')[0]).length >= 3) {
-      windowDate.setDate(windowDate.getDate() + 30)
-    }
-  }
-
-  return schedule
-}
-
-// ============================================================================
 // WORKFLOW 5: LOCK CURRENT DELIVERY WINDOW
 // ============================================================================
 
@@ -440,12 +397,8 @@ export async function lockDeliveryWindow(
 
   // Persist window wines to database
   for (const wine of wines) {
-    const existing = await db.queryAll(
-      'SELECT * FROM delivery_window_wines WHERE delivery_window_id = ? AND wine_id = ?',
-      [windowId, wine.wine_id]
-    )
-
-    if (existing.length === 0) {
+    const existing = await db.getDeliveryWindowWine(windowId, wine.wine_id)
+    if (!existing) {
       await db.addWineToDeliveryWindow(windowId, wine.wine_id, wine.quantity)
     }
   }
@@ -542,12 +495,8 @@ export async function promoteWineToDelivery(wineId: string, quantity: number): P
   }
 
   // Add wine to window
-  const existing = await db.queryAll(
-    'SELECT * FROM delivery_window_wines WHERE delivery_window_id = ? AND wine_id = ?',
-    [window.id, wineId]
-  )
-
-  if (existing.length > 0) {
+  const existing = await db.getDeliveryWindowWine(window.id, wineId)
+  if (existing) {
     await db.updateDeliveryWindowWine(window.id, wineId, quantity)
   } else {
     await db.addWineToDeliveryWindow(window.id, wineId, quantity)
@@ -666,103 +615,3 @@ export async function markDeliveryComplete(windowId: string): Promise<void> {
   })
 }
 
-// ============================================================================
-// WORKFLOW 9: GENERATE CONSUMPTION SCHEDULE (IN-MEMORY)
-// ============================================================================
-
-export async function generateConsumptionSchedule(): Promise<ConsumptionScheduleEntry[]> {
-  const wines = await db.getAllWines()
-  const config = await db.getCellarConfig()
-  const schedule: ConsumptionScheduleEntry[] = []
-
-  // Filter wines at home
-  const homeWines = wines.filter((w) => w.quantity_at_home > 0)
-
-  if (homeWines.length === 0) {
-    return schedule
-  }
-
-  // Calculate monthly target
-  const annualTarget = config.annual_consumption_target
-  const monthlyTarget = annualTarget / 12
-
-  // Get consumption log to exclude already-consumed wines
-  // Simple scheduling: distribute wines monthly
-  let currentDate = new Date()
-  const wineIndex: Record<string, number> = {}
-
-  for (const wine of homeWines) {
-    wineIndex[wine.id] = wine.quantity_at_home
-  }
-
-  // Schedule for next 24 months
-  for (let month = 0; month < 24; month++) {
-    const monthDate = new Date(currentDate)
-    monthDate.setMonth(monthDate.getMonth() + month)
-    const monthKey = monthDate.toISOString().substring(0, 7)
-
-    // Select wines for this month (simple round-robin)
-    const candidates = homeWines.filter(
-      (w) => wineIndex[w.id] > 0 && w.drinking_window_start <= monthDate.getFullYear()
-    )
-
-    for (let i = 0; i < Math.floor(monthlyTarget) && i < candidates.length; i++) {
-      const wine = candidates[i]
-      schedule.push({
-        wine_id: wine.id,
-        planned_consumption_month: monthKey,
-        quantity: 1,
-        status: 'planned',
-      })
-      wineIndex[wine.id]--
-    }
-  }
-
-  return schedule
-}
-
-// ============================================================================
-// WORKFLOW 10: RECORD WINE CONSUMPTION
-// ============================================================================
-
-export async function recordWineConsumption(
-  wineId: string,
-  consumedDate?: string,
-  notes?: string
-): Promise<void> {
-  const wine = await db.getWineById(wineId)
-  if (!wine) {
-    throw new Error(`Wine not found: ${wineId}`)
-  }
-
-  if (wine.quantity_at_home <= 0) {
-    throw new Error('Cannot consume. No bottles at home.')
-  }
-
-  // Default to today
-  const date = consumedDate || new Date().toISOString().split('T')[0]
-
-  // Validate date
-  const today = new Date().toISOString().split('T')[0]
-  if (date > today) {
-    throw new Error('Cannot log consumption for future date')
-  }
-
-  // Check if wine was delivered before consumed date
-  const firstDeliveryDate = await db.getFirstDeliveryDateForWine(wineId)
-  if (firstDeliveryDate && date < firstDeliveryDate) {
-    throw new Error(`Cannot consume wine before delivery date (${firstDeliveryDate})`)
-  }
-
-  // Create consumption log entry
-  await db.createConsumptionEntry({
-    wine_id: wineId,
-    consumed_date: date,
-    notes: notes || undefined,
-  })
-
-  // Update wine inventory (decrement by 1)
-  await db.updateWine(wineId, {
-    quantity_at_home: wine.quantity_at_home - 1,
-  })
-}

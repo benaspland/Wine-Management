@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { Wine, Tier, WineType } from '../types/index'
 import { TIER_LABELS } from '../types/index'
-import { searchWineImages, type ImageResult } from '../services/imageSearch.service'
 import Modal from './Modal'
+import WineImagePicker from './WineImagePicker'
 
 interface WineFormProps {
   isOpen: boolean
@@ -16,27 +16,29 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
   const [formData, setFormData] = useState(
     initialWine
       ? {
-          producer: initialWine.producer,
+          // Optional Wine fields default to '' so controlled inputs and
+          // selects never receive null/undefined values
+          producer: initialWine.producer ?? '',
           name: initialWine.name,
           vintage: initialWine.vintage,
-          country: initialWine.country,
+          country: initialWine.country ?? '',
           region: initialWine.region,
-          classification: initialWine.classification,
-          wine_type: initialWine.wine_type,
-          varietal: initialWine.varietal,
+          classification: initialWine.classification ?? '',
+          wine_type: initialWine.wine_type ?? ('Red' as WineType),
+          varietal: initialWine.varietal ?? '',
           tier: initialWine.tier,
-          location: 'storage' as const,
+          location: 'storage' as 'storage' | 'home',
           quantity: (initialWine.quantity_in_storage || 0) + (initialWine.quantity_at_home || 0),
-          format: initialWine.format,
+          format: initialWine.format ?? '750ml',
           drinking_window_start: initialWine.drinking_window_start,
           drinking_window_end: initialWine.drinking_window_end,
-          alcohol_percent: initialWine.alcohol_percent,
-          serving_temp_min: initialWine.serving_temp_min,
-          serving_temp_max: initialWine.serving_temp_max,
-          notes: initialWine.notes,
-          critic_ratings: initialWine.critic_ratings,
-          flavor_profile: initialWine.flavor_profile,
-          image_url: initialWine.image_url || '',
+          alcohol_percent: initialWine.alcohol_percent ?? 0,
+          serving_temp_min: initialWine.serving_temp_min ?? 15,
+          serving_temp_max: initialWine.serving_temp_max ?? 18,
+          notes: initialWine.notes ?? '',
+          critic_ratings: initialWine.critic_ratings ?? {},
+          flavor_profile: initialWine.flavor_profile ?? '',
+          image_url: initialWine.image_url ?? '',
         }
       : {
           producer: '',
@@ -48,7 +50,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           wine_type: 'Red' as WineType,
           varietal: '',
           tier: 1 as Tier,
-          location: 'storage' as const,
+          location: 'storage' as 'storage' | 'home',
           quantity: 1,
           format: '750ml',
           drinking_window_start: new Date().getFullYear(),
@@ -65,54 +67,42 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    const numFields = ['vintage', 'quantity', 'drinking_window_start', 'drinking_window_end', 'alcohol_percent', 'serving_temp_min', 'serving_temp_max']
+    const intFields = ['vintage', 'quantity', 'drinking_window_start', 'drinking_window_end', 'serving_temp_min', 'serving_temp_max']
 
-    setFormData(prev => ({
-      ...prev,
-      [name]: numFields.includes(name) ? (value ? parseInt(value) : 0) : value,
-    }))
-  }
-
-  const [imageResults, setImageResults] = useState<ImageResult[]>([])
-  const [imageSearching, setImageSearching] = useState(false)
-  const [showImagePicker, setShowImagePicker] = useState(false)
-
-  const handleImageSearch = async () => {
-    if (!formData.producer && !formData.name) {
-      alert('Enter a producer or wine name first')
-      return
+    let parsed: string | number = value
+    if (name === 'alcohol_percent') {
+      parsed = value ? parseFloat(value) : 0
+    } else if (intFields.includes(name)) {
+      parsed = value ? parseInt(value) : 0
     }
-    setImageSearching(true)
-    setShowImagePicker(true)
-    try {
-      const results = await searchWineImages(
-        formData.producer || '',
-        formData.name,
-        formData.vintage
-      )
-      setImageResults(results)
-    } catch {
-      setImageResults([])
-    } finally {
-      setImageSearching(false)
-    }
-  }
 
-  const handleSelectImage = (url: string) => {
-    setFormData(prev => ({ ...prev, image_url: url }))
-    setShowImagePicker(false)
+    setFormData(prev => ({ ...prev, [name]: parsed }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!(formData.producer || '').trim() || !formData.name.trim()) {
+    if (!formData.producer.trim() || !formData.name.trim()) {
       alert('Producer and wine name are required')
       return
     }
 
+    // Translate the form's single quantity + location into the split
+    // inventory fields the Wine record uses. When editing, bottles at
+    // home stay at home and any quantity change is applied to storage.
+    const { location, quantity, ...wineFields } = formData
+    let quantity_in_storage: number
+    let quantity_at_home: number
+    if (initialWine) {
+      quantity_at_home = Math.min(initialWine.quantity_at_home, quantity)
+      quantity_in_storage = quantity - quantity_at_home
+    } else {
+      quantity_in_storage = location === 'storage' ? quantity : 0
+      quantity_at_home = location === 'home' ? quantity : 0
+    }
+
     try {
-      await onSubmit(formData as any)
+      await onSubmit({ ...wineFields, quantity_in_storage, quantity_at_home })
       onClose()
     } catch (error) {
       alert(`Error: ${(error as Error).message}`)
@@ -377,85 +367,13 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
         </div>
 
         {/* Image */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-on-surface mb-1">Bottle Image</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              name="image_url"
-              value={formData.image_url}
-              onChange={handleChange}
-              placeholder="Image URL or search..."
-              className="flex-1 bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
-            />
-            <button
-              type="button"
-              onClick={handleImageSearch}
-              disabled={imageSearching}
-              className="px-3 py-2 bg-primary-container text-on-primary rounded hover:bg-primary transition-colors disabled:opacity-50 flex items-center gap-1"
-            >
-              <span className="material-symbols-outlined text-sm">image_search</span>
-              {imageSearching ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-
-          {/* Image preview */}
-          {formData.image_url && (
-            <div className="flex items-center gap-3 mt-2">
-              <img
-                src={formData.image_url}
-                alt="Wine bottle"
-                className="h-20 w-auto object-contain rounded border border-outline-variant/20"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-              />
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
-                className="text-xs text-red-400 hover:text-red-300"
-              >
-                Remove
-              </button>
-            </div>
-          )}
-
-          {/* Image picker grid */}
-          {showImagePicker && (
-            <div className="mt-2 p-3 bg-surface-container-low rounded border border-outline-variant/20">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-outline uppercase tracking-wider">Select an image</span>
-                <button
-                  type="button"
-                  onClick={() => setShowImagePicker(false)}
-                  className="text-outline hover:text-on-surface text-sm"
-                >
-                  Close
-                </button>
-              </div>
-              {imageSearching ? (
-                <p className="text-sm text-outline py-4 text-center">Searching for images...</p>
-              ) : imageResults.length === 0 ? (
-                <p className="text-sm text-outline py-4 text-center">No images found</p>
-              ) : (
-                <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                  {imageResults.map((img, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleSelectImage(img.url)}
-                      className="relative group border border-outline-variant/20 rounded overflow-hidden hover:border-primary transition-colors aspect-square"
-                    >
-                      <img
-                        src={img.thumbnail}
-                        alt={img.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <WineImagePicker
+          imageUrl={formData.image_url}
+          onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
+          producer={formData.producer}
+          wineName={formData.name}
+          vintage={formData.vintage}
+        />
 
         {/* Submit */}
         <div className="flex gap-3 pt-4">

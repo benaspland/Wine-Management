@@ -1,12 +1,11 @@
 # Wine Cellar - Deployment Guide
 
-This guide covers building and deploying the Wine Cellar app across web, desktop (Electron), and mobile (Capacitor) platforms.
+This guide covers building and deploying the Wine Cellar app across web (PWA) and mobile (Capacitor) platforms.
 
 ## Table of Contents
 
 - [Development Setup](#development-setup)
 - [Web (Browser)](#web-browser)
-- [Desktop (Electron)](#desktop-electron)
 - [Mobile (Capacitor)](#mobile-capacitor)
 - [Building for Production](#building-for-production)
 - [Database Management](#database-management)
@@ -61,75 +60,10 @@ Deploy the `dist/` folder to any static hosting:
 
 ---
 
-## Desktop (Electron)
-
-The Electron build creates native desktop applications for Windows, macOS, and Linux.
-
-### Architecture
-
-- **Main Process**: `electron-main.ts` - Handles window creation, database, IPC
-- **Preload Script**: `electron-preload.ts` - Secure IPC bridge for database access
-- **Database**: better-sqlite3 stored at `${userData}/wine-collection.db`
-- **Build System**: electron-builder for packaging
-
-### Development Mode
-
-```bash
-npm run dev:electron
-```
-
-This:
-1. Builds the Electron main process and preload script
-2. Builds the web assets
-3. Launches Electron with dev tools
-
-### Production Build
-
-#### Windows
-
-```bash
-npm run build:electron
-```
-
-Creates:
-- `dist-electron/wine-app Setup 0.0.0.exe` (NSIS installer)
-- `dist-electron/wine-app 0.0.0.exe` (Portable)
-
-#### macOS
-
-```bash
-npm run build:electron
-```
-
-Creates:
-- `dist-electron/wine-app-0.0.0.dmg` (Disk image)
-- `dist-electron/wine-app-0.0.0.zip` (Compressed app)
-
-Requires code signing for distribution:
-```bash
-export CSC_LINK=/path/to/certificate.p12
-export CSC_KEY_PASSWORD=your-password
-npm run build:electron
-```
-
-#### Linux
-
-```bash
-npm run build:electron
-```
-
-Creates:
-- `dist-electron/wine-app-0.0.0.AppImage` (Single executable)
-- `dist-electron/wine-app_0.0.0_amd64.deb` (Debian package)
-
-### Distributing
-
-1. **Direct Download**: Host executables on your website
-2. **App Store**: Submit to Microsoft Store, Mac App Store, etc.
-3. **Installer Package**: Use the generated installers
-4. **Auto-Updates**: Configure electron-updater for automatic updates
-
----
+> **Note**: The former Electron desktop target was removed. The app ships
+> as a PWA (installable from the browser on desktop and mobile); data is
+> stored in IndexedDB on the device. Use Capacitor if a native shell is
+> ever needed.
 
 ## Mobile (Capacitor)
 

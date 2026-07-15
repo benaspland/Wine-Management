@@ -444,48 +444,6 @@ describe('Workflows - Integration/Regression Tests', () => {
   })
 
   // =========================================================================
-  // WORKFLOW 4: GENERATE DELIVERY SCHEDULE
-  // =========================================================================
-
-  describe('Workflow 4: Generate Delivery Schedule', () => {
-    it('should generate delivery schedule for storage wines', async () => {
-      await db.createWine({
-        name: 'Wine 1',
-        vintage: 2020,
-        tier: 1,
-        region: 'Bordeaux',
-        drinking_window_start: 2025,
-        drinking_window_end: 2040,
-        quantity_in_storage: 12,
-        quantity_at_home: 0,
-      })
-
-      await db.createWine({
-        name: 'Wine 2',
-        vintage: 2019,
-        tier: 2,
-        region: 'Burgundy',
-        drinking_window_start: 2024,
-        drinking_window_end: 2039,
-        quantity_in_storage: 6,
-        quantity_at_home: 0,
-      })
-
-      const schedule = await workflows.generateDeliverySchedule()
-
-      expect(schedule.length).toBe(2)
-      expect(schedule[0].quantity).toBeGreaterThan(0)
-      expect(schedule[1].quantity).toBeGreaterThan(0)
-    })
-
-    it('should return empty schedule if no storage wines', async () => {
-      const schedule = await workflows.generateDeliverySchedule()
-
-      expect(schedule.length).toBe(0)
-    })
-  })
-
-  // =========================================================================
   // WORKFLOW 5 & 5B: LOCK/UNLOCK DELIVERY WINDOW
   // =========================================================================
 
@@ -699,53 +657,11 @@ describe('Workflows - Integration/Regression Tests', () => {
   })
 
   // =========================================================================
-  // WORKFLOW 9: GENERATE CONSUMPTION SCHEDULE
+  // WORKFLOW 2C (delivery interaction): CONSUME AFTER DELIVERY
   // =========================================================================
 
-  describe('Workflow 9: Generate Consumption Schedule', () => {
-    it('should generate consumption schedule for home wines', async () => {
-      await db.createWine({
-        name: 'Wine 1',
-        vintage: 2020,
-        tier: 1,
-        region: 'Bordeaux',
-        drinking_window_start: 2025,
-        drinking_window_end: 2040,
-        quantity_in_storage: 0,
-        quantity_at_home: 12,
-      })
-
-      await db.createWine({
-        name: 'Wine 2',
-        vintage: 2019,
-        tier: 2,
-        region: 'Burgundy',
-        drinking_window_start: 2024,
-        drinking_window_end: 2039,
-        quantity_in_storage: 0,
-        quantity_at_home: 6,
-      })
-
-      const schedule = await workflows.generateConsumptionSchedule()
-
-      expect(schedule.length).toBeGreaterThan(0)
-      expect(schedule[0].planned_consumption_month).toBeDefined()
-      expect(schedule[0].quantity).toBeGreaterThan(0)
-    })
-
-    it('should return empty schedule if no home wines', async () => {
-      const schedule = await workflows.generateConsumptionSchedule()
-
-      expect(schedule.length).toBe(0)
-    })
-  })
-
-  // =========================================================================
-  // WORKFLOW 10: RECORD WINE CONSUMPTION
-  // =========================================================================
-
-  describe('Workflow 10: Record Wine Consumption', () => {
-    it('should record wine consumption with default date', async () => {
+  describe('Consume Wine after Delivery', () => {
+    it('should record wine consumption after a completed delivery', async () => {
       const wine = await db.createWine({
         name: 'Test',
         vintage: 2015,
@@ -771,7 +687,8 @@ describe('Workflows - Integration/Regression Tests', () => {
         status: 'completed',
       })
 
-      await workflows.recordWineConsumption(wine.id, undefined, 'Lovely wine')
+      const today = new Date().toISOString().split('T')[0]
+      await workflows.consumeWine(wine.id, today, 'Lovely wine')
 
       const updated = await db.getWineById(wine.id)
       expect(updated?.quantity_at_home).toBe(4)
@@ -811,16 +728,11 @@ describe('Workflows - Integration/Regression Tests', () => {
       const allWines = await db.getAllWines()
       const wine = allWines[0]
 
-      // 2. Generate delivery schedule
-      const schedule = await workflows.generateDeliverySchedule()
-      expect(schedule.length).toBeGreaterThan(0)
-
-      // 3. Create delivery window and promote wine
+      // 2. Create delivery window and promote wine
       await workflows.promoteWineToDelivery(wine.id, 6)
 
-      // 4. Lock the window
+      // 3. Lock the window
       const currentWindow = await db.getCurrentDeliveryWindow()
-      const windowWines = await db.getDeliveryWindowWines(currentWindow!.id)
 
       await workflows.lockDeliveryWindow(currentWindow!.id, [
         {
@@ -833,20 +745,16 @@ describe('Workflows - Integration/Regression Tests', () => {
         },
       ])
 
-      // 5. Mark delivery complete
+      // 4. Mark delivery complete
       await workflows.markDeliveryComplete(currentWindow!.id)
 
       const delivered = await db.getWineById(wine.id)
       expect(delivered?.quantity_at_home).toBe(6)
       expect(delivered?.quantity_in_storage).toBe(6)
 
-      // 6. Generate consumption schedule
-      const consumptionSchedule = await workflows.generateConsumptionSchedule()
-      expect(consumptionSchedule.length).toBeGreaterThan(0)
-
-      // 7. Record consumption
+      // 5. Record consumption
       const today = new Date().toISOString().split('T')[0]
-      await workflows.recordWineConsumption(wine.id, today, 'Excellent!')
+      await workflows.consumeWine(wine.id, today, 'Excellent!')
 
       const final = await db.getWineById(wine.id)
       expect(final?.quantity_at_home).toBe(5)

@@ -29,7 +29,7 @@ let schedule: ScheduleEntry[] = []
 
 // Load CSV data
 beforeAll(() => {
-  const csvPath = path.join(__dirname, '../../..', 'wine-data.csv')
+  const csvPath = path.join(__dirname, '../../../..', 'wine-data.csv')
   const content = fs.readFileSync(csvPath, 'utf-8')
   const lines = content.split('\n').slice(1) // Skip header
 

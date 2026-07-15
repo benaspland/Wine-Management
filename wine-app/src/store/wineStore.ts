@@ -240,7 +240,8 @@ export const useWineStore = create<WineStore>((set, get) => ({
       sortBy,
     } = get()
 
-    let filtered = wines
+    // Copy so the in-place sort below never mutates the canonical wines array
+    let filtered = [...wines]
 
     // Filter by location (storage vs home)
     if (locationFilter !== 'all') {

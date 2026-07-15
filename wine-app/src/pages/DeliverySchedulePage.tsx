@@ -1,23 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useWineStore } from '../store/wineStore'
-import * as db from '../services/database'
-import * as workflows from '../services/workflows.service'
-import { ScheduleService } from '../services/schedule.service'
-import type { DeliveryDisplayEntry } from '../services/schedule.service'
+import { useDeliverySchedule } from '../hooks/useDeliverySchedule'
 import MessageModal from '../components/MessageModal'
-import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
-  const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
-  const loadWines = useWineStore(state => state.loadWines)
-  const [deliverySchedule, setDeliverySchedule] = useState<DeliveryDisplayEntry[]>([])
-  const [cellarCapacity, setCellarCapacity] = useState(80)
-  const [currentWinesAtHome, setCurrentWinesAtHome] = useState(0)
+  const { schedule: deliverySchedule, error: scheduleError, cellarCapacity, promoteWine, deferWine, confirmDelivery } =
+    useDeliverySchedule()
+
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isPromoting, setIsPromoting] = useState(false)
   const [isDelaying, setIsDelaying] = useState(false)
   const [collapsedDeliveries, setCollapsedDeliveries] = useState<Set<string>>(new Set())
+
+  const currentWinesAtHome = wines.reduce((sum, w) => sum + w.quantity_at_home, 0)
 
   const toggleCollapse = (date: string) => {
     setCollapsedDeliveries(prev => {
@@ -28,164 +24,20 @@ export default function DeliverySchedulePage() {
     })
   }
 
-  // Load cellar config on mount
-  useEffect(() => {
-    db.getCellarConfig().then(config => {
-      setCellarCapacity(config.max_home_capacity)
-    })
-  }, [])
-
-  // Calculate current wines at home
-  useEffect(() => {
-    const total = wines
-      .filter(w => w.quantity_at_home > 0)
-      .reduce((sum, w) => sum + w.quantity_at_home, 0)
-    setCurrentWinesAtHome(total)
-  }, [wines])
-
-  // Generate delivery schedule
-  useEffect(() => {
-    generateDeliverySchedule()
-  }, [scheduleUpdateTrigger])
-
-  const generateDeliverySchedule = async () => {
-    try {
-      const config = await db.getCellarConfig()
-      const totalAtHome = wines
-        .filter(w => w.quantity_at_home > 0)
-        .reduce((sum, w) => sum + w.quantity_at_home, 0)
-
-      // Fetch DB windows and their curated wine lists (for locked windows)
-      // before generating the schedule so committed quantities can be
-      // excluded from the scheduler — it then plans around them naturally.
-      const dbWindows = await db.getAllDeliveryWindows()
-      const lockedWindowWines = new Map<
-        string,
-        Array<{ wine_id: string; quantity: number }>
-      >()
-      const committedQuantities: Record<string, number> = {}
-      const lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>> = {}
-      for (const w of dbWindows) {
-        if (w.locked && w.status !== 'completed') {
-          const wws = await db.getDeliveryWindowWines(w.id)
-          const wineList = wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
-          lockedWindowWines.set(w.id, wineList)
-          lockedDeliveries[w.scheduled_date] = wineList
-          for (const ww of wineList) {
-            committedQuantities[ww.wine_id] = (committedQuantities[ww.wine_id] || 0) + ww.quantity
-          }
-        }
-      }
-
-      // Generate in-memory delivery schedule for storage wines, excluding
-      // bottles already committed to locked windows and simulating locked
-      // deliveries arriving so capacity calculations stay accurate.
-      const deliveries = ScheduleService.generateDeliverySchedule(
-        wines,
-        config.max_home_capacity,
-        totalAtHome,
-        DELIVERY_CONFIG.months as [number, number],
-        config.annual_consumption_target || 30,
-        config.min_delivery_bottles || 24,
-        committedQuantities,
-        lockedDeliveries
-      )
-
-      // Reconcile the in-memory schedule with DB-backed locked windows.
-      // Displaced wines (deferred out of a locked window) are relocated to
-      // the next unlocked delivery so they don't vanish from the schedule.
-      const displaySchedule = ScheduleService.buildDisplaySchedule(
-        deliveries,
-        wines,
-        dbWindows,
-        lockedWindowWines,
-        DELIVERY_CONFIG.months as [number, number]
-      )
-
-      setDeliverySchedule(displaySchedule)
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to generate delivery schedule: ${(error as Error).message}`,
-      })
+  const flashMessage = (type: 'success' | 'error', text: string) => {
+    setMessage({ type, text })
+    if (type === 'success') {
+      setTimeout(() => setMessage(null), 3000)
     }
-  }
-
-  const ensureLockedWindow = async (delivery: DeliveryDisplayEntry): Promise<string> => {
-    let windowId = delivery.windowId
-    if (!windowId) {
-      const newWindow = await db.createDeliveryWindow({
-        scheduled_date: delivery.date,
-        locked: false,
-        status: 'planned',
-      })
-      windowId = newWindow.id
-    }
-
-    const window = await db.getDeliveryWindowById(windowId)
-    if (window && !window.locked) {
-      // Persist current in-memory wines to DB before locking
-      for (const wine of delivery.wines) {
-        const existing = await db.queryAll(
-          'SELECT * FROM delivery_window_wines WHERE delivery_window_id = ? AND wine_id = ?',
-          [windowId, wine.id]
-        )
-        if (existing.length === 0) {
-          await db.addWineToDeliveryWindow(windowId, wine.id, wine.quantity)
-        }
-      }
-      await db.updateDeliveryWindow(windowId, { locked: true })
-    }
-
-    return windowId
   }
 
   const handlePromoteWine = async (wineId: string, quantity: number, wineName: string) => {
     setIsPromoting(true)
     try {
-      const firstDelivery = deliverySchedule.find(d => d.status !== 'completed')
-      if (!firstDelivery) throw new Error('No upcoming delivery scheduled')
-
-      // Check capacity at the delivery date, not today: we assume the user
-      // will continue drinking at their configured annual rate between now
-      // and the delivery, freeing space for the incoming bottles. Without
-      // this projection, long-dated deliveries get rejected even when
-      // they'd comfortably fit by the time they actually arrive.
-      const config = await db.getCellarConfig()
-      const freshWines = await db.getAllWines()
-      const currentHome = freshWines.reduce((sum, w) => sum + w.quantity_at_home, 0)
-      const firstDeliveryTotal = firstDelivery.wines.reduce((sum, w) => sum + w.quantity, 0)
-      const projectedHomeAtDelivery = ScheduleService.projectHomeAtDate(
-        currentHome,
-        firstDelivery.date,
-        config.annual_consumption_target || 30
-      )
-      const projectedAfterDelivery = projectedHomeAtDelivery + firstDeliveryTotal + quantity
-      if (projectedAfterDelivery > config.max_home_capacity) {
-        throw new Error(
-          `Promoting would exceed home capacity on ${firstDelivery.date}. ` +
-          `Projected at delivery: ${projectedHomeAtDelivery}, Delivery: ${firstDeliveryTotal}, Adding: ${quantity}, Max: ${config.max_home_capacity}`
-        )
-      }
-
-      const windowId = await ensureLockedWindow(firstDelivery)
-
-      // Add promoted wine to the first delivery window
-      const existing = await db.queryAll(
-        'SELECT * FROM delivery_window_wines WHERE delivery_window_id = ? AND wine_id = ?',
-        [windowId, wineId]
-      )
-      if (existing.length > 0) {
-        await db.updateDeliveryWindowWine(windowId, wineId, quantity)
-      } else {
-        await db.addWineToDeliveryWindow(windowId, wineId, quantity)
-      }
-
-      await generateDeliverySchedule()
-      setMessage({ type: 'success', text: `${wineName} promoted to next delivery` })
-      setTimeout(() => setMessage(null), 3000)
+      await promoteWine(wineId, quantity)
+      flashMessage('success', `${wineName} promoted to next delivery`)
     } catch (error) {
-      setMessage({ type: 'error', text: `Failed to promote: ${(error as Error).message}` })
+      flashMessage('error', `Failed to promote: ${(error as Error).message}`)
     } finally {
       setIsPromoting(false)
     }
@@ -194,23 +46,10 @@ export default function DeliverySchedulePage() {
   const handleDeferWine = async (wineId: string, date: string, wineName: string) => {
     setIsDelaying(true)
     try {
-      const delivery = deliverySchedule.find(d => d.date === date)
-      if (!delivery) throw new Error('Delivery not found')
-
-      if (delivery.wines.length <= 1) {
-        throw new Error('Cannot defer the only wine in this delivery')
-      }
-
-      const windowId = await ensureLockedWindow(delivery)
-
-      // Remove the deferred wine from the locked window
-      await db.removeWineFromDeliveryWindow(windowId, wineId)
-
-      await generateDeliverySchedule()
-      setMessage({ type: 'success', text: `${wineName} deferred to a future delivery` })
-      setTimeout(() => setMessage(null), 3000)
+      await deferWine(wineId, date)
+      flashMessage('success', `${wineName} deferred to a future delivery`)
     } catch (error) {
-      setMessage({ type: 'error', text: `Failed to defer: ${(error as Error).message}` })
+      flashMessage('error', `Failed to defer: ${(error as Error).message}`)
     } finally {
       setIsDelaying(false)
     }
@@ -218,66 +57,10 @@ export default function DeliverySchedulePage() {
 
   const handleConfirmDelivery = async (date: string) => {
     try {
-      const entry = deliverySchedule.find(d => d.date === date)
-      if (!entry) throw new Error('Delivery not found in schedule')
-
-      // Validate the FULL delivery fits in home space before touching anything.
-      // Without this, moveToHome would fail mid-loop on the first wine and
-      // report its quantity (e.g. "6 bottles") instead of the full delivery
-      // size (e.g. "19 bottles"), leaving the cellar in a partial state.
-      const totalToDeliver = entry.wines.reduce((sum, w) => sum + w.quantity, 0)
-      const config = await db.getCellarConfig()
-      const freshWines = await db.getAllWines()
-      const currentHome = freshWines.reduce((sum, w) => sum + w.quantity_at_home, 0)
-      const availableSpace = config.max_home_capacity - currentHome
-      if (totalToDeliver > availableSpace) {
-        throw new Error(
-          `Delivery of ${totalToDeliver} bottles exceeds home capacity. ` +
-          `Current: ${currentHome}, Max: ${config.max_home_capacity}, Available: ${availableSpace}`
-        )
-      }
-
-      // If no DB record exists yet for this scheduled date, create one now
-      let windowId = entry.windowId
-      if (!windowId) {
-        const newWindow = await db.createDeliveryWindow({
-          scheduled_date: date,
-          locked: false,
-          status: 'planned',
-        })
-        windowId = newWindow.id
-      }
-
-      const window = await db.getDeliveryWindowById(windowId)
-      if (!window) throw new Error('Delivery window not found')
-
-      // Move wines from storage to home
-      for (const wine of entry.wines) {
-        await workflows.moveToHome(wine.id, wine.quantity)
-      }
-
-      // Update window status and record actual delivery date
-      const today = new Date()
-      const actualDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-      await db.updateDeliveryWindow(window.id, {
-        status: 'completed',
-        scheduled_date: actualDate,
-      })
-
-      // Reload wines and regenerate schedule
-      await loadWines()
-      await generateDeliverySchedule()
-
-      setMessage({
-        type: 'success',
-        text: `Delivery for ${date} confirmed`,
-      })
-      setTimeout(() => setMessage(null), 3000)
+      await confirmDelivery(date)
+      flashMessage('success', `Delivery for ${date} confirmed`)
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to confirm delivery: ${(error as Error).message}`,
-      })
+      flashMessage('error', `Failed to confirm delivery: ${(error as Error).message}`)
     }
   }
 
@@ -312,7 +95,13 @@ export default function DeliverySchedulePage() {
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-on-surface mb-4">Upcoming Deliveries</h2>
 
-        {deliverySchedule.length === 0 ? (
+        {scheduleError && (
+          <div className="bg-surface-container-low p-6 rounded-lg text-center">
+            <p className="text-error">Failed to generate delivery schedule: {scheduleError}</p>
+          </div>
+        )}
+
+        {!scheduleError && deliverySchedule.length === 0 ? (
           <div className="bg-surface-container-low p-6 rounded-lg text-center">
             <p className="text-outline">No deliveries scheduled</p>
           </div>

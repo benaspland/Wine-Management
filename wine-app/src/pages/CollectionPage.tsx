@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import type { Wine } from '../types/index'
 import { useWineStore } from '../store/wineStore'
-import { ScheduleService } from '../services/schedule.service'
-import { DELIVERY_CONFIG } from '../config/deliveryConfig'
+import { getScheduledDeliveryDateForWine } from '../services/deliveryPlanning.service'
 import WineCard from '../components/WineCard'
 import WineDetailPanel from '../components/WineDetailPanel'
 import WineForm from '../components/WineForm'
-import * as db from '../services/database'
 
 export default function CollectionPage() {
   const allWines = useWineStore(state => state.wines)
@@ -34,12 +32,12 @@ export default function CollectionPage() {
 
   const totalBottles = wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)
 
-  const handleAddWine = async (wineData: any) => {
+  const handleAddWine = async (wineData: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => {
     await addWine(wineData)
     setShowForm(false)
   }
 
-  const handleEditWine = async (wineData: any) => {
+  const handleEditWine = async (wineData: Partial<Wine>) => {
     if (editingWine) {
       await editWineDetails(editingWine.id, wineData)
       setEditingWine(null)
@@ -49,34 +47,7 @@ export default function CollectionPage() {
 
   const handleSelectWine = async (wine: Wine) => {
     setSelectedWine(wine)
-
-    // Check DB first (locked/completed delivery windows)
-    let scheduledDate = await db.getNextScheduledDeliveryDateForWine(wine.id)
-
-    // Fall back to the in-memory schedule for wines the algorithm placed
-    // but that haven't been locked into a DB window yet
-    if (!scheduledDate && wine.quantity_in_storage > 0) {
-      try {
-        const config = await db.getCellarConfig()
-        const totalAtHome = allWines.reduce(
-          (sum, w) => sum + w.quantity_at_home, 0
-        )
-        const deliveries = ScheduleService.generateDeliverySchedule(
-          allWines,
-          config.max_home_capacity,
-          totalAtHome,
-          DELIVERY_CONFIG.months as [number, number],
-          config.annual_consumption_target || 30,
-          config.min_delivery_bottles || 24
-        )
-        const entry = deliveries.find(d => d.wine_id === wine.id)
-        if (entry) scheduledDate = entry.scheduled_date
-      } catch {
-        // Silently fail — delivery date is informational
-      }
-    }
-
-    setSelectedWineScheduledDate(scheduledDate ?? undefined)
+    setSelectedWineScheduledDate(await getScheduledDeliveryDateForWine(allWines, wine.id))
   }
 
   const handleConsume = async (wineId: string) => {
