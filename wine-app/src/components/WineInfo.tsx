@@ -1,7 +1,18 @@
-import type { Wine } from '../types/index'
+/**
+ * The fields WineInfo renders. Structural on purpose: both full Wine
+ * records and lightweight display objects (e.g. schedule entries)
+ * satisfy it.
+ */
+interface WineDisplayFields {
+  producer?: string
+  name?: string
+  country?: string
+  region?: string
+  classification?: string
+}
 
 interface WineInfoProps {
-  wine: Partial<Wine> | any
+  wine: WineDisplayFields
   producerSize?: 'sm' | 'base' | 'lg' | 'xl' | '2xl' // Tailwind text sizes
   nameSize?: 'sm' | 'base' | 'lg'
   classificationSize?: 'xs' | 'sm'

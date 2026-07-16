@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const restoreInputRef = useRef<HTMLInputElement>(null)
 
   const loadWines = useWineStore(state => state.loadWines)
   const triggerScheduleUpdate = useWineStore(state => state.triggerScheduleUpdate)
@@ -113,6 +114,59 @@ export default function SettingsPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+    }
+  }
+
+  const handleBackup = async () => {
+    setIsLoading(true)
+    try {
+      const backup = await db.exportDatabase()
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `wine-cellar-backup-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      setMessage({ type: 'success', text: 'Full backup downloaded' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      setMessage({ type: 'error', text: `Backup failed: ${(error as Error).message}` })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const proceed = confirm(
+      'Restoring a backup REPLACES everything currently in the app — wines, delivery windows and consumption history. Continue?'
+    )
+    if (!proceed) {
+      if (restoreInputRef.current) restoreInputRef.current.value = ''
+      return
+    }
+
+    setIsLoading(true)
+    setMessage(null)
+    try {
+      const backup: unknown = JSON.parse(await file.text())
+      await db.restoreDatabase(backup)
+      await loadWines()
+      triggerScheduleUpdate()
+
+      setMessage({ type: 'success', text: 'Backup restored successfully' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      setMessage({ type: 'error', text: `Restore failed: ${(error as Error).message}` })
+    } finally {
+      setIsLoading(false)
+      if (restoreInputRef.current) restoreInputRef.current.value = ''
     }
   }
 
@@ -304,6 +358,42 @@ export default function SettingsPage() {
           >
             {isLoading ? 'Exporting...' : `Export ${wines.length} Wines`}
           </button>
+        </div>
+
+        {/* Backup & Restore */}
+        <div className="card">
+          <h3 className="font-headline text-2xl font-bold mb-2">Backup & Restore</h3>
+          <p className="text-outline text-sm mb-6">
+            Full snapshot of everything — wines, delivery windows, consumption history and settings —
+            as a JSON file. Take a backup before app upgrades; restore replaces all current data.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={handleBackup}
+              disabled={isLoading}
+              className="btn-primary flex-1 disabled:opacity-50"
+            >
+              {isLoading ? 'Working...' : 'Download Backup'}
+            </button>
+
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleRestoreFile}
+              disabled={isLoading}
+              className="hidden"
+              data-testid="restore-input"
+            />
+            <button
+              onClick={() => restoreInputRef.current?.click()}
+              disabled={isLoading}
+              className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded disabled:opacity-50 transition-colors"
+            >
+              Restore Backup
+            </button>
+          </div>
         </div>
 
         {/* Data Summary */}

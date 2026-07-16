@@ -10,6 +10,7 @@
     "test:integration": "VITEST_INCLUDE='src/**/*.integration.test.{ts,tsx}' vitest run",
     "test:all": "VITEST_INCLUDE='src/**/*.{test,spec,integration.test}.{ts,tsx}' vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:ghpages": "playwright test --config playwright.ghpages.config.ts",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "preview": "vite preview",

@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import * as db from '../../services/database'
 import * as workflows from '../../services/workflows.service'
+import type { Wine, Tier } from '../../types/index'
 import { ScheduleService } from '../../services/schedule.service'
 
 describe('DrinkingSchedulePage Integration Tests', () => {
@@ -74,13 +75,13 @@ describe('DrinkingSchedulePage Integration Tests', () => {
 
     it('should distribute wines across years', async () => {
       // Create 30+ wines to test multi-year distribution
-      const wines: any[] = []
+      const wines: Wine[] = []
       for (let i = 0; i < 35; i++) {
         wines.push(
           await db.createWine({
             name: `Wine ${i}`,
             vintage: 2010 + (i % 10),
-            tier: ((i % 5) + 1) as any,
+            tier: (((i % 5) + 1) as Tier),
             region: `Region ${i % 5}`,
             drinking_window_start: 2024,
             drinking_window_end: 2050,

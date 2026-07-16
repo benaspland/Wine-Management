@@ -1,344 +1,100 @@
-# Wine Cellar - Deployment Guide
+# The Cellar — Deployment Guide
 
-This guide covers building and deploying the Wine Cellar app across web (PWA) and mobile (Capacitor) platforms.
+The app is a React + Vite **Progressive Web App**. It deploys as static
+files to GitHub Pages and stores all data on-device in IndexedDB (with a
+localStorage fallback). There is no server and no desktop (Electron)
+target — the former Electron build was removed.
 
-## Table of Contents
-
-- [Development Setup](#development-setup)
-- [Web (Browser)](#web-browser)
-- [Mobile (Capacitor)](#mobile-capacitor)
-- [Building for Production](#building-for-production)
-- [Database Management](#database-management)
-- [Troubleshooting](#troubleshooting)
-
----
-
-## Development Setup
-
-### Prerequisites
-
-- Node.js 18+ and npm 9+
-- Git
-- (Optional) Android Studio for mobile development
-
-### Install Dependencies
+## Development
 
 ```bash
 cd wine-app
 npm install
+npm run dev          # http://localhost:5173
 ```
 
----
-
-## Web (Browser)
-
-The web app is a React application built with Vite, optimized for development and quick iteration.
-
-### Development Mode
+First time on a new machine (for the E2E suite):
 
 ```bash
-npm run dev
+npx playwright install chromium
 ```
 
-Opens at `http://localhost:5173` with hot reload enabled.
+## Quality gates
 
-### Production Build
+| Command | What it runs |
+|---|---|
+| `npx tsc -b` | Typecheck |
+| `npm run lint` | ESLint (must be clean — CI gates on it) |
+| `npm test` | Vitest unit/component/integration suite |
+| `npm run test:e2e` | Playwright E2E against the dev server |
+| `npm run test:e2e:ghpages` | Production build served at `/Wine-Management/` — catches base-path, router and service-worker scope regressions |
+
+CI (`.github/workflows/ci.yml`) runs all of these on every push and PR.
+
+## Deploying to GitHub Pages
+
+1. Make sure CI is green on the branch and it is merged to `main`.
+2. Configure the image-search worker URL (one-time, see below):
+   create `wine-app/.env` containing
+   `VITE_IMAGE_WORKER_URL=https://wine-image-search.<account>.workers.dev`
+3. Deploy:
 
 ```bash
-npm run build
+cd wine-app
+npm run deploy       # builds with GITHUB_PAGES=true and pushes dist/ to gh-pages
 ```
 
-Creates optimized build in `dist/` directory (~300KB gzipped).
+The app serves from `https://<user>.github.io/Wine-Management/`. The
+service worker auto-updates installed clients on their next launch.
 
-### Deployment
-
-Deploy the `dist/` folder to any static hosting:
-- **Vercel**: `vercel deploy`
-- **Netlify**: Drag & drop `dist/` folder
-- **GitHub Pages**: Push to gh-pages branch
-- **Custom Server**: Serve `dist/index.html` as fallback for routing
-
----
-
-> **Note**: The former Electron desktop target was removed. The app ships
-> as a PWA (installable from the browser on desktop and mobile); data is
-> stored in IndexedDB on the device. Use Capacitor if a native shell is
-> ever needed.
-
-## Mobile (Capacitor)
-
-Capacitor wraps the web app as a native Android/iOS application.
-
-### Prerequisites
-
-- Android Studio (for Android)
-- Xcode (for iOS, macOS only)
-- Capacitor CLI: `npm install -g @capacitor/cli`
-
-### Setup
-
-#### Initialize Capacitor
+### Image search worker (Cloudflare, one-time setup)
 
 ```bash
-npx cap init wine-app --web-dir=dist
+cd wine-image-worker
+npx wrangler secret put PIXABAY_API_KEY   # paste key from pixabay.com/api/docs
+npx wrangler deploy
+# verify:
+curl "https://wine-image-search.<account>.workers.dev/?q=rioja"
 ```
 
-#### Add Android Platform
+## Data safety
 
-```bash
-npx cap add android
-```
+All data lives **only on the device**. Before upgrading the installed
+app (or testing risky changes):
 
-This creates the Android project in `android/` directory.
+1. Open **Settings → Backup & Restore → Download Backup**. This saves a
+   full JSON snapshot — wines, delivery windows, consumption history and
+   configuration. (The CSV export covers wines only.)
+2. Keep the file somewhere off-device.
+3. **Restore Backup** replaces all current data with a snapshot.
 
-#### Install Plugins
+Upgrade/migration notes:
 
-```bash
-npm install @capacitor-community/sqlite
-npx cap sync
-```
+- The first launch after the storage refactor migrates legacy
+  localStorage data into IndexedDB automatically. The legacy
+  localStorage key is intentionally left in place, so rolling back to a
+  pre-refactor build restores the pre-migration state.
+- The app requests persistent storage (`navigator.storage.persist()`)
+  on startup so the browser won't evict the database under pressure.
 
-### Development Mode
+## Database management
 
-#### Build Web Assets
-
-```bash
-npm run build
-```
-
-#### Sync to Android
-
-```bash
-npx cap sync android
-```
-
-#### Open Android Studio
-
-```bash
-npx cap open android
-```
-
-Build and run using Android Studio's emulator or connected device.
-
-### Production Build
-
-#### Generate Signed APK
-
-1. **Create Keystore**:
-```bash
-keytool -genkey -v -keystore wine-cellar-release.keystore \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias wine-cellar
-```
-
-2. **Configure Gradle**:
-   - Copy `wine-cellar-release.keystore` to `android/app/`
-   - Edit `android/app/build.gradle`:
-```gradle
-signingConfigs {
-    release {
-        storeFile file('wine-cellar-release.keystore')
-        storePassword 'your-store-password'
-        keyAlias 'wine-cellar'
-        keyPassword 'your-key-password'
-    }
-}
-
-buildTypes {
-    release {
-        signingConfig signingConfigs.release
-    }
-}
-```
-
-3. **Build APK**:
-```bash
-cd android
-./gradlew assembleRelease
-# Output: app/build/outputs/apk/release/app-release.apk
-```
-
-4. **Build AAB (for Play Store)**:
-```bash
-./gradlew bundleRelease
-# Output: app/build/outputs/bundle/release/app-release.aab
-```
-
-#### Upload to Play Store
-
-1. Create app on [Google Play Console](https://play.google.com/console)
-2. Create release track
-3. Upload AAB file
-4. Add screenshots, description, content rating
-5. Submit for review
-
----
-
-## Building for Production
-
-### Checklist
-
-- [ ] Update version in `package.json`
-- [ ] Update `CHANGELOG.md` with release notes
-- [ ] Run tests: `npm run lint`
-- [ ] Build all platforms and verify
-- [ ] Test database export/import
-- [ ] Test CSV import with sample data
-- [ ] Verify schedule generation works
-
-### Full Release Build
-
-```bash
-# Update version
-npm version patch  # or minor/major
-
-# Build web
-npm run build
-
-# Build Electron
-npm run build:electron
-
-# Build Android
-npm run build
-npx cap sync android
-# Then in Android Studio: Build → Generate Signed Bundle/APK
-
-# Commit and tag
-git commit -m "Release v0.1.0"
-git tag -a v0.1.0 -m "Version 0.1.0"
-git push origin --tags
-```
-
----
-
-## Database Management
-
-### Database Location
-
-- **Electron**: `~/.config/wine-app/wine-collection.db` (Linux/Mac) or `%APPDATA%\wine-app\wine-collection.db` (Windows)
-- **Web**: Browser IndexedDB (local)
-- **Android**: App internal storage
-
-### Backup & Export
-
-The app provides CSV export in Settings:
-1. Open Settings page
-2. Click "Export Wines"
-3. Save CSV file
-
-### Restore
-
-1. Open Settings page
-2. Click "Select CSV File" and choose exported CSV
-3. Data merges with existing wines
-
-### Manual Database Access (Electron)
-
-```bash
-# Install SQLite CLI
-# macOS: brew install sqlite3
-# Linux: apt-get install sqlite3
-# Windows: Download from sqlite.org
-
-# Open database
-sqlite3 ~/.config/wine-app/wine-collection.db
-
-# Useful queries
-SELECT COUNT(*) as wine_count FROM wines;
-SELECT DISTINCT location FROM wines;
-SELECT * FROM cellar_config;
-```
-
----
+- **Web/PWA**: IndexedDB, database `wine-app`, store `tables`, key `db`
+  (single whole-database snapshot). Inspect via DevTools → Application →
+  IndexedDB.
+- **Full backup/restore**: Settings page (JSON, all tables).
+- **CSV import/export**: Settings page (wines only; import skips
+  duplicates and reports per-row errors).
 
 ## Troubleshooting
 
-### Electron App Won't Start
-
-**Problem**: `Cannot find module 'electron-is-dev'`
-- **Solution**: `npm install`
-
-**Problem**: Blank window or database not loading
-- **Solution**: Check DevTools (F12) for errors. Database path must exist.
-
-### Build Fails
-
-**Problem**: TypeScript errors during `build:electron-main`
-- **Solution**: Ensure `@types/better-sqlite3` is installed: `npm install --save-dev @types/better-sqlite3`
-
-**Problem**: electron-builder fails on Windows
-- **Solution**: Install Windows Build Tools: `npm install --global windows-build-tools`
-
-### Database Issues
-
-**Problem**: "Database is locked"
-- **Solution**: Close all instances of the app and try again
-
-**Problem**: CSV import fails
-- **Solution**: Verify CSV format matches export format. Check browser console for specific error.
-
-### Android Build Issues
-
-**Problem**: Gradle build fails
-- **Solution**:
-  - `cd android && ./gradlew clean`
-  - Update Android SDK in Android Studio
-  - Clear Gradle cache: `~/.gradle/caches`
-
-**Problem**: App crashes on Android startup
-- **Solution**: Check Logcat in Android Studio (Android Monitor → Logcat tab)
-
----
-
-## Environment Variables
-
-### Build Flags
-
-```bash
-# Skip library check
-SKIP_LIB_CHECK=true npm run build
-
-# Electron code signing (macOS)
-export CSC_LINK=/path/to/cert.p12
-export CSC_KEY_PASSWORD=password
-
-# Capacitor environment
-CAPACITOR_LOG_FILE=capacitor.log npx cap sync
-```
-
----
-
-## Performance Optimization
-
-### Web
-- Vite automatically tree-shakes unused code
-- CSS is minified with Tailwind purging
-- Assets are gzipped (~90KB JS, ~3KB CSS)
-
-### Electron
-- SQLite queries use indexes on common fields (location, tier, vintage)
-- Database connections use WAL mode for concurrency
-- Assets cached in dist-electron/
-
-### Mobile
-- Capacitor plugins lazily loaded
-- SQLite database optimized with pragma statements
-- APK size ~50-80MB depending on Android version
-
----
-
-## Support
-
-For issues or questions:
-1. Check this guide
-2. Review GitHub Issues
-3. Check app logs:
-   - Electron: DevTools Console (F12)
-   - Android: Logcat in Android Studio
-   - Browser: Developer Tools (F12)
-
----
-
-## License
-
-Wine Cellar © 2026. All rights reserved.
+- **Blank page on GitHub Pages**: check the browser console for 404s on
+  assets — usually a base-path problem. `npm run test:e2e:ghpages`
+  reproduces this locally.
+- **Deep links 404 on GitHub Pages**: `public/404.html` + the redirect
+  script in `index.html` handle this; make sure `404.html` was deployed.
+- **Stale app after deploy**: the service worker updates on next
+  launch; force-close and reopen the installed app, or unregister the
+  worker in DevTools.
+- **CSV import fails**: the Settings page shows imported/skipped/failed
+  counts; row-level errors are logged to the console.

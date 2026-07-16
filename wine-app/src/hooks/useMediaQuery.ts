@@ -1,50 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useSyncExternalStore } from 'react'
 
 /**
- * Hook to detect media query matches
- * @param query - CSS media query string (e.g., '(min-width: 768px)')
- * @returns boolean indicating if query matches
+ * Reactively track a CSS media query. Built on useSyncExternalStore so
+ * the subscription and the snapshot stay in sync without any effects.
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => {
-    // Try to get initial value during render (for SSR compatibility)
-    if (typeof window === 'undefined') {
-      return false
-    }
-    try {
-      return window.matchMedia(query).matches
-    } catch {
-      return false
-    }
-  })
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    const mediaQuery = window.matchMedia(query)
-
-    // Ensure state is set correctly on mount
-    setMatches(mediaQuery.matches)
-
-    // Handle changes
-    const handleChange = (e: MediaQueryListEvent) => {
-      setMatches(e.matches)
-    }
-
-    // Modern API
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleChange)
-      return () => mediaQuery.removeEventListener('change', handleChange)
-    } else {
-      // Fallback for older browsers
-      mediaQuery.addListener(handleChange)
-      return () => mediaQuery.removeListener(handleChange)
-    }
-  }, [query])
-
-  return matches
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === 'undefined') return () => {}
+      const mediaQuery = window.matchMedia(query)
+      mediaQuery.addEventListener('change', onStoreChange)
+      return () => mediaQuery.removeEventListener('change', onStoreChange)
+    },
+    () => (typeof window === 'undefined' ? false : window.matchMedia(query).matches),
+    () => false
+  )
 }
 
 /**

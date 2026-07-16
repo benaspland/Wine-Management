@@ -114,7 +114,7 @@ export interface AuditLogEntry {
   action: string; // e.g., 'edit_wine_details', 'add_bottles', 'lock_delivery_window'
   wine_id?: string;
   delivery_window_id?: string;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   user_id?: string;
   created_at: string;
 }

@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import * as db from '../database'
 import * as workflows from '../workflows.service'
 import type { ImportWineRow } from '../workflows.service'
+import type { Tier } from '../../types/index'
 
 // Mock localStorage for tests
 const localStorageMock = (() => {
@@ -114,7 +115,7 @@ describe('Workflows - Integration/Regression Tests', () => {
           drinking_window_end: 2045,
           quantity_in_storage: 12,
           quantity_at_home: 0,
-        } as any,
+        } as unknown as ImportWineRow,
         {
           name: 'Invalid Vintage',
           vintage: 1500,
@@ -194,7 +195,7 @@ describe('Workflows - Integration/Regression Tests', () => {
         quantity_at_home: 0,
       })
 
-      await expect(workflows.editWineDetails(wine.id, { tier: 6 as any })).rejects.toThrow()
+      await expect(workflows.editWineDetails(wine.id, { tier: 6 as unknown as Tier })).rejects.toThrow()
     })
   })
 
@@ -224,7 +225,6 @@ describe('Workflows - Integration/Regression Tests', () => {
     })
 
     it('should add bottles to home with capacity check', async () => {
-      const config = await db.getCellarConfig()
       await db.updateCellarConfig({ max_home_capacity: 20 })
 
       const wine = await db.createWine({

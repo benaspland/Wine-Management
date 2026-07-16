@@ -2,10 +2,10 @@ import type { Wine, DeliveryScheduleEntry } from '../types/index'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 
 // Debug logging helper - logs in development and when explicitly enabled
-const debugLog = (...args: any[]) => {
+const debugLog = (...args: unknown[]) => {
   // Log in development/Vite dev mode OR if explicitly enabled
-  const isDev = typeof window !== 'undefined' && (window as any).__DEV__
-  const isDebugEnabled = typeof window !== 'undefined' && (window as any).__SCHEDULE_DEBUG__
+  const isDev = typeof window !== 'undefined' && (window as Window & { __DEV__?: boolean }).__DEV__
+  const isDebugEnabled = typeof window !== 'undefined' && (window as Window & { __SCHEDULE_DEBUG__?: boolean }).__SCHEDULE_DEBUG__
 
   if (isDev || isDebugEnabled) {
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0]
@@ -228,7 +228,7 @@ export class ScheduleService {
               classification: selectedWine.classification,
               suggestedMonth: monthNum,
               suggestedYear: year,
-              status: ScheduleService.getConsumptionStatus(selectedWine, year),
+              status: ScheduleService.getConsumptionStatus(),
             })
 
             wineLastConsumedYear[selectedWine.id] = year
@@ -309,7 +309,7 @@ export class ScheduleService {
             classification: wine.classification,
             suggestedMonth: monthNum,
             suggestedYear: year,
-            status: this.getConsumptionStatus(wine, year),
+            status: this.getConsumptionStatus(),
           })
 
           wineLastConsumedYear[wine.id] = year
@@ -996,7 +996,7 @@ export class ScheduleService {
     return Math.max(1, Math.min(12, targetMonth))
   }
 
-  private static getConsumptionStatus(_wine: Wine, _year: number): string {
+  private static getConsumptionStatus(): string {
     // Return empty string - year/month already shown in timeline structure
     // Avoids "THIS YEAR" / "NEXT YEAR" clutter per user feedback
     return ''

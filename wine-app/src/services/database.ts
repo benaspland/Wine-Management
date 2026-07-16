@@ -58,6 +58,73 @@ const DEFAULT_CONFIG: CellarConfig = {
   updated_at: undefined,
 }
 
+// ============================================================================
+// BACKUP & RESTORE
+// The database lives only on the user's device, so a full-snapshot
+// backup (every table, not just wines) is the safety net for upgrades
+// and device loss. CSV export/import covers wines only.
+// ============================================================================
+
+export interface DatabaseBackup {
+  format: 'wine-app-backup'
+  version: 1
+  exported_at: string
+  tables: DbSnapshot
+}
+
+export async function exportDatabase(): Promise<DatabaseBackup> {
+  const snapshot: DbSnapshot = {}
+  for (const name of TABLE_NAMES) {
+    // Deep copy: the backup must be a frozen point-in-time snapshot,
+    // not live references that later mutations would leak into
+    snapshot[name] = structuredClone(tables.get(name) ?? [])
+  }
+  return {
+    format: 'wine-app-backup',
+    version: 1,
+    exported_at: new Date().toISOString(),
+    tables: snapshot,
+  }
+}
+
+/**
+ * Replace the entire database with the contents of a backup file.
+ * Destructive — callers must confirm with the user first. The snapshot
+ * is written to storage and the database re-initialized so all the
+ * usual normalization (config seeding, boolean coercion) applies.
+ */
+export async function restoreDatabase(backup: unknown): Promise<void> {
+  if (typeof backup !== 'object' || backup === null) {
+    throw new Error('Invalid backup file: not a JSON object')
+  }
+  const candidate = backup as Partial<DatabaseBackup>
+  if (candidate.format !== 'wine-app-backup') {
+    throw new Error('Invalid backup file: missing wine-app-backup marker')
+  }
+  if (typeof candidate.tables !== 'object' || candidate.tables === null) {
+    throw new Error('Invalid backup file: missing tables')
+  }
+  for (const name of TABLE_NAMES) {
+    const rows = candidate.tables[name]
+    if (rows !== undefined && !Array.isArray(rows)) {
+      throw new Error(`Invalid backup file: table "${name}" is not an array`)
+    }
+  }
+  if (!Array.isArray(candidate.tables.wines)) {
+    throw new Error('Invalid backup file: missing wines table')
+  }
+
+  if (!adapter) {
+    adapter = createStorageAdapter()
+  }
+  const snapshot: DbSnapshot = {}
+  for (const name of TABLE_NAMES) {
+    snapshot[name] = candidate.tables[name] ?? []
+  }
+  await adapter.save(snapshot)
+  await initializeDatabase()
+}
+
 export async function initializeDatabase(): Promise<void> {
   adapter = createStorageAdapter()
 

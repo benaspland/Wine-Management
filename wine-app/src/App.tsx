@@ -24,6 +24,11 @@ function App() {
 
     const init = async () => {
       try {
+        // Ask the browser not to evict our IndexedDB under storage
+        // pressure — this device holds the only copy of the cellar.
+        if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+          void navigator.storage.persist()
+        }
         await initializeDatabase()
         // await seedDatabase() // Disabled: start with empty database, import your own collection
         await loadWines()

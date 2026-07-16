@@ -16,7 +16,7 @@ describe('DeliverySchedulePage Integration Tests', () => {
   describe('Delivery Schedule Generation', () => {
     it('should generate delivery schedule for storage wines', async () => {
       // Create test wines
-      const wine1 = await db.createWine({
+      await db.createWine({
         name: 'Test Red',
         vintage: 2020,
         tier: 1,
@@ -27,7 +27,7 @@ describe('DeliverySchedulePage Integration Tests', () => {
         quantity_at_home: 0,
       })
 
-      const wine2 = await db.createWine({
+      await db.createWine({
         name: 'Test White',
         vintage: 2021,
         tier: 2,
@@ -51,7 +51,7 @@ describe('DeliverySchedulePage Integration Tests', () => {
 
     it('should respect cellar capacity constraints', async () => {
       // Create wines
-      const wine1 = await db.createWine({
+      await db.createWine({
         name: 'Red Wine',
         vintage: 2020,
         tier: 1,
@@ -73,7 +73,7 @@ describe('DeliverySchedulePage Integration Tests', () => {
 
     it('should consider current wines at home', async () => {
       // Create wines
-      const wine = await db.createWine({
+      await db.createWine({
         name: 'Test Wine',
         vintage: 2020,
         tier: 1,
