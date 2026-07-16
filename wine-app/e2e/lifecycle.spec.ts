@@ -6,7 +6,11 @@ import { test, expect } from '@playwright/test'
  */
 
 test('add a wine, persist it across reload, then delete it', async ({ page }) => {
+  // The Overview dashboard is the landing page; the collection lives at /cellar
   await page.goto('/')
+  await expect(page.getByText('Cellar Overview').first()).toBeVisible()
+
+  await page.goto('/cellar')
   await expect(page.getByText('Private Collection').first()).toBeVisible()
 
   // Add a wine via the form

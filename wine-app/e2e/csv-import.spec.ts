@@ -20,6 +20,6 @@ test('imports the full collection CSV through the Settings page', async ({ page 
   await expect(page.locator('button:has-text("Export 125 Wines")')).toBeVisible()
 
   // Imported wines render in the collection
-  await page.goto('/')
+  await page.goto('/cellar')
   await expect(page.getByText('Barolo Margheria').first()).toBeVisible()
 })

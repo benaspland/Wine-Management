@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import TopAppBar from './components/TopAppBar'
 import BottomNavBar from './components/BottomNavBar'
 import ToastStack from './components/ToastStack'
+import DashboardPage from './pages/DashboardPage'
 import CollectionPage from './pages/CollectionPage'
 import DrinkingSchedulePage from './pages/DrinkingSchedulePage'
 import DeliverySchedulePage from './pages/DeliverySchedulePage'
@@ -76,7 +77,8 @@ function App() {
         <TopAppBar />
         <main className="pt-16 pb-24 md:pb-0">
           <Routes>
-            <Route path="/" element={<CollectionPage />} />
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/cellar" element={<CollectionPage />} />
             <Route path="/schedule" element={<DrinkingSchedulePage />} />
             <Route path="/deliveries" element={<DeliverySchedulePage />} />
             <Route path="/settings" element={<SettingsPage />} />
