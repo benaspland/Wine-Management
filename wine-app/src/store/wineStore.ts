@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Wine, CellarConfig, ConsumptionLogEntry } from '../types/index'
 import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
+import { CLOSING_SOON_YEARS } from '../services/dashboard.service'
 
 interface WineStore {
   wines: Wine[]
@@ -19,7 +20,8 @@ interface WineStore {
   countryFilter: string | null
   wineTypeFilter: string | null
   formatFilter: string | null
-  sortBy: 'vintage' | 'tier' | 'producer'
+  windowFilter: 'all' | 'ready' | 'closing' | 'waiting'
+  sortBy: 'vintage' | 'tier' | 'producer' | 'window'
 
   // Actions
   loadWines: () => Promise<void>
@@ -39,7 +41,8 @@ interface WineStore {
   setCountryFilter: (country: string | null) => void
   setWineTypeFilter: (type: string | null) => void
   setFormatFilter: (format: string | null) => void
-  setSortBy: (sort: 'vintage' | 'tier' | 'producer') => void
+  setWindowFilter: (filter: 'all' | 'ready' | 'closing' | 'waiting') => void
+  setSortBy: (sort: 'vintage' | 'tier' | 'producer' | 'window') => void
   applyFilters: () => void
   clearFilters: () => void
   triggerScheduleUpdate: () => void
@@ -63,6 +66,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
   countryFilter: null,
   wineTypeFilter: null,
   formatFilter: null,
+  windowFilter: 'all',
   sortBy: 'vintage',
 
   loadWines: async () => {
@@ -225,6 +229,11 @@ export const useWineStore = create<WineStore>((set, get) => ({
     get().applyFilters()
   },
 
+  setWindowFilter: (filter) => {
+    set({ windowFilter: filter })
+    get().applyFilters()
+  },
+
   setSortBy: (sort) => {
     set({ sortBy: sort })
     get().applyFilters()
@@ -239,6 +248,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       countryFilter: null,
       wineTypeFilter: null,
       formatFilter: null,
+      windowFilter: 'all',
     })
     get().applyFilters()
   },
@@ -253,6 +263,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       countryFilter,
       wineTypeFilter,
       formatFilter,
+      windowFilter,
       sortBy,
     } = get()
 
@@ -298,8 +309,30 @@ export const useWineStore = create<WineStore>((set, get) => ({
       filtered = filtered.filter((w) => w.format === formatFilter)
     }
 
+    // Drinking-window state relative to the current year
+    if (windowFilter !== 'all') {
+      const year = new Date().getFullYear()
+      if (windowFilter === 'ready') {
+        filtered = filtered.filter(
+          (w) => w.drinking_window_start <= year && year <= w.drinking_window_end
+        )
+      } else if (windowFilter === 'closing') {
+        filtered = filtered.filter(
+          (w) =>
+            w.drinking_window_start <= year &&
+            year <= w.drinking_window_end &&
+            w.drinking_window_end <= year + CLOSING_SOON_YEARS
+        )
+      } else if (windowFilter === 'waiting') {
+        filtered = filtered.filter((w) => w.drinking_window_start > year)
+      }
+    }
+
     // Apply sorting
-    if (sortBy === 'tier') {
+    if (sortBy === 'window') {
+      // Most urgent first: window closing soonest at the top
+      filtered.sort((a, b) => a.drinking_window_end - b.drinking_window_end)
+    } else if (sortBy === 'tier') {
       filtered.sort((a, b) => b.tier - a.tier)
     } else if (sortBy === 'producer') {
       filtered.sort((a, b) => (a.producer || '').localeCompare(b.producer || ''))

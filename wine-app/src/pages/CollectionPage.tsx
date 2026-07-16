@@ -49,6 +49,7 @@ export default function CollectionPage() {
   const countryFilter = useWineStore(state => state.countryFilter)
   const wineTypeFilter = useWineStore(state => state.wineTypeFilter)
   const formatFilter = useWineStore(state => state.formatFilter)
+  const windowFilter = useWineStore(state => state.windowFilter)
 
   const activeFilterCount = [
     locationFilter !== 'all',
@@ -57,6 +58,7 @@ export default function CollectionPage() {
     countryFilter !== null,
     wineTypeFilter !== null,
     formatFilter !== null,
+    windowFilter !== 'all',
   ].filter(Boolean).length
 
   const totalBottles = wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)

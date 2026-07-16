@@ -190,6 +190,7 @@ export default function SettingsPage() {
         'Alcohol Level',
         'Flavour Profile',
         'Recommended Service Temp',
+        'Purchase Price',
       ]
 
       const rows = wines.map(wine => {
@@ -217,6 +218,7 @@ export default function SettingsPage() {
           `${wine.alcohol_percent}%`,
           `"${wine.flavor_profile}"`,
           serviceTemp,
+          wine.purchase_price ?? '',
         ].join(',')
       })
 

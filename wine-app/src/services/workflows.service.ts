@@ -37,6 +37,7 @@ export interface ImportWineRow {
   flavor_profile?: string
   critic_ratings?: string | Record<string, number>
   format?: string
+  purchase_price?: number
   drinking_window_start: number
   drinking_window_end: number
   quantity_in_storage: number

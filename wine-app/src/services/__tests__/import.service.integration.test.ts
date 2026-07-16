@@ -397,6 +397,62 @@ describe('ImportService - validation and duplicate handling', () => {
 // PART 4: field parsers (exercised through the public import surface)
 // ===========================================================================
 
+describe('ImportService - purchase price column', () => {
+  const HEADER_WITH_PRICE = HEADER + ',Purchase Price'
+
+  function rowWithPrice(price: string, overrides: Partial<Record<string, string>> = {}) {
+    return `${row(overrides)},${price}`
+  }
+
+  it('parses a plain per-bottle price', async () => {
+    const file = csvFile([HEADER_WITH_PRICE, rowWithPrice('25.50')].join('\n'))
+    const result = await ImportService.importFromCSV(file)
+
+    expect(result.success).toBe(1)
+    const wines = await db.getAllWines()
+    expect(wines[0].purchase_price).toBe(25.5)
+  })
+
+  it('tolerates currency symbols and thousands separators', async () => {
+    const file = csvFile(
+      [
+        HEADER_WITH_PRICE,
+        rowWithPrice('"£1,250.00"', { Wine: 'Chateau Uno' }),
+        rowWithPrice('$40', { Wine: 'Chateau Due' }),
+      ].join('\n')
+    )
+    const result = await ImportService.importFromCSV(file)
+
+    expect(result.success).toBe(2)
+    const wines = await db.getAllWines()
+    expect(wines.find(w => w.name === 'Uno')?.purchase_price).toBe(1250)
+    expect(wines.find(w => w.name === 'Due')?.purchase_price).toBe(40)
+  })
+
+  it('leaves the price unset when the value is empty or garbage', async () => {
+    const file = csvFile(
+      [
+        HEADER_WITH_PRICE,
+        rowWithPrice('', { Wine: 'Chateau Uno' }),
+        rowWithPrice('TBC', { Wine: 'Chateau Due' }),
+      ].join('\n')
+    )
+    const result = await ImportService.importFromCSV(file)
+
+    expect(result.success).toBe(2)
+    const wines = await db.getAllWines()
+    expect(wines.every(w => w.purchase_price === undefined)).toBe(true)
+  })
+
+  it('imports files without the column unchanged (backward compatible)', async () => {
+    const file = csv(row())
+    const result = await ImportService.importFromCSV(file)
+
+    expect(result.success).toBe(1)
+    expect((await db.getAllWines())[0].purchase_price).toBeUndefined()
+  })
+})
+
 describe('ImportService - field parsing', () => {
   async function importOne(overrides: Partial<Record<string, string>>) {
     const result = await ImportService.importFromCSV(csv(row(overrides)))

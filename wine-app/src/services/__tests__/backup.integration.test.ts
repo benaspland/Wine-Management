@@ -36,6 +36,7 @@ async function seedRealisticState() {
     vintage: 2010,
     tier: 3,
     region: 'Rioja',
+    purchase_price: 32.5,
     drinking_window_start: 2020,
     drinking_window_end: 2040,
     quantity_in_storage: 6,
@@ -103,6 +104,8 @@ describe('restoreDatabase', () => {
     expect(wines).toHaveLength(1)
     expect(wines[0].id).toBe(wine.id)
     expect(wines[0].quantity_at_home).toBe(2) // 3 delivered, 1 consumed
+    // New schema fields ride through the backup untouched
+    expect(wines[0].purchase_price).toBe(32.5)
 
     expect((await db.getCellarConfig()).max_home_capacity).toBe(55)
     expect(await db.getConsumptionLogByWineId(wine.id)).toHaveLength(1)
