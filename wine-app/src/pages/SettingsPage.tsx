@@ -92,7 +92,8 @@ export default function SettingsPage() {
       await loadWines()
       triggerScheduleUpdate()
 
-      const successMsg = `Imported ${result.success} wines successfully`
+      const skippedMsg = result.skipped > 0 ? `, ${result.skipped} skipped as duplicates` : ''
+      const successMsg = `Imported ${result.success} wines successfully${skippedMsg}`
       const errorMsg = result.failed > 0 ? ` (${result.failed} failed)` : ''
 
       setMessage({

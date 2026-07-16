@@ -5,10 +5,11 @@
  * malformed rows, missing columns, duplicates, quoting, and the
  * individual field parsers.
  *
- * Several tests are labelled CHARACTERIZATION: they pin current behavior
- * that is questionable (silent duplicate skips, the Bordeaux name
- * rewrite, dropped "94+" ratings, ignored Size column). If that behavior
- * is deliberately fixed, update these tests as part of the fix.
+ * The first version of this suite pinned five importer defects as
+ * characterization tests (silent duplicate skips, the Bordeaux name
+ * rewrite, dropped "94+" ratings, ignored Size column, garbage
+ * quantities coercing to 0). All five were then fixed, and the tests
+ * below assert the corrected behavior.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -105,6 +106,7 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     const result = await ImportService.importFromCSV(realFile())
 
     expect(result.success).toBe(125)
+    expect(result.skipped).toBe(1)
     expect(result.failed).toBe(0)
     expect(result.errors).toEqual([])
 
@@ -112,13 +114,12 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     expect(wines.length).toBe(125)
   })
 
-  it('CHARACTERIZATION: the duplicate row is skipped silently, not reported', async () => {
+  it('reports the duplicate row in the skipped count', async () => {
     // "Barbaresco: Produttori del Barbaresco, Normale" (2021) appears twice
-    // in the file. The importer deduplicates on name+vintage+producer, but
-    // the skip is invisible in the returned result — success excludes it
-    // and errors stay empty.
+    // in the file. The importer deduplicates on name+vintage+producer and
+    // surfaces the skip in the result.
     const result = await ImportService.importFromCSV(realFile())
-    expect(result.success + result.failed).toBe(125)
+    expect(result.skipped).toBe(1)
 
     const wines = await db.getAllWines()
     const duplicated = wines.filter(
@@ -162,6 +163,8 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     const second = await ImportService.importFromCSV(realFile())
 
     expect(second.success).toBe(0)
+    // All 126 rows match existing wines (the in-file duplicate row too)
+    expect(second.skipped).toBe(126)
     expect(second.failed).toBe(0)
     expect(second.errors).toEqual([])
 
@@ -169,19 +172,18 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     expect(wines.length).toBe(125)
   })
 
-  it('CHARACTERIZATION: every Bordeaux wine is renamed to "Bordeaux"', async () => {
-    // For France/Bordeaux rows the importer overwrites the parsed wine name
-    // with the region, so all ~19 Bordeaux wines end up named "Bordeaux"
-    // and are distinguishable only by producer. Destructive — the parsed
-    // château name is discarded.
+  it('keeps the parsed château name for Bordeaux wines', async () => {
+    // Regression guard: an earlier importer version overwrote every
+    // Bordeaux wine's name with the literal region string "Bordeaux".
     await ImportService.importFromCSV(realFile())
     const wines = await db.getAllWines()
 
     const bordeaux = wines.filter((w) => w.country === 'France' && w.region === 'Bordeaux')
     expect(bordeaux.length).toBeGreaterThanOrEqual(15)
-    expect(bordeaux.every((w) => w.name === 'Bordeaux')).toBe(true)
-    // The producer still carries the château identity
-    expect(bordeaux.some((w) => w.producer === 'Chateau Gloria')).toBe(true)
+    expect(bordeaux.every((w) => w.name !== 'Bordeaux')).toBe(true)
+
+    const gloria = bordeaux.find((w) => w.producer === 'Chateau Gloria')
+    expect(gloria?.name).toBe('Gloria')
   })
 
   it('parses the Piedmont "Type: Producer, Cru" pattern into producer + name', async () => {
@@ -194,20 +196,20 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     expect(massolino?.name).toBe('Barolo Margheria')
   })
 
-  it('CHARACTERIZATION: the Size column is ignored — Magnum formats are lost', async () => {
-    // The CSV records bottle Size (75cl/Magnum) but csvRowToWine never maps
-    // it to the wine's format field, so every import loses format data.
+  it('maps the Size column to the wine format', async () => {
     await ImportService.importFromCSV(realFile())
     const wines = await db.getAllWines()
 
     // 2011 Barolo: Massolino, Margheria is a Magnum in the CSV
     const magnumRow = wines.find((w) => w.producer === 'Massolino' && w.vintage === 2011)
-    expect(magnumRow?.format).toBeUndefined()
+    expect(magnumRow?.format).toBe('Magnum')
+
+    // Standard bottles keep their size string too
+    const standard = wines.find((w) => w.producer === 'Chateau Gloria')
+    expect(standard?.format).toBe('75cl')
   })
 
-  it('CHARACTERIZATION: critic ratings with "+" qualifiers are dropped', async () => {
-    // "RP 94+" does not match the rating parser's /^(\w+)\s+(\d+)$/ and is
-    // silently omitted from the stored ratings.
+  it('keeps the numeric score of critic ratings with "+" qualifiers', async () => {
     await ImportService.importFromCSV(realFile())
     const wines = await db.getAllWines()
 
@@ -215,8 +217,7 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     const gpl = wines.find((w) => w.producer === 'Chateau Grand-Puy-Lacoste' && w.vintage === 2016)
     expect(gpl).toBeDefined()
     const ratings = JSON.parse((gpl!.critic_ratings as string) ?? '{}') as Record<string, number>
-    expect(ratings).toEqual({ js: 96, nm: 95, ja: 94 })
-    expect(ratings.rp).toBeUndefined()
+    expect(ratings).toEqual({ js: 96, nm: 95, rp: 94, ja: 94 })
   })
 })
 
@@ -340,17 +341,15 @@ describe('ImportService - validation and duplicate handling', () => {
     expect(await db.getAllWines()).toHaveLength(0)
   })
 
-  it('CHARACTERIZATION: a garbage quantity silently imports as 0 bottles', async () => {
-    // parseInt('lots') is NaN, which the importer coerces to 0 — the row
-    // imports "successfully" with zero bottles instead of being flagged.
+  it('rejects a non-numeric quantity instead of importing 0 bottles', async () => {
     const file = csv(row({ Quantity: 'lots' }))
 
     const result = await ImportService.importFromCSV(file)
 
-    expect(result.success).toBe(1)
-    expect(result.errors).toEqual([])
-    const wines = await db.getAllWines()
-    expect(wines[0].quantity_in_storage).toBe(0)
+    expect(result.success).toBe(0)
+    expect(result.failed).toBe(1)
+    expect(result.errors[0]).toContain('Invalid quantity: lots')
+    expect(await db.getAllWines()).toHaveLength(0)
   })
 
   it('skips a duplicate appearing later in the same file', async () => {
@@ -362,6 +361,7 @@ describe('ImportService - validation and duplicate handling', () => {
     const result = await ImportService.importFromCSV(file)
 
     expect(result.success).toBe(1)
+    expect(result.skipped).toBe(1)
     const wines = await db.getAllWines()
     expect(wines).toHaveLength(1)
     // First occurrence wins; the duplicate's quantity is not merged
@@ -477,13 +477,25 @@ describe('ImportService - field parsing', () => {
     expect(wine.name).toBe('Testino')
   })
 
-  it('CHARACTERIZATION: the Bordeaux rule overwrites the wine name with the region', async () => {
+  it('parses Bordeaux château rows like any other wine (no region rename)', async () => {
     const wine = await importOne({
       Wine: 'Chateau Margaux',
       Country: 'France',
       Region: 'Bordeaux',
     })
     expect(wine.producer).toBe('Chateau Margaux')
-    expect(wine.name).toBe('Bordeaux')
+    expect(wine.name).toBe('Margaux')
+  })
+
+  it('stores the Size column as the wine format', async () => {
+    const wine = await importOne({ Size: 'Magnum' })
+    expect(wine.format).toBe('Magnum')
+
+    localStorage.clear()
+    await db.initializeDatabase()
+
+    // A "-" placeholder means unknown, not a format
+    const unknown = await importOne({ Size: '-' })
+    expect(unknown.format).toBeUndefined()
   })
 })

@@ -21,7 +21,9 @@ interface CSVRow {
 }
 
 export class ImportService {
-  static async importFromCSV(file: File): Promise<{ success: number; failed: number; errors: string[] }> {
+  static async importFromCSV(
+    file: File
+  ): Promise<{ success: number; skipped: number; failed: number; errors: string[] }> {
     const text = await file.text()
     const lines = text.trim().split('\n')
 
@@ -57,7 +59,13 @@ export class ImportService {
     // Use workflow to import all wines at once
     const result = await workflows.importWineCollection(winestoImport)
 
-    return { success: result.imported, failed: result.failed.length, errors: errors.concat(result.failed.map(f => `Row ${f.rowNumber}: ${f.field} - ${f.error}`)) }
+    // failed covers both parse-stage rejects and workflow validation failures
+    return {
+      success: result.imported,
+      skipped: result.skipped,
+      failed: errors.length + result.failed.length,
+      errors: errors.concat(result.failed.map(f => `Row ${f.rowNumber}: ${f.field} - ${f.error}`)),
+    }
   }
 
   private static parseCsvLine(line: string, headers: string[]): CSVRow {
@@ -86,17 +94,19 @@ export class ImportService {
     }
     values.push(current.trim().replace(/^"|"$/g, ''))
 
-    const row: any = {}
+    const row: Record<string, string> = {}
     headers.forEach((header, index) => {
       row[header] = values[index] || ''
     })
 
-    return row as CSVRow
+    return row as unknown as CSVRow
   }
 
   private static csvRowToWine(row: CSVRow): ImportWineRow {
     // Parse wine name into producer + name
-    let { producer, name } = this.parseWineName(row.Wine)
+    const parsed = this.parseWineName(row.Wine)
+    const producer = parsed.producer
+    let name = parsed.name
 
     // Extract classification from wine name if not already in CSV Classification field
     let classification = row.Classification?.trim() || ''
@@ -117,13 +127,6 @@ export class ImportService {
       name = name.replace(/\s+/g, ' ')
     }
 
-    // For Bordeaux wines, use the region/appellation as the wine name instead of duplicating the château
-    if (row.Country.toLowerCase() === 'france' && row.Region.toLowerCase() === 'bordeaux') {
-      // Extract the specific appellation from the region field if available
-      // e.g., "St Estephe" -> use as name instead of château name
-      name = row.Region.split(',')[0].trim() // Take first part if multiple regions
-    }
-
     // Parse drinking window
     const { start, end } = this.parseDrinkingWindow(row['Peak Drinking Window'])
 
@@ -138,6 +141,14 @@ export class ImportService {
 
     // Get tier from Wine Rating (1-5)
     const tier = Math.max(1, Math.min(5, parseInt(row['Wine Rating']) || 1)) as Tier
+
+    // Quantity must be a real number — a typo here would otherwise import 0 bottles
+    const quantity = parseInt(row.Quantity)
+    if (isNaN(quantity)) {
+      throw new Error(`Invalid quantity: ${row.Quantity}`)
+    }
+
+    const format = row.Size?.trim()
 
     return {
       name,
@@ -154,9 +165,10 @@ export class ImportService {
       serving_temp_max: tempMax,
       flavor_profile: row['Flavour Profile'].trim() || undefined,
       critic_ratings: JSON.stringify(criticRatings),
+      format: format && format !== '-' ? format : undefined,
       drinking_window_start: start,
       drinking_window_end: end,
-      quantity_in_storage: parseInt(row.Quantity) || 0,
+      quantity_in_storage: quantity,
       quantity_at_home: 0, // Imported wines go to storage
     }
   }
@@ -278,7 +290,8 @@ export class ImportService {
 
     const parts = ratings.split(':')
     for (const part of parts) {
-      const match = part.trim().match(/^(\w+)\s+(\d+)$/)
+      // Allow qualifiers like "RP 94+" — keep the numeric score
+      const match = part.trim().match(/^(\w+)\s+(\d+)\+?$/)
       if (match) {
         result[match[1].toLowerCase()] = parseInt(match[2])
       }
