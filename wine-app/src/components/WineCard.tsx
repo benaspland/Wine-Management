@@ -38,7 +38,7 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
       onClick={() => onSelect(wine)}
       className="relative group cursor-pointer"
     >
-      <div className="bg-surface-container-low p-6 pt-0 rounded-xl transition-all duration-300 hover:bg-surface-container h-full flex flex-col">
+      <div className="bg-surface-container-low p-6 pt-0 rounded-2xl transition-all duration-300 hover:bg-surface-container h-full flex flex-col">
         {/* Bottle Image */}
         <div className="relative -mt-12 mb-6 flex justify-center h-80">
           {wine.image_url ? (
@@ -83,7 +83,7 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
                   ? 'No bottles at home to drink'
                   : 'Mark one bottle as consumed'
               }
-              className="min-h-11 shrink-0 flex items-center gap-1.5 px-3 rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
+              className="min-h-11 shrink-0 flex items-center gap-1.5 px-3.5 rounded-full bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
             >
               <WineIcon size={16} aria-hidden="true" />
               Drink

@@ -19,7 +19,7 @@ export default function ToastStack() {
       {toasts.map(toast => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-center gap-3 max-w-md w-full md:w-auto bg-surface-container-high shadow-2xl rounded-lg px-4 py-3 border-l-4 ${
+          className={`pointer-events-auto flex items-center gap-3 max-w-md w-full md:w-auto bg-surface-container-high shadow-2xl rounded-2xl px-4 py-3 border-l-4 ${
             toast.type === 'error' ? 'border-l-error' : 'border-l-primary-container'
           }`}
         >

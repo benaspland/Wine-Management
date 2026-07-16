@@ -289,7 +289,7 @@ export default function WineDetailPanel({
 
             {wine.quantity_in_storage > 0 && (
               <div className="flex items-stretch gap-2">
-                <div className="flex items-center rounded border border-outline-variant/30">
+                <div className="flex items-center rounded-full border border-outline-variant/30">
                   <button
                     onClick={() => setMoveQuantity(q => Math.max(1, q - 1))}
                     disabled={isLoading || moveQuantity <= 1}
@@ -324,14 +324,14 @@ export default function WineDetailPanel({
               <button
                 onClick={() => onEdit(wine)}
                 disabled={isLoading}
-                className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded disabled:opacity-50 transition-colors"
+                className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
               >
                 Edit
               </button>
               <button
                 onClick={handleDelete}
                 disabled={isLoading}
-                className="flex-1 border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/50 py-3 text-xs tracking-widest uppercase font-bold rounded disabled:opacity-50 transition-colors"
+                className="flex-1 border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/50 py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
               >
                 Delete
               </button>

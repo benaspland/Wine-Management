@@ -32,6 +32,7 @@ html {
 }
 
 .btn-primary {
+  border-radius: 9999px;
   background-color: #ffbf00;
   color: #402d00;
   font-weight: bold;
@@ -52,6 +53,7 @@ html {
 }
 
 .btn-secondary {
+  border-radius: 9999px;
   border: 1px solid rgba(80, 69, 50, 0.3);
   color: #9c8f78;
   transition: color 0.2s, transform 0.2s;
@@ -68,7 +70,7 @@ html {
 .card {
   background-color: #1c1b1b;
   padding: 1.5rem;
-  border-radius: 0.75rem;
+  border-radius: 1.25rem;
   transition: background-color 0.3s;
 }
 

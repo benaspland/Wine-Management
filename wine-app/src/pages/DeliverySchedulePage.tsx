@@ -3,7 +3,7 @@ import { useWineStore } from '../store/wineStore'
 import { useDeliverySchedule } from '../hooks/useDeliverySchedule'
 import MessageModal from '../components/MessageModal'
 import { useToastStore } from '../store/toastStore'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Lock } from 'lucide-react'
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
@@ -76,25 +76,35 @@ export default function DeliverySchedulePage() {
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="font-headline text-4xl font-bold mb-6 text-on-surface">Delivery Schedule</h1>
 
-      {/* Cellar Capacity Overview */}
-      <div className="bg-surface-container-low p-6 rounded-lg mb-6">
-        <h2 className="text-xl font-bold mb-4">Home Cellar Capacity</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <p className="text-outline text-sm">Currently at Home</p>
-            <p className="text-3xl font-bold text-primary">{currentWinesAtHome}</p>
-          </div>
-          <div>
-            <p className="text-outline text-sm">Capacity</p>
-            <p className="text-3xl font-bold text-on-surface">{cellarCapacity}</p>
-          </div>
-          <div>
-            <p className="text-outline text-sm">Available Space</p>
-            <p className={`text-3xl font-bold ${availableCapacity > 0 ? 'text-success' : 'text-error'}`}>
-              {availableCapacity}
-            </p>
-          </div>
+      {/* Compact capacity strip: bottles at home / capacity, space left */}
+      <div
+        className="flex items-center gap-3 mb-8"
+        role="meter"
+        aria-valuenow={currentWinesAtHome}
+        aria-valuemin={0}
+        aria-valuemax={cellarCapacity}
+        aria-label="Home cellar capacity"
+        title={`${currentWinesAtHome} bottles at home of ${cellarCapacity} capacity`}
+      >
+        <div
+          className="relative h-2.5 flex-1 rounded-full overflow-hidden"
+          style={{ backgroundColor: 'rgba(255, 191, 0, 0.14)' }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${cellarCapacity > 0 ? Math.min(100, (currentWinesAtHome / cellarCapacity) * 100) : 0}%`,
+              backgroundColor: availableCapacity <= cellarCapacity * 0.05 ? '#e66767' : '#ffbf00',
+            }}
+          />
         </div>
+        <p className="text-sm whitespace-nowrap">
+          <span className="font-semibold text-on-surface">{currentWinesAtHome}</span>
+          <span className="text-outline"> / {cellarCapacity}</span>
+          <span className={`ml-2 ${availableCapacity > 0 ? 'text-outline' : 'text-error'}`}>
+            {availableCapacity} free
+          </span>
+        </p>
       </div>
 
       {/* Delivery Schedule */}
@@ -102,13 +112,13 @@ export default function DeliverySchedulePage() {
         <h2 className="text-xl font-bold text-on-surface mb-4">Upcoming Deliveries</h2>
 
         {scheduleError && (
-          <div className="bg-surface-container-low p-6 rounded-lg text-center">
+          <div className="bg-surface-container-low p-6 rounded-2xl text-center">
             <p className="text-error">Failed to generate delivery schedule: {scheduleError}</p>
           </div>
         )}
 
         {!scheduleError && deliverySchedule.length === 0 ? (
-          <div className="bg-surface-container-low p-6 rounded-lg text-center">
+          <div className="bg-surface-container-low p-6 rounded-2xl text-center">
             <p className="text-outline">No deliveries scheduled</p>
           </div>
         ) : (
@@ -118,7 +128,7 @@ export default function DeliverySchedulePage() {
             const totalWines = delivery.wines.length
 
             return (
-              <div key={delivery.date} className="bg-surface-container rounded-lg border border-outline-variant overflow-hidden">
+              <div key={delivery.date} className="bg-surface-container rounded-2xl border border-outline-variant/40 overflow-hidden">
                 <button
                   onClick={() => toggleCollapse(delivery.date)}
                   className="w-full p-4 flex justify-between items-center hover:bg-surface-container-high transition-colors text-left"
@@ -143,16 +153,26 @@ export default function DeliverySchedulePage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded text-sm font-medium ${
-                      delivery.status === 'completed' ? 'bg-success/20 text-success' :
-                      delivery.status === 'in_transit' ? 'bg-warning/20 text-warning' :
-                      'bg-primary/20 text-primary'
-                    }`}>
-                      {delivery.status}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Read-only status, styled to not look tappable */}
+                    <span className="flex items-center gap-1.5 text-xs text-outline">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          delivery.status === 'completed' ? 'bg-success' :
+                          delivery.status === 'in_transit' ? 'bg-warning' :
+                          'bg-primary-container'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {delivery.status === 'completed' ? 'Delivered' :
+                        delivery.status === 'in_transit' ? 'In transit' : 'Planned'}
                     </span>
-                    {delivery.locked && (
-                      <span className="px-3 py-1 rounded text-sm bg-outline/20 text-outline">
+                    {delivery.locked && delivery.status !== 'completed' && (
+                      <span
+                        className="flex items-center gap-1 text-xs text-outline"
+                        title="You have customised this delivery (promoted or deferred wines), so regeneration keeps it as-is"
+                      >
+                        <Lock size={11} aria-hidden="true" />
                         Curated
                       </span>
                     )}
@@ -168,7 +188,7 @@ export default function DeliverySchedulePage() {
                         const canModify = delivery.status !== 'completed'
 
                         return (
-                          <div key={wine.id} className="bg-surface p-3 rounded border border-outline-variant text-sm">
+                          <div key={wine.id} className="bg-surface p-3 rounded-xl border border-outline-variant/40 text-sm">
                             <div className="flex justify-between items-start gap-2">
                               <div className="min-w-0">
                                 <p className="font-semibold text-on-surface">
@@ -184,7 +204,7 @@ export default function DeliverySchedulePage() {
                                     <button
                                       onClick={() => handleDeferWine(wine.id, delivery.date, `${wine.producer} ${wine.name}`)}
                                       disabled={isDelaying || delivery.wines.length <= 1}
-                                      className="px-2 py-1 bg-surface-container-high text-on-surface rounded text-xs font-medium hover:bg-outline/20 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                      className="px-3 py-1.5 bg-surface-container-high text-on-surface rounded-full text-xs font-medium hover:bg-outline/20 transition-colors disabled:opacity-50 whitespace-nowrap"
                                       title="Defer this wine to a future delivery"
                                     >
                                       {isDelaying ? '...' : 'Defer'}
@@ -193,7 +213,7 @@ export default function DeliverySchedulePage() {
                                     <button
                                       onClick={() => handlePromoteWine(wine.id, wine.quantity, `${wine.producer} ${wine.name}`)}
                                       disabled={isPromoting}
-                                      className="px-2 py-1 bg-primary text-on-primary rounded text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                      className="px-3 py-1.5 bg-primary text-on-primary rounded-full text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50 whitespace-nowrap"
                                       title="Promote to next delivery"
                                     >
                                       {isPromoting ? '...' : 'Promote'}
@@ -210,7 +230,7 @@ export default function DeliverySchedulePage() {
                     {delivery.status !== 'completed' && (
                       <button
                         onClick={() => handleConfirmDelivery(delivery.date)}
-                        className="w-full px-4 py-2 bg-primary text-on-primary rounded font-medium hover:opacity-90"
+                        className="w-full px-4 py-2.5 bg-primary text-on-primary rounded-full font-medium hover:opacity-90"
                       >
                         Confirm Delivery
                       </button>

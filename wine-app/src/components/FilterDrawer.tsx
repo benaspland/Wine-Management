@@ -8,7 +8,7 @@ interface FilterDrawerProps {
 }
 
 const selectClass =
-  'w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary text-sm'
+  'w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary text-sm'
 const labelClass = 'block text-xs text-outline mb-1 uppercase tracking-wider'
 
 /**
@@ -57,7 +57,7 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
         aria-hidden="true"
         className="fixed inset-0 bg-black/40 z-40"
       />
-      <div className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-surface-container-low border-r border-outline-variant/30 z-50 flex flex-col">
+      <div className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-surface-container-low border-r border-outline-variant/30 z-50 flex flex-col rounded-r-3xl">
         <div className="flex justify-between items-center p-6 border-b border-outline-variant/10">
           <h2 className="font-headline text-xl font-bold text-on-surface">Filter & Sort</h2>
           <button onClick={onClose} aria-label="Close filters" className="text-outline hover:text-on-surface">
@@ -186,7 +186,7 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
           </p>
           <button
             onClick={clearFilters}
-            className="w-full border border-outline-variant/30 text-outline-variant hover:text-outline py-2 text-xs tracking-widest uppercase font-bold rounded transition-colors"
+            className="w-full border border-outline-variant/30 text-outline-variant hover:text-outline py-2.5 text-xs tracking-widest uppercase font-bold rounded-full transition-colors"
           >
             Clear Filters
           </button>

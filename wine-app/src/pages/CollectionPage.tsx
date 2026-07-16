@@ -166,13 +166,13 @@ export default function CollectionPage() {
                 placeholder="Search producer, name, region..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full bg-surface-container-low text-on-surface pl-9 pr-3 py-2.5 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
+                className="w-full bg-surface-container-low text-on-surface pl-9 pr-3 py-2.5 rounded-full border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
               />
             </div>
 
             <button
               onClick={() => setShowFilters(true)}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-surface-container-low border border-outline-variant/20 text-on-surface-variant hover:border-primary text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-low border border-outline-variant/20 text-on-surface-variant hover:border-primary text-sm font-medium transition-colors"
             >
               <SlidersHorizontal size={16} aria-hidden="true" />
               <span className="hidden sm:inline">Filter & Sort</span>
@@ -183,7 +183,7 @@ export default function CollectionPage() {
               )}
             </button>
 
-            <div className="flex rounded-lg border border-outline-variant/20 overflow-hidden">
+            <div className="flex rounded-full border border-outline-variant/20 overflow-hidden">
               <button
                 onClick={() => switchViewMode('grid')}
                 aria-label="Grid view"
@@ -207,7 +207,7 @@ export default function CollectionPage() {
                 setEditingWine(null)
                 setShowForm(true)
               }}
-              className="flex items-center gap-2 bg-primary-container text-on-primary px-4 py-2.5 rounded-lg font-medium hover:bg-primary transition-colors active:scale-95"
+              className="flex items-center gap-2 bg-primary-container text-on-primary px-5 py-2.5 rounded-full font-medium hover:bg-primary transition-colors active:scale-95"
             >
               <Plus size={18} aria-hidden="true" />
               Add Wine
