@@ -18,6 +18,7 @@ interface CSVRow {
   'Alcohol Level': string
   'Flavour Profile': string
   'Recommended Service Temp': string
+  'Purchase Price'?: string
 }
 
 export class ImportService {
@@ -150,6 +151,11 @@ export class ImportService {
 
     const format = row.Size?.trim()
 
+    // Optional per-bottle price; tolerate currency symbols and thousands
+    // separators ("£25.50", "1,200"). Absent/unparseable means unrecorded.
+    const rawPrice = (row['Purchase Price'] ?? '').replace(/[^0-9.]/g, '')
+    const purchasePrice = rawPrice ? parseFloat(rawPrice) : NaN
+
     return {
       name,
       vintage: parseInt(row.Vintage),
@@ -166,6 +172,7 @@ export class ImportService {
       flavor_profile: row['Flavour Profile'].trim() || undefined,
       critic_ratings: JSON.stringify(criticRatings),
       format: format && format !== '-' ? format : undefined,
+      purchase_price: !isNaN(purchasePrice) && purchasePrice > 0 ? purchasePrice : undefined,
       drinking_window_start: start,
       drinking_window_end: end,
       quantity_in_storage: quantity,

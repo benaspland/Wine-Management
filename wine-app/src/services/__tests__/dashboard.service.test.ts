@@ -51,6 +51,20 @@ describe('computeDashboardStats', () => {
     expect(stats.bottlesAtHome).toBe(5)
   })
 
+  it('sums cellar value only over wines with a recorded price', () => {
+    const stats = computeDashboardStats(
+      [
+        wine({ purchase_price: 25, quantity_in_storage: 10, quantity_at_home: 2 }), // 300
+        wine({ purchase_price: 100, quantity_in_storage: 3 }), // 300... wait 3*100=300
+        wine({ quantity_in_storage: 6 }), // unpriced
+      ],
+      NOW
+    )
+
+    expect(stats.totalValue).toBe(25 * 12 + 100 * 3)
+    expect(stats.pricedBottles).toBe(15)
+  })
+
   it('excludes wines with zero bottles from every stat', () => {
     const stats = computeDashboardStats(
       [

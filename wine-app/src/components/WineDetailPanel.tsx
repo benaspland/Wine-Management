@@ -195,7 +195,15 @@ export default function WineDetailPanel({
               <p className="text-[10px] text-outline uppercase tracking-wider">Alcohol</p>
               <p className="text-sm font-medium">{wine.alcohol_percent}% ABV</p>
             </div>
-            {scheduledDeliveryDate && (
+            {typeof wine.purchase_price === 'number' && wine.purchase_price > 0 && (
+            <div>
+              <p className="text-[10px] text-outline uppercase tracking-wider">Purchase Price</p>
+              <p className="text-sm font-medium">
+                £{wine.purchase_price.toLocaleString()} <span className="text-outline">/ bottle</span>
+              </p>
+            </div>
+          )}
+          {scheduledDeliveryDate && (
               <div>
                 <p className="text-[10px] text-outline uppercase tracking-wider">
                   {new Date(scheduledDeliveryDate) <= new Date() ? 'Delivered' : 'Scheduled Delivery'}

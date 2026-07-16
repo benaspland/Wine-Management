@@ -53,6 +53,18 @@ function StatTile({ label, value, sub, to }: { label: string; value: string; sub
 export default function DashboardPage() {
   const wines = useWineStore(state => state.wines)
   const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
+  const setWindowFilter = useWineStore(state => state.setWindowFilter)
+  const setSortBy = useWineStore(state => state.setSortBy)
+
+  /** Jump to the cellar pre-filtered to at-risk wines, most urgent first. */
+  const presetDrinkSoon = () => {
+    setWindowFilter('closing')
+    setSortBy('window')
+  }
+  const presetReady = () => {
+    setWindowFilter('ready')
+    setSortBy('window')
+  }
 
   const [pace, setPace] = useState<DrinkingPace | null>(null)
   const [capacity, setCapacity] = useState(80)
@@ -135,7 +147,11 @@ export default function DashboardPage() {
         <StatTile
           label="Total bottles"
           value={String(stats.totalBottles)}
-          sub={`${stats.totalWines} wines`}
+          sub={
+            stats.totalValue > 0
+              ? `${stats.totalWines} wines · £${Math.round(stats.totalValue).toLocaleString()}`
+              : `${stats.totalWines} wines`
+          }
           to="/cellar"
         />
         <StatTile
@@ -208,18 +224,20 @@ export default function DashboardPage() {
         <div className="bg-surface-container-low rounded-xl p-5">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Drinking windows</h3>
           <div className="flex gap-6 mb-4 text-sm">
-            <div>
+            <Link to="/cellar" onClick={presetReady} className="hover:opacity-80">
               <p className="text-2xl font-sans font-semibold text-on-surface">{stats.windowWatch.readyWines}</p>
               <p className="text-xs text-outline">ready now</p>
-            </div>
+            </Link>
             <div>
               <p className="text-2xl font-sans font-semibold text-on-surface">{stats.windowWatch.waitingWines}</p>
               <p className="text-xs text-outline">still waiting</p>
             </div>
-            <div>
-              <p className="text-2xl font-sans font-semibold text-on-surface">{stats.windowWatch.closingSoonWines}</p>
+            <Link to="/cellar" onClick={presetDrinkSoon} className="hover:opacity-80">
+              <p className={`text-2xl font-sans font-semibold ${stats.windowWatch.closingSoonWines > 0 ? 'text-[#c98500]' : 'text-on-surface'}`}>
+                {stats.windowWatch.closingSoonWines}
+              </p>
               <p className="text-xs text-outline">closing soon</p>
-            </div>
+            </Link>
           </div>
 
           {stats.windowWatch.closingSoonest.length > 0 && (

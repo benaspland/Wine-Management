@@ -94,6 +94,46 @@ describe('WineForm - add mode quantity mapping', () => {
   })
 })
 
+describe('WineForm - purchase price', () => {
+  it('maps a positive price to purchase_price', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(<WineForm isOpen={true} onClose={vi.fn()} onSubmit={onSubmit} />)
+
+    setField('producer', 'Château Test')
+    setField('name', 'Cuvée Test')
+    setField('purchase_price', '32.50')
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit.mock.calls[0][0].purchase_price).toBe(32.5)
+  })
+
+  it('leaves the price unset when the field is empty', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(<WineForm isOpen={true} onClose={vi.fn()} onSubmit={onSubmit} />)
+
+    setField('producer', 'Château Test')
+    setField('name', 'Cuvée Test')
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit.mock.calls[0][0].purchase_price).toBeUndefined()
+  })
+
+  it('shows the stored price when editing', () => {
+    render(
+      <WineForm
+        isOpen={true}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+        initialWine={makeWine({ purchase_price: 45 })}
+      />
+    )
+    const field = document.querySelector('[name="purchase_price"]') as HTMLInputElement
+    expect(field.value).toBe('45')
+  })
+})
+
 describe('WineForm - edit mode quantity mapping', () => {
   it('shows the combined bottle count and keeps home bottles when reducing quantity', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined)

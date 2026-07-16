@@ -35,6 +35,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           alcohol_percent: initialWine.alcohol_percent ?? 0,
           serving_temp_min: initialWine.serving_temp_min ?? 15,
           serving_temp_max: initialWine.serving_temp_max ?? 18,
+          purchase_price: initialWine.purchase_price ?? 0,
           notes: initialWine.notes ?? '',
           critic_ratings: initialWine.critic_ratings ?? {},
           flavor_profile: initialWine.flavor_profile ?? '',
@@ -58,6 +59,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           alcohol_percent: 0,
           serving_temp_min: 15,
           serving_temp_max: 18,
+          purchase_price: 0,
           notes: '',
           critic_ratings: {},
           flavor_profile: '',
@@ -70,7 +72,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     const intFields = ['vintage', 'quantity', 'drinking_window_start', 'drinking_window_end', 'serving_temp_min', 'serving_temp_max']
 
     let parsed: string | number = value
-    if (name === 'alcohol_percent') {
+    if (name === 'alcohol_percent' || name === 'purchase_price') {
       parsed = value ? parseFloat(value) : 0
     } else if (intFields.includes(name)) {
       parsed = value ? parseInt(value) : 0
@@ -90,7 +92,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     // Translate the form's single quantity + location into the split
     // inventory fields the Wine record uses. When editing, bottles at
     // home stay at home and any quantity change is applied to storage.
-    const { location, quantity, ...wineFields } = formData
+    const { location, quantity, purchase_price, ...wineFields } = formData
     let quantity_in_storage: number
     let quantity_at_home: number
     if (initialWine) {
@@ -102,7 +104,12 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     }
 
     try {
-      await onSubmit({ ...wineFields, quantity_in_storage, quantity_at_home })
+      await onSubmit({
+        ...wineFields,
+        purchase_price: purchase_price > 0 ? purchase_price : undefined,
+        quantity_in_storage,
+        quantity_at_home,
+      })
       onClose()
     } catch (error) {
       alert(`Error: ${(error as Error).message}`)
@@ -111,7 +118,10 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={initialWine ? 'Edit Wine' : 'Add New Wine'} size="lg">
-      <form onSubmit={handleSubmit} className="space-y-6">
+      {/* noValidate: validation is handled in handleSubmit; native number
+          constraint checks (step) also false-negative on decimals in some
+          DOM implementations */}
+      <form onSubmit={handleSubmit} noValidate className="space-y-6">
         {/* Producer & Name */}
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -248,6 +258,23 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               <option>1.5L</option>
               <option>3L</option>
             </select>
+          </div>
+        </div>
+
+        {/* Purchase Price */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-on-surface mb-1">Price per Bottle (£)</label>
+            <input
+              type="number"
+              name="purchase_price"
+              value={formData.purchase_price || ''}
+              onChange={handleChange}
+              step="0.01"
+              min="0"
+              placeholder="optional"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+            />
           </div>
         </div>
 

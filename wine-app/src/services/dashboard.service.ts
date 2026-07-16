@@ -43,6 +43,10 @@ export interface DrinkingPace {
 export interface DashboardStats {
   totalBottles: number
   totalWines: number
+  /** Sum of purchase_price x bottles for wines that have a price. */
+  totalValue: number
+  /** How many bottles the value covers (prices are optional per wine). */
+  pricedBottles: number
   bottlesAtHome: number
   bottlesInStorage: number
   readyToDrinkWines: number
@@ -60,7 +64,8 @@ const TIER_LABELS: Record<number, string> = {
   5: 'Icon',
 }
 
-const CLOSING_SOON_YEARS = 2
+/** In-window wines whose window ends within this many years are "closing soon". */
+export const CLOSING_SOON_YEARS = 2
 const TOP_REGIONS = 6
 
 function bottleCount(wine: Wine): number {
@@ -78,6 +83,10 @@ export function computeDashboardStats(wines: Wine[], now: Date = new Date()): Da
   const totalBottles = owned.reduce((sum, w) => sum + bottleCount(w), 0)
   const bottlesAtHome = owned.reduce((sum, w) => sum + w.quantity_at_home, 0)
   const bottlesInStorage = owned.reduce((sum, w) => sum + w.quantity_in_storage, 0)
+
+  const priced = owned.filter(w => typeof w.purchase_price === 'number' && w.purchase_price > 0)
+  const totalValue = priced.reduce((sum, w) => sum + w.purchase_price! * bottleCount(w), 0)
+  const pricedBottles = priced.reduce((sum, w) => sum + bottleCount(w), 0)
 
   // By type (bottles), fixed canonical order so chart colors stay stable
   const typeOrder = ['Red', 'White', 'Rosé', 'Sparkling', 'Fortified']
@@ -130,6 +139,8 @@ export function computeDashboardStats(wines: Wine[], now: Date = new Date()): Da
   return {
     totalBottles,
     totalWines: owned.length,
+    totalValue,
+    pricedBottles,
     bottlesAtHome,
     bottlesInStorage,
     readyToDrinkWines: ready.length,

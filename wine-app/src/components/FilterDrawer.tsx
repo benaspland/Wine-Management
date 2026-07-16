@@ -31,6 +31,8 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
   const setWineTypeFilter = useWineStore(state => state.setWineTypeFilter)
   const formatFilter = useWineStore(state => state.formatFilter)
   const setFormatFilter = useWineStore(state => state.setFormatFilter)
+  const windowFilter = useWineStore(state => state.windowFilter)
+  const setWindowFilter = useWineStore(state => state.setWindowFilter)
   const sortBy = useWineStore(state => state.sortBy)
   const setSortBy = useWineStore(state => state.setSortBy)
   const clearFilters = useWineStore(state => state.clearFilters)
@@ -94,6 +96,20 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
           </div>
 
           <div>
+            <label className={labelClass}>Drinking window</label>
+            <select
+              value={windowFilter}
+              onChange={e => setWindowFilter(e.target.value as 'all' | 'ready' | 'closing' | 'waiting')}
+              className={selectClass}
+            >
+              <option value="all">Any Window</option>
+              <option value="ready">Ready to Drink</option>
+              <option value="closing">Closing Soon</option>
+              <option value="waiting">Still Waiting</option>
+            </select>
+          </div>
+
+          <div>
             <label className={labelClass}>Region</label>
             <select
               value={regionFilter ?? ''}
@@ -153,12 +169,13 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
             <label className={labelClass}>Sort By</label>
             <select
               value={sortBy}
-              onChange={e => setSortBy(e.target.value as 'vintage' | 'tier' | 'producer')}
+              onChange={e => setSortBy(e.target.value as 'vintage' | 'tier' | 'producer' | 'window')}
               className={selectClass}
             >
               <option value="vintage">Vintage (newest first)</option>
               <option value="tier">Tier (highest first)</option>
               <option value="producer">Producer (A–Z)</option>
+              <option value="window">Window urgency (closing first)</option>
             </select>
           </div>
         </div>
