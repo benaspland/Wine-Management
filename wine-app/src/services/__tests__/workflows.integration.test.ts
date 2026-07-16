@@ -763,4 +763,118 @@ describe('Workflows - Integration/Regression Tests', () => {
       expect(consumptionLog.length).toBe(1)
     })
   })
+
+  // =========================================================================
+  // STATE TRANSITION INVARIANTS
+  // Properties that must hold across every storage -> home -> consumed
+  // transition, regardless of the path taken.
+  // =========================================================================
+
+  describe('State Transition Invariants', () => {
+    async function createDeliveredWine(storage: number, home: number, deliveredDate: string) {
+      const wine = await db.createWine({
+        name: 'Invariant',
+        vintage: 2015,
+        tier: 1,
+        region: 'Rioja',
+        drinking_window_start: 2020,
+        drinking_window_end: 2045,
+        quantity_in_storage: storage,
+        quantity_at_home: home,
+      })
+      const window = await db.createDeliveryWindow({
+        scheduled_date: deliveredDate,
+        locked: false,
+        status: 'completed',
+      })
+      await db.createDeliveryCompletion({
+        wine_id: wine.id,
+        delivery_window_id: window.id,
+        quantity_delivered: home,
+        delivered_date: deliveredDate,
+        status: 'completed',
+      })
+      return wine
+    }
+
+    it('conserves bottles across the storage -> home -> consumed chain', async () => {
+      const wine = await createDeliveredWine(12, 0, '2026-01-01')
+      const today = new Date().toISOString().split('T')[0]
+
+      await workflows.moveToHome(wine.id, 6)
+      await workflows.consumeWine(wine.id, today)
+      await workflows.consumeWine(wine.id, today)
+
+      const after = await db.getWineById(wine.id)
+      const log = await db.getConsumptionLogByWineId(wine.id)
+
+      expect(after?.quantity_in_storage).toBe(6)
+      expect(after?.quantity_at_home).toBe(4)
+      expect(log.length).toBe(2)
+      // Nothing created or destroyed: storage + home + consumed = original 12
+      expect(after!.quantity_in_storage + after!.quantity_at_home + log.length).toBe(12)
+    })
+
+    it('never lets home quantity go negative when consuming to zero', async () => {
+      const wine = await createDeliveredWine(0, 1, '2026-01-01')
+      const today = new Date().toISOString().split('T')[0]
+
+      await workflows.consumeWine(wine.id, today)
+      await expect(workflows.consumeWine(wine.id, today)).rejects.toThrow(
+        'Cannot consume. No bottles at home.'
+      )
+
+      const after = await db.getWineById(wine.id)
+      expect(after?.quantity_at_home).toBe(0)
+      // The rejected consumption left no log entry behind
+      const log = await db.getConsumptionLogByWineId(wine.id)
+      expect(log.length).toBe(1)
+    })
+
+    it('rejects moving more bottles than storage holds, leaving quantities unchanged', async () => {
+      const wine = await createDeliveredWine(3, 0, '2026-01-01')
+
+      await expect(workflows.moveToHome(wine.id, 5)).rejects.toThrow(
+        /Cannot move more than available in storage/
+      )
+
+      const after = await db.getWineById(wine.id)
+      expect(after?.quantity_in_storage).toBe(3)
+      expect(after?.quantity_at_home).toBe(0)
+    })
+
+    it('allows consumption exactly on the delivery date (boundary)', async () => {
+      const today = new Date().toISOString().split('T')[0]
+      const wine = await createDeliveredWine(0, 2, today)
+
+      await workflows.consumeWine(wine.id, today)
+
+      const after = await db.getWineById(wine.id)
+      expect(after?.quantity_at_home).toBe(1)
+    })
+
+    it('rejects consumption dated before the first delivery, leaving state unchanged', async () => {
+      const wine = await createDeliveredWine(0, 2, '2026-06-01')
+
+      await expect(workflows.consumeWine(wine.id, '2026-05-15')).rejects.toThrow(
+        /Cannot consume wine before delivery date/
+      )
+
+      const after = await db.getWineById(wine.id)
+      expect(after?.quantity_at_home).toBe(2)
+      expect(await db.getConsumptionLogByWineId(wine.id)).toHaveLength(0)
+    })
+
+    it('rejects consumption dated in the future', async () => {
+      const wine = await createDeliveredWine(0, 2, '2026-01-01')
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+      await expect(workflows.consumeWine(wine.id, tomorrow)).rejects.toThrow(
+        'Cannot log consumption for future date'
+      )
+
+      const after = await db.getWineById(wine.id)
+      expect(after?.quantity_at_home).toBe(2)
+    })
+  })
 })

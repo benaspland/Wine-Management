@@ -6,9 +6,3 @@ import '@testing-library/jest-dom'
 afterEach(() => {
   cleanup()
 })
-
-// Mock window.electronAPI if needed
-Object.defineProperty(window, 'electronAPI', {
-  value: undefined,
-  writable: true,
-})
