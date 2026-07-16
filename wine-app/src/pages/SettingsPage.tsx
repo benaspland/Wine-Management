@@ -391,7 +391,7 @@ export default function SettingsPage() {
             <button
               onClick={() => restoreInputRef.current?.click()}
               disabled={isLoading}
-              className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded disabled:opacity-50 transition-colors"
+              className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
             >
               Restore Backup
             </button>

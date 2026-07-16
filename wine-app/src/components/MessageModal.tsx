@@ -13,7 +13,7 @@ export default function MessageModal({ type, text, onClose }: MessageModalProps)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className={`bg-surface rounded-lg shadow-lg p-8 max-w-md mx-4 border-l-4 ${borderColor}`}>
+      <div className={`bg-surface rounded-2xl shadow-lg p-8 max-w-md mx-4 border-l-4 ${borderColor}`}>
         <div className="flex items-start gap-4">
           <div className="text-3xl" style={{ color }}>
             {icon}
@@ -27,7 +27,7 @@ export default function MessageModal({ type, text, onClose }: MessageModalProps)
         </div>
         <button
           onClick={onClose}
-          className="mt-6 w-full bg-primary text-on-primary py-2 rounded font-medium hover:bg-primary/90 transition-colors"
+          className="mt-6 w-full bg-primary text-on-primary py-2.5 rounded-full font-medium hover:bg-primary/90 transition-colors"
         >
           OK
         </button>

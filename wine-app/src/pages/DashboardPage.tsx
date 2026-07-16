@@ -41,7 +41,7 @@ function StatTile({ label, value, sub, to }: { label: string; value: string; sub
   return (
     <Link
       to={to}
-      className="block bg-surface-container-low rounded-xl p-4 hover:bg-surface-container transition-colors"
+      className="block bg-surface-container-low rounded-2xl p-4 hover:bg-surface-container transition-colors"
     >
       <p className="text-xs text-outline uppercase tracking-wider mb-1">{label}</p>
       <p className="text-2xl font-sans font-semibold text-on-surface">{value}</p>
@@ -118,17 +118,17 @@ export default function DashboardPage() {
     return (
       <div className="px-6 max-w-5xl mx-auto py-8">
         <h2 className="font-headline text-4xl md:text-7xl mb-8 text-on-surface">Cellar Overview</h2>
-        <div className="bg-surface-container-low rounded-xl p-8 text-center">
+        <div className="bg-surface-container-low rounded-2xl p-8 text-center">
           <WineIcon size={40} className="text-outline mx-auto mb-4" aria-hidden="true" />
           <p className="text-on-surface mb-2 font-medium">Your cellar is empty</p>
           <p className="text-outline text-sm mb-6">
             Add wines one at a time, or import your whole collection from a CSV file.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/cellar" className="btn-primary rounded">Go to Cellar</Link>
+            <Link to="/cellar" className="btn-primary">Go to Cellar</Link>
             <Link
               to="/settings"
-              className="border border-outline-variant/30 text-outline-variant hover:text-outline px-6 py-3 text-xs tracking-widest uppercase font-bold rounded transition-colors"
+              className="border border-outline-variant/30 text-outline-variant hover:text-outline px-6 py-3 text-xs tracking-widest uppercase font-bold rounded-full transition-colors"
             >
               Import CSV
             </Link>
@@ -175,7 +175,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Meters */}
-      <div className="bg-surface-container-low rounded-xl p-5 mb-6 space-y-5">
+      <div className="bg-surface-container-low rounded-2xl p-5 mb-6 space-y-5">
         <Meter
           label="Home cellar"
           value={stats.bottlesAtHome}
@@ -198,7 +198,7 @@ export default function DashboardPage() {
 
       {/* Composition */}
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low rounded-xl p-5">
+        <div className="bg-surface-container-low rounded-2xl p-5">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By type</h3>
           <DonutChart
             segments={donutSegments}
@@ -207,21 +207,21 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="bg-surface-container-low rounded-xl p-5">
+        <div className="bg-surface-container-low rounded-2xl p-5">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Top regions</h3>
           <BarList rows={stats.topRegions.map(r => ({ label: r.label, value: r.bottles }))} />
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low rounded-xl p-5">
+        <div className="bg-surface-container-low rounded-2xl p-5">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By tier</h3>
           <BarList rows={stats.byTier.map(t => ({ label: t.label, value: t.wines }))} />
           <p className="text-xs text-outline mt-3">wines per tier</p>
         </div>
 
         {/* Window watch */}
-        <div className="bg-surface-container-low rounded-xl p-5">
+        <div className="bg-surface-container-low rounded-2xl p-5">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Drinking windows</h3>
           <div className="flex gap-6 mb-4 text-sm">
             <Link to="/cellar" onClick={presetReady} className="hover:opacity-80">
@@ -260,13 +260,13 @@ export default function DashboardPage() {
       <div className="flex flex-wrap gap-3">
         <Link
           to="/deliveries"
-          className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-lg px-4 py-2.5 transition-colors"
+          className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-full px-4 py-2.5 transition-colors"
         >
           <Truck size={16} aria-hidden="true" /> Manage deliveries
         </Link>
         <Link
           to="/schedule"
-          className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-lg px-4 py-2.5 transition-colors"
+          className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-full px-4 py-2.5 transition-colors"
         >
           <CalendarDays size={16} aria-hidden="true" /> Drinking schedule
         </Link>

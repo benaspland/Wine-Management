@@ -132,7 +132,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               value={formData.producer}
               onChange={handleChange}
               placeholder="e.g., Château Margaux"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -143,7 +143,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               value={formData.name}
               onChange={handleChange}
               placeholder="e.g., Margaux"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -156,7 +156,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="location"
               value={formData.location}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             >
               <option value="home">Home</option>
               <option value="storage">Storage</option>
@@ -169,7 +169,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="vintage"
               value={formData.vintage}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -184,7 +184,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               value={formData.country}
               onChange={handleChange}
               placeholder="e.g., France"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -195,7 +195,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               value={formData.region}
               onChange={handleChange}
               placeholder="e.g., Bordeaux"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -208,7 +208,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="wine_type"
               value={formData.wine_type}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             >
               <option>Red</option>
               <option>White</option>
@@ -223,7 +223,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="tier"
               value={formData.tier}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             >
               {Object.entries(TIER_LABELS).map(([num, label]) => (
                 <option key={num} value={num}>{label}</option>
@@ -242,7 +242,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               value={formData.quantity}
               onChange={handleChange}
               min="0"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -251,7 +251,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="format"
               value={formData.format}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             >
               <option>375ml</option>
               <option>750ml</option>
@@ -273,7 +273,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               step="0.01"
               min="0"
               placeholder="optional"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -287,7 +287,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="drinking_window_start"
               value={formData.drinking_window_start}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -297,7 +297,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="drinking_window_end"
               value={formData.drinking_window_end}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -311,7 +311,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="serving_temp_min"
               value={formData.serving_temp_min}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -321,7 +321,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               name="serving_temp_max"
               value={formData.serving_temp_max}
               onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -338,7 +338,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               step="0.1"
               min="0"
               max="20"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -349,7 +349,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               value={formData.classification}
               onChange={handleChange}
               placeholder="e.g., Reserva, DOCG"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -363,7 +363,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             onChange={handleChange}
             rows={3}
             placeholder="Critic notes, tasting notes..."
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary resize-none"
+            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary resize-none"
           />
         </div>
 
@@ -376,7 +376,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             value={formData.varietal}
             onChange={handleChange}
             placeholder="e.g., Cabernet Sauvignon : Merlot"
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
           />
         </div>
 
@@ -389,7 +389,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             value={formData.flavor_profile}
             onChange={handleChange}
             placeholder="e.g., Blackberry : Cassis : Graphite"
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary"
+            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
           />
         </div>
 
@@ -408,7 +408,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded disabled:opacity-50 transition-colors"
+            className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
           >
             Cancel
           </button>

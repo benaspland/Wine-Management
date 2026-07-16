@@ -51,7 +51,7 @@ test('add a wine, persist it across reload, then delete it', async ({ page }) =>
 test('delivery and drinking schedule pages render', async ({ page }) => {
   await page.goto('/deliveries')
   await expect(page.getByText('Delivery Schedule').first()).toBeVisible()
-  await expect(page.getByText('Home Cellar Capacity').first()).toBeVisible()
+  await expect(page.getByText('Upcoming Deliveries').first()).toBeVisible()
 
   await page.goto('/schedule')
   await expect(page.getByText('Drinking Schedule').first()).toBeVisible()
