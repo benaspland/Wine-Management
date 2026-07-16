@@ -1,0 +1,52 @@
+name: Deploy to GitHub Pages
+
+# Publishes the built PWA to GitHub Pages on every push to main, and can
+# be run on demand from the Actions tab (workflow_dispatch). Runs on
+# GitHub's infrastructure, so no local machine is needed to deploy.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let an in-progress one finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: wine-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: wine-app/package-lock.json
+      - run: npm ci
+      - run: npm run build:ghpages
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Relative to repo root — working-directory does not apply to actions
+          path: wine-app/dist
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
