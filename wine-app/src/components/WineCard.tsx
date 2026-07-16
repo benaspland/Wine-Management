@@ -1,0 +1,118 @@
+import type { Wine } from '../types/index'
+import { TIER_LABELS } from '../types/index'
+import { WineService } from '../services/wine.service'
+import WineInfo from './WineInfo'
+import LocationBadge from './LocationBadge'
+import { Wine as WineIcon } from 'lucide-react'
+
+interface WineCardProps {
+  wine: Wine
+  onSelect: (wine: Wine) => void
+  onConsume: (wineId: string) => Promise<void>
+  isLoading?: boolean
+}
+
+export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineCardProps) {
+  const drinkingStatus = WineService.getDrinkingWindowLabel(wine)
+  const drinkingColor =
+    drinkingStatus === 'Ready to Drink' ? 'text-primary' :
+    drinkingStatus.includes('Wait') ? 'text-outline' :
+    drinkingStatus === 'Peak' ? 'text-primary' :
+    'text-outline'
+
+  const tierLabel = TIER_LABELS[wine.tier]
+  const tierBgColor =
+    wine.tier === 5 ? 'bg-primary-container text-on-primary-fixed-variant' :
+    wine.tier === 4 ? 'bg-on-surface text-surface' :
+    wine.tier === 3 ? 'border border-primary/40 text-primary' :
+    'bg-surface-container-high text-on-surface-variant'
+
+  const handleConsume = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (wine.quantity_at_home === 0) return
+    await onConsume(wine.id)
+  }
+
+  return (
+    <div
+      onClick={() => onSelect(wine)}
+      className="relative group cursor-pointer"
+    >
+      <div className="bg-surface-container-low p-6 pt-0 rounded-xl transition-all duration-300 hover:bg-surface-container h-full flex flex-col">
+        {/* Bottle Image */}
+        <div className="relative -mt-12 mb-6 flex justify-center h-80">
+          {wine.image_url ? (
+            <img
+              alt={`${wine.producer} ${wine.name}`}
+              loading="lazy"
+              decoding="async"
+              className="h-full object-contain drop-shadow-[0_20px_20px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-500"
+              src={wine.image_url}
+            />
+          ) : (
+            <div className="h-full w-24 bg-surface-container rounded flex items-center justify-center opacity-50">
+              <WineIcon size={32} className="text-outline" aria-hidden="true" />
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 space-y-4">
+          {/* Header */}
+          <div className="flex justify-between items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <span className="text-primary text-xs font-bold tracking-[0.2em] uppercase">
+                {wine.country}, {wine.region}
+              </span>
+              <div className="mt-1">
+                <WineInfo
+                  wine={wine}
+                  producerSize="2xl"
+                  nameSize="sm"
+                  classificationSize="xs"
+                  showClassification={true}
+                  layout="vertical"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleConsume}
+              disabled={wine.quantity_at_home === 0 || isLoading}
+              title={
+                wine.quantity_at_home === 0
+                  ? 'No bottles at home to drink'
+                  : 'Mark one bottle as consumed'
+              }
+              className="min-h-11 shrink-0 flex items-center gap-1.5 px-3 rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
+            >
+              <WineIcon size={16} aria-hidden="true" />
+              Drink
+            </button>
+          </div>
+
+          {/* Tier & Details Badges */}
+          <div className="flex flex-wrap gap-2 pt-2">
+            <span className={`${tierBgColor} px-3 py-1 text-[10px] font-black tracking-widest uppercase whitespace-nowrap rounded-sm shadow-sm`}>
+              {tierLabel}
+            </span>
+            <span className="bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter text-on-surface-variant uppercase whitespace-nowrap">
+              {wine.varietal ? wine.varietal.split(':')[0].trim() : 'Unknown'}
+            </span>
+            <span className={`bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter uppercase whitespace-nowrap ${drinkingColor}`}>
+              {drinkingStatus}
+            </span>
+          </div>
+
+          {/* Footer: where the bottles are */}
+          <div className="pt-4 border-t border-outline-variant/10 flex justify-between items-center">
+            <LocationBadge wine={wine} />
+            <div className="flex items-center gap-1.5 bg-surface-container-highest px-2 py-1 rounded text-[10px] text-outline font-bold tracking-widest uppercase">
+              <span className="text-primary">●</span>
+              {wine.format}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
