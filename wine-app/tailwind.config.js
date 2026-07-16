@@ -56,12 +56,20 @@ export default {
       "transparent": "transparent",
       "white": "#ffffff",
       "black": "#000000",
+      // Semantic status colors + the red ramp used by destructive actions
+      // (this palette REPLACES Tailwind's defaults, so anything used in
+      // markup must be declared here)
+      "success": "#4ade80",
+      "warning": "#fbbf24",
+      "red-300": "#fca5a5",
+      "red-400": "#f87171",
+      "red-500": "#ef4444",
     },
     fontFamily: {
-      "headline": ["Noto Serif"],
-      "body": ["Inter"],
-      "label": ["Inter"],
-      "sans": ["Inter", "system-ui", "sans-serif"],
+      "headline": ["Noto Serif", "serif"],
+      "body": ["Inter Variable", "Inter", "sans-serif"],
+      "label": ["Inter Variable", "Inter", "sans-serif"],
+      "sans": ["Inter Variable", "Inter", "system-ui", "sans-serif"],
       "serif": ["Noto Serif", "serif"],
       "mono": ["monospace"],
     },

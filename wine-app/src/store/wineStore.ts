@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Wine, CellarConfig } from '../types/index'
+import type { Wine, CellarConfig, ConsumptionLogEntry } from '../types/index'
 import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 
@@ -26,7 +26,8 @@ interface WineStore {
   addWine: (wine: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => Promise<void>
   editWineDetails: (id: string, updates: Partial<Wine>) => Promise<void>
   addBottles: (wineId: string, quantity: number, destination: 'storage' | 'home') => Promise<void>
-  consumeWine: (wineId: string, consumedDate?: string, notes?: string) => Promise<void>
+  consumeWine: (wineId: string, consumedDate?: string, notes?: string) => Promise<ConsumptionLogEntry>
+  undoConsume: (logEntryId: string) => Promise<void>
   moveWineToHome: (wineId: string, quantity: number) => Promise<void>
   deleteWine: (id: string) => Promise<void>
 
@@ -128,15 +129,30 @@ export const useWineStore = create<WineStore>((set, get) => ({
     set({ error: null })
     try {
       const today = new Date().toISOString().split('T')[0]
-      await workflows.consumeWine(wineId, consumedDate || today, notes)
+      const entry = await workflows.consumeWine(wineId, consumedDate || today, notes)
       await get().loadWines()
       get().triggerScheduleUpdate()
       if (get().selectedWine?.id === wineId) {
         const updated = await db.getWineById(wineId)
         set({ selectedWine: updated })
       }
+      return entry
     } catch (error) {
       set({ error: (error as Error).message })
+      // Rethrow so the UI can show contextual feedback (toast/alert)
+      throw error
+    }
+  },
+
+  undoConsume: async (logEntryId) => {
+    set({ error: null })
+    try {
+      await workflows.undoConsumeWine(logEntryId)
+      await get().loadWines()
+      get().triggerScheduleUpdate()
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
     }
   },
 

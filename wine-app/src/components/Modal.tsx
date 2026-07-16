@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
 
 interface ModalProps {
   isOpen: boolean
@@ -24,9 +25,10 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
           <h2 className="font-headline text-2xl font-bold text-on-surface">{title}</h2>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-outline-variant hover:text-on-surface transition-colors"
           >
-            <span className="material-symbols-outlined">close</span>
+            <X size={24} />
           </button>
         </div>
 

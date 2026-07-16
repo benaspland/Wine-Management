@@ -129,3 +129,86 @@ describe('WineDetailPanel - availability-dependent actions', () => {
     expect(screen.queryByText('12 Bottles')).not.toBeNull()
   })
 })
+
+describe('WineDetailPanel - dismissal', () => {
+  it('closes from the close button (all viewports)', () => {
+    const handlers = renderPanel(makeWine())
+    fireEvent.click(screen.getByLabelText('Close panel'))
+    expect(handlers.onClose).toHaveBeenCalled()
+  })
+
+  it('closes when the backdrop is clicked', () => {
+    const handlers = renderPanel(makeWine())
+    fireEvent.click(screen.getByTestId('panel-backdrop'))
+    expect(handlers.onClose).toHaveBeenCalled()
+  })
+
+  it('closes on Escape', () => {
+    const handlers = renderPanel(makeWine())
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(handlers.onClose).toHaveBeenCalled()
+  })
+})
+
+describe('WineDetailPanel - move to home quantity', () => {
+  it('defaults the stepper to everything in storage and passes the quantity', async () => {
+    const handlers = renderPanel(makeWine({ quantity_in_storage: 6, quantity_at_home: 0 }))
+
+    expect(screen.getByTestId('move-quantity').textContent).toBe('6')
+    fireEvent.click(screen.getByText('Move to Home'))
+
+    await waitFor(() => expect(handlers.onMoveToHome).toHaveBeenCalledWith('wine-1', 6))
+  })
+
+  it('steps the quantity down and clamps at 1', async () => {
+    const handlers = renderPanel(makeWine({ quantity_in_storage: 2, quantity_at_home: 0 }))
+
+    fireEvent.click(screen.getByLabelText('Fewer bottles'))
+    expect(screen.getByTestId('move-quantity').textContent).toBe('1')
+    // Already at the minimum; the decrement button is disabled
+    expect((screen.getByLabelText('Fewer bottles') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.click(screen.getByText('Move to Home'))
+    await waitFor(() => expect(handlers.onMoveToHome).toHaveBeenCalledWith('wine-1', 1))
+  })
+
+  it('never steps above the storage quantity', () => {
+    renderPanel(makeWine({ quantity_in_storage: 3, quantity_at_home: 0 }))
+    expect((screen.getByLabelText('More bottles') as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('WineDetailPanel - consumption history', () => {
+  it('lists recent consumption entries when provided', () => {
+    const handlers = {
+      onClose: vi.fn(),
+      onConsume: vi.fn(),
+      onMoveToHome: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+    }
+    render(
+      <WineDetailPanel
+        wine={makeWine()}
+        {...handlers}
+        consumptionLog={[
+          {
+            id: 'log-1',
+            wine_id: 'wine-1',
+            consumed_date: '2026-03-15',
+            notes: 'With the roast',
+            created_at: '2026-03-15T20:00:00.000Z',
+          },
+        ]}
+      />
+    )
+
+    expect(screen.queryByText('Consumption History')).not.toBeNull()
+    expect(screen.queryByText('With the roast')).not.toBeNull()
+  })
+
+  it('omits the section when there is no history', () => {
+    renderPanel(makeWine())
+    expect(screen.queryByText('Consumption History')).toBeNull()
+  })
+})

@@ -247,6 +247,20 @@ export async function createConsumptionEntry(
   return record
 }
 
+export async function getConsumptionEntryById(id: string): Promise<ConsumptionLogEntry | null> {
+  return getTable('consumption_log').find((log) => log.id === id) ?? null
+}
+
+export async function deleteConsumptionEntry(id: string): Promise<void> {
+  const logs = getTable('consumption_log')
+  const index = logs.findIndex((log) => log.id === id)
+  if (index === -1) {
+    throw new Error(`Consumption entry not found: ${id}`)
+  }
+  logs.splice(index, 1)
+  await persist()
+}
+
 export async function getConsumptionLogByWineId(
   wineId: string
 ): Promise<ConsumptionLogEntry[]> {

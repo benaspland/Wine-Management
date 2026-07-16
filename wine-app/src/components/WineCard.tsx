@@ -2,6 +2,8 @@ import type { Wine } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import { WineService } from '../services/wine.service'
 import WineInfo from './WineInfo'
+import LocationBadge from './LocationBadge'
+import { Wine as WineIcon } from 'lucide-react'
 
 interface WineCardProps {
   wine: Wine
@@ -25,16 +27,10 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
     wine.tier === 3 ? 'border border-primary/40 text-primary' :
     'bg-surface-container-high text-on-surface-variant'
 
-  const totalBottles = wine.quantity_in_storage + wine.quantity_at_home
-
   const handleConsume = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (wine.quantity_at_home === 0) return
-    try {
-      await onConsume(wine.id)
-    } catch (error) {
-      alert(`Error: ${(error as Error).message}`)
-    }
+    await onConsume(wine.id)
   }
 
   return (
@@ -48,12 +44,14 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
           {wine.image_url ? (
             <img
               alt={`${wine.producer} ${wine.name}`}
+              loading="lazy"
+              decoding="async"
               className="h-full object-contain drop-shadow-[0_20px_20px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-500"
               src={wine.image_url}
             />
           ) : (
             <div className="h-full w-24 bg-surface-container rounded flex items-center justify-center opacity-50">
-              <span className="material-symbols-outlined text-3xl text-outline">wine_bar</span>
+              <WineIcon size={32} className="text-outline" aria-hidden="true" />
             </div>
           )}
         </div>
@@ -61,8 +59,8 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
         {/* Content */}
         <div className="flex-1 space-y-4">
           {/* Header */}
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
+          <div className="flex justify-between items-start gap-3">
+            <div className="flex-1 min-w-0">
               <span className="text-primary text-xs font-bold tracking-[0.2em] uppercase">
                 {wine.country}, {wine.region}
               </span>
@@ -80,10 +78,15 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
             <button
               onClick={handleConsume}
               disabled={wine.quantity_at_home === 0 || isLoading}
-              title={wine.quantity_at_home === 0 ? 'No bottles available' : 'Mark as consumed'}
-              className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-highest text-outline-variant hover:text-error disabled:opacity-50 transition-colors"
+              title={
+                wine.quantity_at_home === 0
+                  ? 'No bottles at home to drink'
+                  : 'Mark one bottle as consumed'
+              }
+              className="min-h-11 shrink-0 flex items-center gap-1.5 px-3 rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
             >
-              <span className="material-symbols-outlined">wine_bar</span>
+              <WineIcon size={16} aria-hidden="true" />
+              Drink
             </button>
           </div>
 
@@ -100,16 +103,9 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
             </span>
           </div>
 
-          {/* Footer Stats */}
+          {/* Footer: where the bottles are */}
           <div className="pt-4 border-t border-outline-variant/10 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary scale-90" style={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}>
-                liquor
-              </span>
-              <span className="text-xs text-on-surface/80 font-medium">
-                {totalBottles} {totalBottles === 1 ? 'Bottle' : 'Bottles'}
-              </span>
-            </div>
+            <LocationBadge wine={wine} />
             <div className="flex items-center gap-1.5 bg-surface-container-highest px-2 py-1 rounded text-[10px] text-outline font-bold tracking-widest uppercase">
               <span className="text-primary">●</span>
               {wine.format}

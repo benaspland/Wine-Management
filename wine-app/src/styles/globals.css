@@ -1,9 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700&family=Inter:wght@300;400;500;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind itself is loaded once via src/index.css (v4 syntax); this
+   file carries only the app's plain-CSS layer. */
 
 * {
   -webkit-font-smoothing: antialiased;
@@ -13,21 +9,12 @@
 body {
   background-color: #131313;
   color: #E5E2E1;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter Variable', 'Inter', sans-serif;
   min-height: 100vh;
 }
 
 html {
   scroll-behavior: smooth;
-}
-
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  vertical-align: middle;
-}
-
-.material-symbols-outlined.fill {
-  font-variation-settings: 'FILL' 1;
 }
 
 .glass-panel {

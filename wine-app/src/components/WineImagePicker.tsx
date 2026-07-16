@@ -1,4 +1,5 @@
 import { useWineImageSearch } from '../hooks/useWineImageSearch'
+import { Search } from 'lucide-react'
 
 interface WineImagePickerProps {
   imageUrl: string
@@ -53,7 +54,7 @@ export default function WineImagePicker({
           disabled={searching}
           className="px-3 py-2 bg-primary-container text-on-primary rounded hover:bg-primary transition-colors disabled:opacity-50 flex items-center gap-1"
         >
-          <span className="material-symbols-outlined text-sm">image_search</span>
+          <Search size={16} aria-hidden="true" />
           {searching ? 'Searching...' : 'Search'}
         </button>
       </div>

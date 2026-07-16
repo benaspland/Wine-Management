@@ -865,6 +865,26 @@ describe('Workflows - Integration/Regression Tests', () => {
       expect(await db.getConsumptionLogByWineId(wine.id)).toHaveLength(0)
     })
 
+    it('undoing a consumption restores the bottle and removes the log entry', async () => {
+      const wine = await createDeliveredWine(0, 2, '2026-01-01')
+      const today = new Date().toISOString().split('T')[0]
+
+      const entry = await workflows.consumeWine(wine.id, today, 'Oops, logged twice')
+      expect((await db.getWineById(wine.id))?.quantity_at_home).toBe(1)
+
+      await workflows.undoConsumeWine(entry.id)
+
+      const after = await db.getWineById(wine.id)
+      expect(after?.quantity_at_home).toBe(2)
+      expect(await db.getConsumptionLogByWineId(wine.id)).toHaveLength(0)
+
+      // Undoing twice fails cleanly without double-crediting the bottle
+      await expect(workflows.undoConsumeWine(entry.id)).rejects.toThrow(
+        /Consumption entry not found/
+      )
+      expect((await db.getWineById(wine.id))?.quantity_at_home).toBe(2)
+    })
+
     it('rejects consumption dated in the future', async () => {
       const wine = await createDeliveredWine(0, 2, '2026-01-01')
       const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { useDeliverySchedule } from '../hooks/useDeliverySchedule'
 import MessageModal from '../components/MessageModal'
+import { useToastStore } from '../store/toastStore'
+import { ChevronDown } from 'lucide-react'
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
@@ -9,6 +11,7 @@ export default function DeliverySchedulePage() {
     useDeliverySchedule()
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const showToast = useToastStore(state => state.show)
   const [isPromoting, setIsPromoting] = useState(false)
   const [isDelaying, setIsDelaying] = useState(false)
   const [collapsedDeliveries, setCollapsedDeliveries] = useState<Set<string>>(new Set())
@@ -24,10 +27,13 @@ export default function DeliverySchedulePage() {
     })
   }
 
+  // Successes are non-blocking toasts; errors stay as a modal that must
+  // be acknowledged before continuing to curate.
   const flashMessage = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text })
     if (type === 'success') {
-      setTimeout(() => setMessage(null), 3000)
+      showToast(text)
+    } else {
+      setMessage({ type, text })
     }
   }
 
@@ -118,12 +124,12 @@ export default function DeliverySchedulePage() {
                   className="w-full p-4 flex justify-between items-center hover:bg-surface-container-high transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <span
-                      className="material-symbols-outlined text-outline text-sm transition-transform duration-200"
+                    <ChevronDown
+                      size={16}
+                      aria-hidden="true"
+                      className="text-outline transition-transform duration-200"
                       style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
-                    >
-                      expand_more
-                    </span>
+                    />
                     <div>
                       <h3 className="text-lg font-bold text-on-surface">
                         {new Date(delivery.date).toLocaleDateString('en-US', {

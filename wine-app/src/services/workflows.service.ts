@@ -9,6 +9,7 @@
 import type {
   Wine,
   CellarConfig,
+  ConsumptionLogEntry,
   DeliveryScheduleEntry,
   DeliveryWindowWine,
   Tier,
@@ -260,7 +261,7 @@ export async function consumeWine(
   wineId: string,
   consumedDate: string,
   notes?: string
-): Promise<void> {
+): Promise<ConsumptionLogEntry> {
   const wine = await db.getWineById(wineId)
   if (!wine) {
     throw new Error(`Wine not found: ${wineId}`)
@@ -283,7 +284,7 @@ export async function consumeWine(
   }
 
   // Create consumption log entry
-  await db.createConsumptionEntry({
+  const entry = await db.createConsumptionEntry({
     wine_id: wineId,
     consumed_date: consumedDate,
     notes: notes || undefined,
@@ -292,6 +293,34 @@ export async function consumeWine(
   // Update wine inventory
   await db.updateWine(wineId, {
     quantity_at_home: wine.quantity_at_home - 1,
+  })
+
+  return entry
+}
+
+/**
+ * Undo a just-logged consumption: remove the log entry and return the
+ * bottle to the home inventory. Powers the "Undo" toast action.
+ */
+export async function undoConsumeWine(logEntryId: string): Promise<void> {
+  const entry = await db.getConsumptionEntryById(logEntryId)
+  if (!entry) {
+    throw new Error(`Consumption entry not found: ${logEntryId}`)
+  }
+
+  const wine = await db.getWineById(entry.wine_id)
+  if (!wine) {
+    throw new Error(`Wine not found: ${entry.wine_id}`)
+  }
+
+  await db.deleteConsumptionEntry(logEntryId)
+  await db.updateWine(entry.wine_id, {
+    quantity_at_home: wine.quantity_at_home + 1,
+  })
+
+  await db.createAuditLog({
+    action: 'undo_consume_wine',
+    details: { wine_id: entry.wine_id, consumed_date: entry.consumed_date },
   })
 }
 

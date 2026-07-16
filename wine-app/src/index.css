@@ -1,1 +1,4 @@
 @import "tailwindcss";
+/* Tailwind v4 does not auto-load JS config files; without this the whole
+   custom theme (surface colors, font-headline, ...) silently no-ops. */
+@config "../tailwind.config.js";
