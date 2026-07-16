@@ -57,7 +57,7 @@ test('migrates a legacy localStorage snapshot into IndexedDB on first launch', a
     window.localStorage.setItem('wine-app-db', JSON.stringify(snapshot))
   }, LEGACY_SNAPSHOT)
 
-  await page.goto('/')
+  await page.goto('/cellar')
 
   // Legacy wines render immediately
   await expect(page.getByText('Legacy Uno').first()).toBeVisible()

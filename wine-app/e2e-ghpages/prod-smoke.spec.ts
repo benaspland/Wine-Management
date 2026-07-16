@@ -18,9 +18,11 @@ test('boots, persists, and loads every asset under the subpath', async ({ page }
   const assetFailures = watchForAssetErrors(page)
 
   await page.goto(`${BASE}/`)
-  await expect(page.getByText('Private Collection').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('Cellar Overview').first()).toBeVisible({ timeout: 15_000 })
 
   // Add a wine and verify IndexedDB persistence in the production build
+  await page.goto(`${BASE}/cellar`)
+  await expect(page.getByText('Private Collection').first()).toBeVisible()
   await page.getByText('Add Wine').first().click()
   await page.fill('input[name="producer"]', 'Château Prod')
   await page.fill('input[name="name"]', 'Base Path Cuvée')
@@ -39,7 +41,7 @@ test('client-side routes work and survive a reload under the subpath', async ({ 
   const assetFailures = watchForAssetErrors(page)
 
   await page.goto(`${BASE}/`)
-  await expect(page.getByText('Private Collection').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('Cellar Overview').first()).toBeVisible({ timeout: 15_000 })
 
   // Navigate via the top nav (desktop viewport)
   await page.getByRole('link', { name: 'Deliveries' }).click()
@@ -59,7 +61,7 @@ test('client-side routes work and survive a reload under the subpath', async ({ 
 
 test('service worker registers with the subpath scope', async ({ page }) => {
   await page.goto(`${BASE}/`)
-  await expect(page.getByText('Private Collection').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('Cellar Overview').first()).toBeVisible({ timeout: 15_000 })
 
   const scope = await page.evaluate(async () => {
     if (!('serviceWorker' in navigator)) return 'unsupported'

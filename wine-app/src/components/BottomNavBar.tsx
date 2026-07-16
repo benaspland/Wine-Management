@@ -1,8 +1,9 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutGrid, CalendarDays, Truck, Settings } from 'lucide-react'
+import { LayoutDashboard, Wine, CalendarDays, Truck, Settings } from 'lucide-react'
 
 const TABS = [
-  { to: '/', label: 'Cellar', Icon: LayoutGrid },
+  { to: '/', label: 'Overview', Icon: LayoutDashboard },
+  { to: '/cellar', label: 'Cellar', Icon: Wine },
   { to: '/schedule', label: 'Schedule', Icon: CalendarDays },
   { to: '/deliveries', label: 'Deliveries', Icon: Truck },
   { to: '/settings', label: 'Settings', Icon: Settings },
