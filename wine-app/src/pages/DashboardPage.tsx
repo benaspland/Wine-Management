@@ -9,6 +9,7 @@ import {
   nextDelivery,
   type DrinkingPace,
 } from '../services/dashboard.service'
+import { wineDisplayName } from '../services/wine.service'
 import DonutChart from '../components/dashboard/DonutChart'
 import BarList from '../components/dashboard/BarList'
 import Meter from '../components/dashboard/Meter'
@@ -246,7 +247,7 @@ export default function DashboardPage() {
                 <li key={w.id} className="flex items-center gap-2 text-sm">
                   <TriangleAlert size={14} className="text-[#c98500] shrink-0" aria-hidden="true" />
                   <span className="text-on-surface-variant truncate">
-                    {w.producer} {w.name} {w.vintage}
+                    {wineDisplayName(w.producer, w.name)} {w.vintage}
                   </span>
                   <span className="text-outline ml-auto whitespace-nowrap">until {w.windowEnd}</span>
                 </li>

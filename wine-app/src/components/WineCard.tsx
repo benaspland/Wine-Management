@@ -3,6 +3,7 @@ import { TIER_LABELS } from '../types/index'
 import { WineService } from '../services/wine.service'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
+import { wineDisplayName } from '../services/wine.service'
 import { Wine as WineIcon } from 'lucide-react'
 
 interface WineCardProps {
@@ -38,23 +39,20 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
       onClick={() => onSelect(wine)}
       className="relative group cursor-pointer"
     >
-      <div className="bg-surface-container-low p-6 pt-0 rounded-2xl transition-all duration-300 hover:bg-surface-container h-full flex flex-col">
-        {/* Bottle Image */}
-        <div className="relative -mt-12 mb-6 flex justify-center h-80">
-          {wine.image_url ? (
+      <div className={`bg-surface-container-low p-6 rounded-2xl transition-all duration-300 hover:bg-surface-container h-full flex flex-col ${wine.image_url ? 'pt-0' : ''}`}>
+        {/* Bottle image only when one exists — a 320px placeholder box per
+            wine was the biggest scroll cost in the grid */}
+        {wine.image_url && (
+          <div className="relative -mt-12 mb-6 flex justify-center h-80">
             <img
-              alt={`${wine.producer} ${wine.name}`}
+              alt={wineDisplayName(wine.producer, wine.name)}
               loading="lazy"
               decoding="async"
               className="h-full object-contain drop-shadow-[0_20px_20px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-500"
               src={wine.image_url}
             />
-          ) : (
-            <div className="h-full w-24 bg-surface-container rounded flex items-center justify-center opacity-50">
-              <WineIcon size={32} className="text-outline" aria-hidden="true" />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 space-y-4">
@@ -92,13 +90,13 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
 
           {/* Tier & Details Badges */}
           <div className="flex flex-wrap gap-2 pt-2">
-            <span className={`${tierBgColor} px-3 py-1 text-[10px] font-black tracking-widest uppercase whitespace-nowrap rounded-sm shadow-sm`}>
+            <span className={`${tierBgColor} px-3 py-1 text-[10px] font-black tracking-widest uppercase whitespace-nowrap rounded-full shadow-sm`}>
               {tierLabel}
             </span>
-            <span className="bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter text-on-surface-variant uppercase whitespace-nowrap">
+            <span className="bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter text-on-surface-variant uppercase whitespace-nowrap rounded-full">
               {wine.varietal ? wine.varietal.split(':')[0].trim() : 'Unknown'}
             </span>
-            <span className={`bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter uppercase whitespace-nowrap ${drinkingColor}`}>
+            <span className={`bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-tighter uppercase whitespace-nowrap rounded-full ${drinkingColor}`}>
               {drinkingStatus}
             </span>
           </div>
@@ -106,7 +104,7 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
           {/* Footer: where the bottles are */}
           <div className="pt-4 border-t border-outline-variant/10 flex justify-between items-center">
             <LocationBadge wine={wine} />
-            <div className="flex items-center gap-1.5 bg-surface-container-highest px-2 py-1 rounded text-[10px] text-outline font-bold tracking-widest uppercase">
+            <div className="flex items-center gap-1.5 bg-surface-container-highest px-2 py-1 rounded-full text-[10px] text-outline font-bold tracking-widest uppercase">
               <span className="text-primary">●</span>
               {wine.format}
             </div>

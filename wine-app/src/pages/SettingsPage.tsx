@@ -3,6 +3,8 @@ import { useWineStore } from '../store/wineStore'
 import * as db from '../services/database'
 import { ImportService } from '../services/import.service'
 import MessageModal from '../components/MessageModal'
+import { useToastStore } from '../store/toastStore'
+import { wineDisplayName } from '../services/wine.service'
 
 export default function SettingsPage() {
   const wines = useWineStore(state => state.wines)
@@ -14,6 +16,7 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
 
+  const showToast = useToastStore(state => state.show)
   const loadWines = useWineStore(state => state.loadWines)
   const triggerScheduleUpdate = useWineStore(state => state.triggerScheduleUpdate)
 
@@ -66,8 +69,7 @@ export default function SettingsPage() {
       })
       // Regenerate schedules with new parameters
       triggerScheduleUpdate()
-      setMessage({ type: 'success', text: 'Settings updated successfully and schedules regenerated' })
-      setTimeout(() => setMessage(null), 3000)
+      showToast('Settings saved — schedules regenerated')
     } catch (error) {
       setMessage({ type: 'error', text: `Error: ${(error as Error).message}` })
     } finally {
@@ -97,10 +99,11 @@ export default function SettingsPage() {
       const successMsg = `Imported ${result.success} wines successfully${skippedMsg}`
       const errorMsg = result.failed > 0 ? ` (${result.failed} failed)` : ''
 
-      setMessage({
-        type: result.failed > 0 ? 'error' : 'success',
-        text: successMsg + errorMsg
-      })
+      if (result.failed > 0) {
+        setMessage({ type: 'error', text: successMsg + errorMsg })
+      } else {
+        showToast(successMsg)
+      }
 
       if (result.errors.length > 0) {
         console.warn('Import errors:', result.errors)
@@ -131,8 +134,7 @@ export default function SettingsPage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      setMessage({ type: 'success', text: 'Full backup downloaded' })
-      setTimeout(() => setMessage(null), 3000)
+      showToast('Full backup downloaded')
     } catch (error) {
       setMessage({ type: 'error', text: `Backup failed: ${(error as Error).message}` })
     } finally {
@@ -160,8 +162,7 @@ export default function SettingsPage() {
       await loadWines()
       triggerScheduleUpdate()
 
-      setMessage({ type: 'success', text: 'Backup restored successfully' })
-      setTimeout(() => setMessage(null), 3000)
+      showToast('Backup restored successfully')
     } catch (error) {
       setMessage({ type: 'error', text: `Restore failed: ${(error as Error).message}` })
     } finally {
@@ -200,7 +201,8 @@ export default function SettingsPage() {
 
         const peakWindow = `${wine.drinking_window_start}-${wine.drinking_window_end}`
         const serviceTemp = `${wine.serving_temp_min}-${wine.serving_temp_max}°C`
-        const fullName = `${wine.producer} ${wine.name}`
+        // Deduped name so an export -> import round trip re-parses cleanly
+        const fullName = wineDisplayName(wine.producer, wine.name)
 
         return [
           wine.vintage,
@@ -235,8 +237,7 @@ export default function SettingsPage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      setMessage({ type: 'success', text: 'Wines exported successfully' })
-      setTimeout(() => setMessage(null), 3000)
+      showToast('Wines exported successfully')
     } catch (error) {
       setMessage({ type: 'error', text: `Export failed: ${(error as Error).message}` })
     } finally {
@@ -391,7 +392,7 @@ export default function SettingsPage() {
             <button
               onClick={() => restoreInputRef.current?.click()}
               disabled={isLoading}
-              className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
+              className="flex-1 border border-outline/40 text-outline hover:text-on-surface hover:border-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
             >
               Restore Backup
             </button>

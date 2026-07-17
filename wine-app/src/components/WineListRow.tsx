@@ -1,5 +1,6 @@
 import type { Wine } from '../types/index'
 import LocationBadge from './LocationBadge'
+import { wineDisplayName } from '../services/wine.service'
 import { Wine as WineIcon } from 'lucide-react'
 
 interface WineListRowProps {
@@ -41,7 +42,7 @@ export default function WineListRow({ wine, onSelect, onConsume, isLoading }: Wi
       />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-on-surface truncate">
-          {wine.producer} {wine.name}
+          {wineDisplayName(wine.producer, wine.name)}
         </p>
         <p className="text-xs text-outline truncate">
           {wine.vintage} · {wine.region}
@@ -52,7 +53,7 @@ export default function WineListRow({ wine, onSelect, onConsume, isLoading }: Wi
         onClick={handleConsume}
         disabled={wine.quantity_at_home === 0 || isLoading}
         title={wine.quantity_at_home === 0 ? 'No bottles at home to drink' : 'Mark one bottle as consumed'}
-        aria-label={`Drink ${wine.producer} ${wine.name}`}
+        aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
         className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
       >
         <WineIcon size={18} aria-hidden="true" />
