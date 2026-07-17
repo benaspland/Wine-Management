@@ -3,6 +3,7 @@ import type { Wine, ConsumptionLogEntry } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
+import { wineDisplayName } from '../services/wine.service'
 import { X, Wine as WineIcon, Minus, Plus } from 'lucide-react'
 
 interface WineDetailPanelProps {
@@ -74,7 +75,7 @@ export default function WineDetailPanel({
   }
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${wine.producer} ${wine.name} ${wine.vintage}"? This cannot be undone.`)) {
+    if (!confirm(`Delete "${wineDisplayName(wine.producer, wine.name)} ${wine.vintage}"? This cannot be undone.`)) {
       return
     }
     try {
@@ -113,15 +114,15 @@ export default function WineDetailPanel({
             <div className="flex justify-center">
               {wine.image_url ? (
                 <img
-                  alt={`${wine.producer} ${wine.name}`}
+                  alt={wineDisplayName(wine.producer, wine.name)}
                   loading="lazy"
                   decoding="async"
                   className="w-64 h-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] transform hover:scale-105 transition-transform duration-700"
                   src={wine.image_url}
                 />
               ) : (
-                <div className="w-64 h-80 bg-surface-container rounded flex items-center justify-center opacity-50">
-                  <WineIcon size={48} className="text-outline" aria-hidden="true" />
+                <div className="w-full h-24 bg-surface-container rounded-2xl flex items-center justify-center opacity-50">
+                  <WineIcon size={32} className="text-outline" aria-hidden="true" />
                 </div>
               )}
             </div>
@@ -150,7 +151,7 @@ export default function WineDetailPanel({
               {Object.entries(criticRatings).slice(0, 2).map(([critic, score]) => (
                 <div
                   key={critic}
-                  className="flex-1 bg-surface-container-low p-5 rounded-sm border-l-2 border-primary-container"
+                  className="flex-1 bg-surface-container-low p-5 rounded-xl border-l-2 border-primary-container"
                 >
                   <p className="text-[10px] text-outline tracking-widest uppercase mb-1">
                     {critic.toUpperCase()}

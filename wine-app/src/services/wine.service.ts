@@ -1,5 +1,19 @@
 import type { Wine } from '../types/index'
 
+/**
+ * One-line display name that avoids the "Chateau Meyney Meyney" effect:
+ * the CSV importer derives name from producer for chateau-style wines
+ * (producer "Chateau Meyney" -> name "Meyney"), so naive
+ * `producer + name` concatenation repeats the suffix.
+ */
+export function wineDisplayName(producer: string | undefined, name: string): string {
+  const p = producer?.trim() ?? ''
+  const n = name.trim()
+  if (!p) return n
+  if (!n || p.toLowerCase().endsWith(n.toLowerCase())) return p
+  return `${p} ${n}`
+}
+
 export class WineService {
   // Check if wine can be consumed (within window)
   static canConsume(wine: Wine): boolean {

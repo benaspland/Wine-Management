@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { useDeliverySchedule } from '../hooks/useDeliverySchedule'
 import MessageModal from '../components/MessageModal'
+import { wineDisplayName } from '../services/wine.service'
 import { useToastStore } from '../store/toastStore'
 import { ChevronDown, Lock } from 'lucide-react'
 
@@ -192,7 +193,7 @@ export default function DeliverySchedulePage() {
                             <div className="flex justify-between items-start gap-2">
                               <div className="min-w-0">
                                 <p className="font-semibold text-on-surface">
-                                  {wine.producer} {wine.name}
+                                  {wineDisplayName(wine.producer, wine.name)}
                                 </p>
                                 <p className="text-outline text-xs">
                                   {wine.vintage} • Qty: {wine.quantity} {wine.format || '750ml'}
@@ -202,7 +203,7 @@ export default function DeliverySchedulePage() {
                                 <div className="shrink-0">
                                   {isFirstDelivery ? (
                                     <button
-                                      onClick={() => handleDeferWine(wine.id, delivery.date, `${wine.producer} ${wine.name}`)}
+                                      onClick={() => handleDeferWine(wine.id, delivery.date, wineDisplayName(wine.producer, wine.name))}
                                       disabled={isDelaying || delivery.wines.length <= 1}
                                       className="px-3 py-1.5 bg-surface-container-high text-on-surface rounded-full text-xs font-medium hover:bg-outline/20 transition-colors disabled:opacity-50 whitespace-nowrap"
                                       title="Defer this wine to a future delivery"
@@ -211,7 +212,7 @@ export default function DeliverySchedulePage() {
                                     </button>
                                   ) : (
                                     <button
-                                      onClick={() => handlePromoteWine(wine.id, wine.quantity, `${wine.producer} ${wine.name}`)}
+                                      onClick={() => handlePromoteWine(wine.id, wine.quantity, wineDisplayName(wine.producer, wine.name))}
                                       disabled={isPromoting}
                                       className="px-3 py-1.5 bg-primary text-on-primary rounded-full text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50 whitespace-nowrap"
                                       title="Promote to next delivery"

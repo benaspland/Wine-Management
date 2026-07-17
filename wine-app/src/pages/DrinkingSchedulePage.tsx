@@ -7,6 +7,7 @@ import * as workflows from '../services/workflows.service'
 import WineInfo from '../components/WineInfo'
 import MessageModal from '../components/MessageModal'
 import { useToastStore } from '../store/toastStore'
+import { wineDisplayName } from '../services/wine.service'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 import { CircleCheck, Package, Wine as WineIcon, RefreshCw } from 'lucide-react'
 
@@ -60,7 +61,7 @@ export default function DrinkingSchedulePage() {
       await loadWines()
       await generateDrinkingSchedule()
 
-      showToast(`${producerName} ${wineName} marked as consumed`)
+      showToast(`${wineDisplayName(producerName, wineName)} marked as consumed`)
     } catch (error) {
       setMessage({
         type: 'error',
@@ -355,7 +356,7 @@ export default function DrinkingSchedulePage() {
                             onClick={() => handleMarkConsumed(wine.id, wine.producer, wine.name, entry.year, MONTH_TO_NUMBER[entry.month] || 1)}
                             disabled={isConsuming}
                             title="Mark as consumed"
-                            aria-label={`Mark ${wine.producer} ${wine.name} as consumed`}
+                            aria-label={`Mark ${wineDisplayName(wine.producer, wine.name)} as consumed`}
                             className="shrink-0 min-h-11 min-w-11 flex items-center justify-center rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
                           >
                             <WineIcon size={18} aria-hidden="true" />

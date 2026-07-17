@@ -3,6 +3,7 @@ import type { Wine, ConsumptionLogEntry } from '../types/index'
 import { useWineStore } from '../store/wineStore'
 import { useToastStore } from '../store/toastStore'
 import { getScheduledDeliveryDateForWine } from '../services/deliveryPlanning.service'
+import { wineDisplayName } from '../services/wine.service'
 import * as db from '../services/database'
 import WineCard from '../components/WineCard'
 import WineListRow from '../components/WineListRow'
@@ -75,7 +76,7 @@ export default function CollectionPage() {
   const handleAddWine = async (wineData: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => {
     await addWine(wineData)
     setShowForm(false)
-    showToast(`${wineData.producer} ${wineData.name} added to the collection`)
+    showToast(`${wineDisplayName(wineData.producer, wineData.name)} added to the collection`)
   }
 
   const handleEditWine = async (wineData: Partial<Wine>) => {
@@ -101,7 +102,7 @@ export default function CollectionPage() {
 
   const handleConsume = async (wineId: string) => {
     const wine = allWines.find(w => w.id === wineId)
-    const label = wine ? `${wine.producer} ${wine.name} ${wine.vintage}` : 'Bottle'
+    const label = wine ? `${wineDisplayName(wine.producer, wine.name)} ${wine.vintage}` : 'Bottle'
     try {
       const entry = await consumeWine(wineId)
       showToast(`${label} consumed`, {
