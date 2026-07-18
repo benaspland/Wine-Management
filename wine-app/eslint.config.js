@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // scripts/ holds one-off debug harnesses, not shipped code
+  globalIgnores(['dist', 'scripts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

@@ -33,13 +33,13 @@ export default function DonutChart({ segments, centerValue, centerLabel }: Donut
   // Gaps only make sense between 2+ segments
   const gap = segments.length > 1 ? GAP : 0
 
-  let offset = 0
-  const arcs = segments.map(segment => {
+  const arcs = segments.map((segment, i) => {
     const fraction = segment.value / total
     const length = Math.max(0, fraction * CIRCUMFERENCE - gap)
-    const arc = { ...segment, length, offset }
-    offset += fraction * CIRCUMFERENCE
-    return arc
+    const offset = segments
+      .slice(0, i)
+      .reduce((sum, s) => sum + (s.value / total) * CIRCUMFERENCE, 0)
+    return { ...segment, length, offset }
   })
 
   return (

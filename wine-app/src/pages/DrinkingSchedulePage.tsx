@@ -98,45 +98,41 @@ export default function DrinkingSchedulePage() {
       // Group schedule entries by year/month for timeline display
       const grouped: Record<string, ScheduleEntry['wines']> = {}
 
-      // Batch load consumption status - eliminates N+1 queries
-      const periodMap = new Map<string, { year: number; month: number; wineIds: string[] }>()
-
-      drinkingSchedule.forEach(entry => {
-        const periodKey = `${entry.suggestedYear}-${entry.suggestedMonth}`
-        if (!periodMap.has(periodKey)) {
-          periodMap.set(periodKey, {
-            year: entry.suggestedYear,
-            month: entry.suggestedMonth,
-            wineIds: [],
-          })
-        }
-        const period = periodMap.get(periodKey)!
-        if (!period.wineIds.includes(entry.wineId)) {
-          period.wineIds.push(entry.wineId)
-        }
-      })
-
-      const consumptionStatus = new Map<string, { consumed: boolean; consumedDate?: string }>()
-
-      for (const period of periodMap.values()) {
-        const logs = await db.getConsumptionLogByYear(period.year)
-        for (const wineId of period.wineIds) {
-          const log = logs.find(l => l.wine_id === wineId)
-          if (log) {
-            const statusKey = `${wineId}-${period.year}-${period.month}`
-            consumptionStatus.set(statusKey, { consumed: true, consumedDate: log.consumed_date })
-          }
+      // Batch load consumption logs across all scheduled years, queued per
+      // wine in date order so each log marks exactly one scheduled entry —
+      // a wine scheduled twice needs two drinks for two ticks. Queues are
+      // keyed by wine alone (not wine-year) so drinking a bottle early
+      // still ticks off a slot the engine had planned for a later year.
+      const scheduledYears = [...new Set(drinkingSchedule.map(e => e.suggestedYear))].sort()
+      const logQueues = new Map<string, string[]>() // wineId -> consumed dates asc
+      for (const year of scheduledYears) {
+        const logs = await db.getConsumptionLogByYear(year)
+        logs.sort((a, b) => a.consumed_date.localeCompare(b.consumed_date))
+        for (const log of logs) {
+          if (!logQueues.has(log.wine_id)) logQueues.set(log.wine_id, [])
+          logQueues.get(log.wine_id)!.push(log.consumed_date)
         }
       }
 
+      // Entries arrive sorted by year/month, so earlier scheduled slots
+      // claim earlier consumption logs.
       drinkingSchedule.forEach(entry => {
-        const key = `${entry.suggestedYear}-${entry.suggestedMonth}`
+        const queue = logQueues.get(entry.wineId)
+        const consumedDate = queue && queue.length > 0 ? queue.shift() : undefined
+
+        // Consumed wines file under the month they were actually drunk;
+        // everything else stays in its scheduled slot.
+        let key = `${entry.suggestedYear}-${entry.suggestedMonth}`
+        if (consumedDate) {
+          const actual = new Date(consumedDate)
+          if (!Number.isNaN(actual.getTime())) {
+            key = `${actual.getFullYear()}-${actual.getMonth() + 1}`
+          }
+        }
+
         if (!grouped[key]) {
           grouped[key] = []
         }
-
-        const statusKey = `${entry.wineId}-${entry.suggestedYear}-${entry.suggestedMonth}`
-        const consumptionInfo = consumptionStatus.get(statusKey) || { consumed: false }
 
         grouped[key].push({
           id: entry.wineId,
@@ -146,8 +142,8 @@ export default function DrinkingSchedulePage() {
           region: entry.region ?? '',
           tier: entry.tier,
           status: entry.status,
-          consumed: consumptionInfo.consumed,
-          consumedDate: consumptionInfo.consumedDate,
+          consumed: !!consumedDate,
+          consumedDate,
         })
       })
 
@@ -243,29 +239,21 @@ export default function DrinkingSchedulePage() {
         </nav>
       )}
 
-      {/* Header */}
-      <div className="mb-10">
-        <span className="text-primary-container font-label text-xs tracking-[0.3em] uppercase mb-2 block">
-          Curation Engine
-        </span>
-        <div className="flex items-end justify-between gap-4">
-          <h2 className="font-headline text-4xl md:text-6xl font-bold text-on-surface leading-tight">
-            Drinking Schedule
-          </h2>
-          <button
-            onClick={generateDrinkingSchedule}
-            disabled={isRegenerating}
-            title="Regenerate schedule"
-            aria-label="Regenerate schedule"
-            className="btn-primary shrink-0 !px-4 disabled:opacity-50 flex items-center gap-2"
-          >
-            <RefreshCw size={16} className={isRegenerating ? 'animate-spin' : ''} aria-hidden="true" />
-            <span className="hidden sm:inline">{isRegenerating ? 'Working...' : 'Regenerate'}</span>
-          </button>
-        </div>
-        <p className="text-outline mt-3 text-sm max-w-md font-light leading-relaxed">
-          Your peak-maturity timeline, ordered for optimal enjoyment.
-        </p>
+      {/* Header: single line, matching the delivery page */}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <h1 className="font-headline text-3xl md:text-4xl font-bold text-on-surface whitespace-nowrap">
+          Drinking Schedule
+        </h1>
+        <button
+          onClick={generateDrinkingSchedule}
+          disabled={isRegenerating}
+          title="Regenerate schedule"
+          aria-label="Regenerate schedule"
+          className="btn-primary shrink-0 !px-4 disabled:opacity-50 flex items-center gap-2"
+        >
+          <RefreshCw size={16} className={isRegenerating ? 'animate-spin' : ''} aria-hidden="true" />
+          <span className="hidden sm:inline">{isRegenerating ? 'Working...' : 'Regenerate'}</span>
+        </button>
       </div>
 
       {/* Timeline */}
@@ -340,7 +328,7 @@ export default function DrinkingSchedulePage() {
                             className="shrink-0 flex flex-col items-center gap-0.5 text-success"
                             title={`Consumed ${consumedDate ?? ''}`}
                           >
-                            <CircleCheck size={20} aria-hidden="true" />
+                            <CircleCheck size={16} aria-hidden="true" />
                             <span className="text-[9px] text-outline-variant">{consumedDate}</span>
                           </div>
                         ) : !isAtHome ? (
@@ -348,7 +336,7 @@ export default function DrinkingSchedulePage() {
                             className="shrink-0 flex flex-col items-center gap-0.5 text-outline-variant"
                             title="In storage — pending delivery"
                           >
-                            <Package size={20} aria-hidden="true" />
+                            <Package size={16} aria-hidden="true" />
                             <span className="text-[9px]">storage</span>
                           </div>
                         ) : (
@@ -357,9 +345,9 @@ export default function DrinkingSchedulePage() {
                             disabled={isConsuming}
                             title="Mark as consumed"
                             aria-label={`Mark ${wineDisplayName(wine.producer, wine.name)} as consumed`}
-                            className="shrink-0 min-h-11 min-w-11 flex items-center justify-center rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
+                            className="shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
                           >
-                            <WineIcon size={18} aria-hidden="true" />
+                            <WineIcon size={16} aria-hidden="true" />
                           </button>
                         )}
                       </div>
