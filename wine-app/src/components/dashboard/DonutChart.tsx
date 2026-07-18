@@ -6,10 +6,15 @@
  * color-alone: the legend carries labels and values.
  */
 
+import { Link } from 'react-router-dom'
+
 export interface DonutSegment {
   label: string
   value: number
   color: string
+  /** When set, the legend row is a link (e.g. to a pre-filtered cellar view). */
+  to?: string
+  onClick?: () => void
 }
 
 interface DonutChartProps {
@@ -84,17 +89,35 @@ export default function DonutChart({ segments, centerValue, centerLabel }: Donut
       </svg>
 
       <ul className="space-y-2 min-w-0">
-        {segments.map(segment => (
-          <li key={segment.label} className="flex items-center gap-2 text-sm">
-            <span
-              className="w-3 h-3 rounded-sm shrink-0"
-              style={{ backgroundColor: segment.color }}
-              aria-hidden="true"
-            />
-            <span className="text-on-surface-variant truncate">{segment.label}</span>
-            <span className="text-on-surface font-medium ml-auto pl-3">{segment.value}</span>
-          </li>
-        ))}
+        {segments.map(segment => {
+          const cells = (
+            <>
+              <span
+                className="w-3 h-3 rounded-sm shrink-0"
+                style={{ backgroundColor: segment.color }}
+                aria-hidden="true"
+              />
+              <span className="text-on-surface-variant truncate">{segment.label}</span>
+              <span className="text-on-surface font-medium ml-auto pl-3">{segment.value}</span>
+            </>
+          )
+          return (
+            <li key={segment.label}>
+              {segment.to ? (
+                <Link
+                  to={segment.to}
+                  onClick={segment.onClick}
+                  aria-label={`Show ${segment.label} wines`}
+                  className="flex items-center gap-2 text-sm rounded-lg -mx-2 px-2 py-0.5 hover:bg-surface-container-high/60 transition-colors"
+                >
+                  {cells}
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">{cells}</div>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

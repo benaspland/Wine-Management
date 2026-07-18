@@ -56,15 +56,37 @@ export default function DashboardPage() {
   const scheduleUpdateTrigger = useWineStore(state => state.scheduleUpdateTrigger)
   const setWindowFilter = useWineStore(state => state.setWindowFilter)
   const setSortBy = useWineStore(state => state.setSortBy)
+  const setRegionFilter = useWineStore(state => state.setRegionFilter)
+  const setTierFilter = useWineStore(state => state.setTierFilter)
+  const setWineTypeFilter = useWineStore(state => state.setWineTypeFilter)
+  const clearFilters = useWineStore(state => state.clearFilters)
+
+  // Every dashboard tap-through starts from a clean slate so the cellar
+  // shows exactly the tapped breakdown, not it intersected with whatever
+  // filters were left over from the last visit.
 
   /** Jump to the cellar pre-filtered to at-risk wines, most urgent first. */
   const presetDrinkSoon = () => {
+    clearFilters()
     setWindowFilter('closing')
     setSortBy('window')
   }
   const presetReady = () => {
+    clearFilters()
     setWindowFilter('ready')
     setSortBy('window')
+  }
+  const presetRegion = (region: string) => {
+    clearFilters()
+    setRegionFilter(region)
+  }
+  const presetTier = (tier: number) => {
+    clearFilters()
+    setTierFilter(tier)
+  }
+  const presetType = (type: string) => {
+    clearFilters()
+    setWineTypeFilter(type)
   }
 
   const [pace, setPace] = useState<DrinkingPace | null>(null)
@@ -104,6 +126,8 @@ export default function DashboardPage() {
     label: slice.label,
     value: slice.bottles,
     color: TYPE_COLORS[slice.label] ?? '#9c8f78',
+    to: '/cellar',
+    onClick: () => presetType(slice.label),
   }))
 
   const paceCaption = pace
@@ -210,14 +234,34 @@ export default function DashboardPage() {
 
         <div className="bg-surface-container-low rounded-2xl p-5">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Top regions</h3>
-          <BarList rows={stats.topRegions.map(r => ({ label: r.label, value: r.bottles }))} />
+          <BarList
+            rows={stats.topRegions.map(r =>
+              // "Other" is an aggregate and "Unknown" wines have no region
+              // value to filter on — those rows stay static.
+              r.label === 'Other' || r.label === 'Unknown'
+                ? { label: r.label, value: r.bottles }
+                : {
+                    label: r.label,
+                    value: r.bottles,
+                    to: '/cellar',
+                    onClick: () => presetRegion(r.label),
+                  }
+            )}
+          />
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
         <div className="bg-surface-container-low rounded-2xl p-5">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By tier</h3>
-          <BarList rows={stats.byTier.map(t => ({ label: t.label, value: t.wines }))} />
+          <BarList
+            rows={stats.byTier.map(t => ({
+              label: t.label,
+              value: t.wines,
+              to: '/cellar',
+              onClick: () => presetTier(t.tier),
+            }))}
+          />
           <p className="text-xs text-outline mt-3">wines per tier</p>
         </div>
 
