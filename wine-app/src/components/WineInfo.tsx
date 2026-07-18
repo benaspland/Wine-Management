@@ -41,8 +41,12 @@ export default function WineInfo({
     '2xl': 'text-2xl',
   }
 
-  const shouldHideName =
-    wine.country === 'France' && wine.region === 'Bordeaux' && !wine.name
+  // Skip the name line when it adds nothing: empty, or already the tail of
+  // the producer (château-style wines where the importer derives one from
+  // the other — showing both reads as a stutter).
+  const producerLower = (wine.producer ?? '').trim().toLowerCase()
+  const nameLower = (wine.name ?? '').trim().toLowerCase()
+  const shouldHideName = !nameLower || producerLower.endsWith(nameLower)
 
   if (layout === 'inline') {
     return (
