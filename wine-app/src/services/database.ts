@@ -340,6 +340,35 @@ export async function getConsumptionEntryById(id: string): Promise<ConsumptionLo
   return getTable('consumption_log').find((log) => log.id === id) ?? null
 }
 
+/**
+ * Amend an existing consumption record — the tasting note written after
+ * the glass, or a corrected date when a bottle is logged late. The wine
+ * it belongs to cannot be changed; that would be a different bottle.
+ */
+export async function updateConsumptionEntry(
+  id: string,
+  updates: Partial<Pick<ConsumptionLogEntry, 'consumed_date' | 'notes'>>
+): Promise<ConsumptionLogEntry> {
+  const logs = getTable('consumption_log')
+  const index = logs.findIndex((log) => log.id === id)
+  if (index === -1) {
+    throw new Error(`Consumption entry not found: ${id}`)
+  }
+
+  const updated: ConsumptionLogEntry = { ...logs[index] }
+  if (updates.consumed_date !== undefined) {
+    updated.consumed_date = updates.consumed_date
+  }
+  if (updates.notes !== undefined) {
+    // Blank means "no note", not an empty note
+    updated.notes = updates.notes.trim() || undefined
+  }
+  logs[index] = updated
+
+  await persist()
+  return updated
+}
+
 export async function deleteConsumptionEntry(id: string): Promise<void> {
   const logs = getTable('consumption_log')
   const index = logs.findIndex((log) => log.id === id)

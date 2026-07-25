@@ -306,6 +306,50 @@ export async function consumeWine(
  * Undo a just-logged consumption: remove the log entry and return the
  * bottle to the home inventory. Powers the "Undo" toast action.
  */
+/**
+ * Amend a logged consumption — add the tasting note after the glass, or
+ * correct the date on a bottle logged late. The date is held to the same
+ * rules as logging it in the first place, so an amendment can't put a
+ * bottle in the future or before it was delivered.
+ */
+export async function amendConsumption(
+  logEntryId: string,
+  updates: { consumedDate?: string; notes?: string }
+): Promise<ConsumptionLogEntry> {
+  const entry = await db.getConsumptionEntryById(logEntryId)
+  if (!entry) {
+    throw new Error(`Consumption entry not found: ${logEntryId}`)
+  }
+
+  if (updates.consumedDate !== undefined) {
+    const today = new Date().toISOString().split('T')[0]
+    if (updates.consumedDate > today) {
+      throw new Error('Cannot log consumption for future date')
+    }
+
+    const firstDeliveryDate = await db.getFirstDeliveryDateForWine(entry.wine_id)
+    if (firstDeliveryDate && updates.consumedDate < firstDeliveryDate) {
+      throw new Error(`Cannot consume wine before delivery date (${firstDeliveryDate})`)
+    }
+  }
+
+  const updated = await db.updateConsumptionEntry(logEntryId, {
+    consumed_date: updates.consumedDate,
+    notes: updates.notes,
+  })
+
+  await db.createAuditLog({
+    action: 'amend_consumption',
+    wine_id: entry.wine_id,
+    details: {
+      fields_changed: Object.keys(updates),
+      consumed_date: updated.consumed_date,
+    },
+  })
+
+  return updated
+}
+
 export async function undoConsumeWine(logEntryId: string): Promise<void> {
   const entry = await db.getConsumptionEntryById(logEntryId)
   if (!entry) {

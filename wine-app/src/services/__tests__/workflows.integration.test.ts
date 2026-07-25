@@ -359,6 +359,85 @@ describe('Workflows - Integration/Regression Tests', () => {
   // WORKFLOW 2D: MOVE TO HOME
   // =========================================================================
 
+  /**
+   * A tasting note is written after the glass, not at the moment the
+   * bottle is logged, so an already-logged consumption must be
+   * amendable — and a bottle logged late must be datable backwards.
+   */
+  describe('Amend Consumption', () => {
+    async function consumedWine() {
+      const wine = await db.createWine({
+        name: 'Amendable',
+        vintage: 2015,
+        tier: 1,
+        region: 'Test',
+        drinking_window_start: 2020,
+        drinking_window_end: 2045,
+        quantity_in_storage: 0,
+        quantity_at_home: 3,
+      })
+      const today = new Date().toISOString().split('T')[0]
+      const entry = await workflows.consumeWine(wine.id, today)
+      return { wine, entry, today }
+    }
+
+    it('adds a tasting note to a bottle already logged', async () => {
+      const { wine, entry } = await consumedWine()
+      expect(entry.notes).toBeUndefined()
+
+      const updated = await workflows.amendConsumption(entry.id, {
+        notes: 'Singing. Decanted an hour.',
+      })
+
+      expect(updated.notes).toBe('Singing. Decanted an hour.')
+      const logs = await db.getConsumptionLogByWineId(wine.id)
+      expect(logs[0].notes).toBe('Singing. Decanted an hour.')
+    })
+
+    it('back-dates a bottle that was logged late', async () => {
+      const { entry } = await consumedWine()
+
+      const updated = await workflows.amendConsumption(entry.id, {
+        consumedDate: '2026-02-14',
+      })
+
+      expect(updated.consumed_date).toBe('2026-02-14')
+    })
+
+    it('does not change the bottle count — the bottle was already drunk', async () => {
+      const { wine, entry } = await consumedWine()
+      const before = (await db.getWineById(wine.id))!.quantity_at_home
+
+      await workflows.amendConsumption(entry.id, { notes: 'Lovely' })
+
+      expect((await db.getWineById(wine.id))!.quantity_at_home).toBe(before)
+    })
+
+    it('clears the note when it is emptied', async () => {
+      const { entry } = await consumedWine()
+      await workflows.amendConsumption(entry.id, { notes: 'first thoughts' })
+
+      const cleared = await workflows.amendConsumption(entry.id, { notes: '   ' })
+
+      expect(cleared.notes).toBeUndefined()
+    })
+
+    it('holds an amended date to the same rules as logging it', async () => {
+      const { entry } = await consumedWine()
+      const future = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+
+      await expect(
+        workflows.amendConsumption(entry.id, { consumedDate: future })
+      ).rejects.toThrow(/future date/)
+    })
+
+    it('rejects an unknown entry', async () => {
+      await expect(
+        workflows.amendConsumption('does-not-exist', { notes: 'x' })
+      ).rejects.toThrow(/not found/)
+    })
+  })
+
   describe('Workflow 2D: Move to Home', () => {
     it('should move bottles from storage to home', async () => {
       const wine = await db.createWine({

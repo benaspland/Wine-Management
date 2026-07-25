@@ -3,6 +3,7 @@ import type { Wine, ConsumptionLogEntry } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
+import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
 import { X, Wine as WineIcon, Minus, Plus } from 'lucide-react'
 
@@ -38,6 +39,7 @@ export default function WineDetailPanel({
   // count changes, per React's "adjusting state on prop change" pattern.
   const [moveQuantity, setMoveQuantity] = useState(Math.max(1, wine.quantity_in_storage))
   const stepperKey = `${wine.id}:${wine.quantity_in_storage}`
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [lastStepperKey, setLastStepperKey] = useState(stepperKey)
   if (lastStepperKey !== stepperKey) {
     setLastStepperKey(stepperKey)
@@ -73,19 +75,33 @@ export default function WineDetailPanel({
   }
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${wineDisplayName(wine.producer, wine.name)} ${wine.vintage}"? This cannot be undone.`)) {
-      return
-    }
     try {
       await onDelete(wine.id)
+      setConfirmingDelete(false)
       onClose()
     } catch (error) {
       alert(`Error: ${(error as Error).message}`)
     }
   }
 
+  const totalToDelete = totalBottles
+
   return (
     <>
+      <ConfirmDeleteDialog
+        isOpen={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        title="Delete Wine"
+        message={`Delete ${wineDisplayName(wine.producer, wine.name)} ${wine.vintage}?`}
+        detail={
+          totalToDelete > 0
+            ? `${totalToDelete} ${totalToDelete === 1 ? 'bottle' : 'bottles'} will be removed from your collection. This cannot be undone.`
+            : 'This cannot be undone.'
+        }
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+      />
+
       {/* Backdrop: click anywhere outside the panel to dismiss */}
       <div
         onClick={onClose}
@@ -346,7 +362,7 @@ export default function WineDetailPanel({
                 Edit
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => setConfirmingDelete(true)}
                 disabled={isLoading}
                 className="flex-1 border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/50 py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
               >
