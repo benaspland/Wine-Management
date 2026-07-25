@@ -34,10 +34,7 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push and PR.
 ## Deploying to GitHub Pages
 
 1. Make sure CI is green on the branch and it is merged to `main`.
-2. Configure the image-search worker URL (one-time, see below):
-   create `wine-app/.env` containing
-   `VITE_IMAGE_WORKER_URL=https://wine-image-search.<account>.workers.dev`
-3. Deploy:
+2. Deploy:
 
 ```bash
 cd wine-app
@@ -47,15 +44,17 @@ npm run deploy       # builds with GITHUB_PAGES=true and pushes dist/ to gh-page
 The app serves from `https://<user>.github.io/Wine-Management/`. The
 service worker auto-updates installed clients on their next launch.
 
-### Image search worker (Cloudflare, one-time setup)
+### Bottle photos
 
-```bash
-cd wine-image-worker
-npx wrangler secret put PIXABAY_API_KEY   # paste key from pixabay.com/api/docs
-npx wrangler deploy
-# verify:
-curl "https://wine-image-search.<account>.workers.dev/?q=rioja"
-```
+Photos are taken with the device camera (or picked from the gallery) and
+stored on the wine record as a compressed data URL — no API, no key, no
+network at display time. They are downscaled to a 900px longest edge and
+capped at 300KB each before storing, so they stay inside IndexedDB and
+travel with the JSON backup.
+
+An earlier stock-photo search (Pixabay via a Cloudflare Worker) was
+removed: stock libraries cannot know what a specific producer and
+vintage look like. It is recoverable from git history if ever wanted.
 
 ## Data safety
 

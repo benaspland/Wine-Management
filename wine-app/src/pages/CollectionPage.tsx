@@ -155,6 +155,12 @@ export default function CollectionPage() {
     await deleteWine(wineId)
   }
 
+  const handlePhotoChange = async (wineId: string, imageUrl: string) => {
+    await editWineDetails(wineId, { image_url: imageUrl })
+    await refreshSelectedWine(wineId)
+    showToast('Photo saved')
+  }
+
   const handleEditClick = (wine: Wine) => {
     setEditingWine(wine)
     setShowForm(true)
@@ -332,6 +338,7 @@ export default function CollectionPage() {
             onMoveToHome={handleMoveToHome}
             onEdit={handleEditClick}
             onDelete={handleDelete}
+            onPhotoChange={handlePhotoChange}
             isLoading={loading}
             scheduledDeliveryDate={selectedWineScheduledDate}
             consumptionLog={selectedWineLog}

@@ -34,6 +34,7 @@ function renderCard(wine: Wine) {
   const handlers = {
     onSelect: vi.fn(),
     onConsume: vi.fn().mockResolvedValue(undefined),
+    onConsumeDetailed: vi.fn(),
   }
   render(<WineCard wine={wine} {...handlers} />)
   return handlers
