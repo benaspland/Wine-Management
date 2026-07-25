@@ -1,4 +1,5 @@
 import type { Tier } from '../types/index'
+import { normalizeFormat } from './format.service'
 import type { ImportWineRow } from './workflows.service'
 import * as workflows from './workflows.service'
 
@@ -179,7 +180,8 @@ export class ImportService {
       throw new Error(`Invalid quantity: ${row.Quantity}`)
     }
 
-    const format = row.Size?.trim()
+    // Sources describe the same bottle many ways; store one trade name
+    const format = normalizeFormat(row.Size)
 
     // Optional per-bottle price; tolerate currency symbols and thousands
     // separators ("£25.50", "1,200"). Absent/unparseable means unrecorded.
@@ -206,7 +208,7 @@ export class ImportService {
       flavor_profile: row['Flavour Profile'].trim() || undefined,
       notes: row['Wine Notes']?.trim() || undefined,
       critic_ratings: JSON.stringify(criticRatings),
-      format: format && format !== '-' ? format : undefined,
+      format,
       purchase_price: !isNaN(purchasePrice) && purchasePrice > 0 ? purchasePrice : undefined,
       purchase_date: this.parsePurchaseDate(row['Purchase Date']),
       merchant: merchant && merchant !== '-' ? merchant : undefined,

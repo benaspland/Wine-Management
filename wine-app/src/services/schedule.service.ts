@@ -1,5 +1,6 @@
 import type { Wine, DeliveryScheduleEntry } from '../types/index'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
+import { bottlesPerCase, isMagnumOrLarger } from './format.service'
 
 // Debug logging helper - logs in development and when explicitly enabled
 const debugLog = (...args: unknown[]) => {
@@ -162,7 +163,7 @@ export class ScheduleService {
           const availabilityYearMonth = wineAvailability[w.id]
           const timesThisYear = yearsConsumption.filter(e => e.wineId === w.id).length
           // Magnums and Tier 4-5 never get a 2nd bottle
-          const hardMax = (w.format?.toLowerCase().includes('magnum') || w.tier >= 4) ? 1 : maxTimesThisYear
+          const hardMax = (isMagnumOrLarger(w.format) || w.tier >= 4) ? 1 : maxTimesThisYear
           const alreadyThisMonth = yearsConsumption.some(
             e => e.wineId === w.id && e.suggestedMonth === month
           )
@@ -387,14 +388,7 @@ export class ScheduleService {
     )
 
     // Helper functions
-    const caseSize = (wine: Wine): number => {
-      const size = wine.format?.toLowerCase() || '750ml'
-      if (size.includes('half') || size === '375ml') return 12
-      if (size.includes('magnum') || size.includes('1.5l')) return 3
-      if (size === '75cl' || size === '750ml') return 6
-      debugLog(`[caseSize] Unknown size for ${wine.producer} ${wine.name}: "${wine.format}", defaulting to 6`)
-      return 6
-    }
+    const caseSize = (wine: Wine): number => bottlesPerCase(wine.format)
 
     // State tracking
     const remaining: Record<string, number> = {}
@@ -459,7 +453,7 @@ export class ScheduleService {
             // Hard caps (real constraints): magnums and Tier 4-5 limited to 1/year.
             // Normal wines have no per-year cap in the delivery sim — we plan to
             // meet the user's actual consumption target.
-            const isHardCapped = wine.format?.toLowerCase().includes('magnum') || wine.tier >= 4
+            const isHardCapped = isMagnumOrLarger(wine.format) || wine.tier >= 4
             const maxY = isHardCapped ? 1 : Infinity
             const drunk = drunkThisYear[wine.id] || 0
             if (drunk >= maxY) return

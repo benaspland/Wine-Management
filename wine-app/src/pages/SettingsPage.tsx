@@ -13,7 +13,7 @@ const COLUMN_HELP: Record<string, string> = {
   Region: 'e.g. Bordeaux',
   Wine: 'Full name — producer and cuvée, e.g. Chateau Meyney',
   Quantity: 'Bottles owned; imported into storage',
-  Size: '375ml, 750ml, 1.5L or 3L',
+  Size: 'Bottle, Half Bottle, Magnum — or a volume like 75cl, 750ml, 1.5L',
   'Peak Drinking Window': 'Start and end year, e.g. 2026-2040',
   Classification: 'e.g. DOCG, 1er Cru',
   'Wine Rating': '1-5, sets the tier (1 Everyday … 5 Icon)',

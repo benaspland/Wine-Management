@@ -197,7 +197,7 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     expect(massolino?.name).toBe('Barolo Margheria')
   })
 
-  it('maps the Size column to the wine format', async () => {
+  it('normalizes the Size column onto trade names', async () => {
     await ImportService.importFromCSV(realFile())
     const wines = await db.getAllWines()
 
@@ -205,9 +205,13 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     const magnumRow = wines.find((w) => w.producer === 'Massolino' && w.vintage === 2011)
     expect(magnumRow?.format).toBe('Magnum')
 
-    // Standard bottles keep their size string too
+    // "75cl" and "750ml" describe the same bottle and must not survive
+    // as two different formats — that fragments the format filter
     const standard = wines.find((w) => w.producer === 'Chateau Gloria')
-    expect(standard?.format).toBe('75cl')
+    expect(standard?.format).toBe('Bottle')
+
+    const distinctFormats = [...new Set(wines.map(w => w.format))].sort()
+    expect(distinctFormats).toEqual(['Bottle', 'Magnum'])
   })
 
   it('keeps the numeric score of critic ratings with "+" qualifiers', async () => {

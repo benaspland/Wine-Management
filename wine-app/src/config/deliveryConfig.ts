@@ -3,6 +3,8 @@
  * These values are used throughout the scheduling algorithms
  */
 
+import { bottlesPerCase } from '../services/format.service'
+
 export const DELIVERY_CONFIG = {
   // Delivery scheduling
   months: [3, 9], // March and September
@@ -48,14 +50,10 @@ export function formatDeliveryDate(year: number, month: number): string {
 }
 
 /**
- * Get minimum delivery threshold for a given bottle format
+ * Get minimum delivery threshold for a given bottle format.
+ * Delegates to the shared normaliser so every size spelling — and
+ * capitalisation — resolves the same way it does everywhere else.
  */
 export function getMinDeliveryThreshold(format: string): number {
-  if (format.includes('375') || format.includes('half')) {
-    return DELIVERY_CONFIG.thresholds.halfBottle
-  }
-  if (format.includes('1.5') || format.includes('magnum')) {
-    return DELIVERY_CONFIG.thresholds.magnum
-  }
-  return DELIVERY_CONFIG.thresholds.standard
+  return bottlesPerCase(format)
 }

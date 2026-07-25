@@ -3,6 +3,7 @@ import type { Wine, Tier, WineType } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import Modal from './Modal'
 import WineImagePicker from './WineImagePicker'
+import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
 
 interface WineFormProps {
   isOpen: boolean
@@ -29,7 +30,9 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           tier: initialWine.tier,
           location: 'storage' as 'storage' | 'home',
           quantity: (initialWine.quantity_in_storage || 0) + (initialWine.quantity_at_home || 0),
-          format: initialWine.format ?? '750ml',
+          // Normalised so a legacy value like "75cl" preselects its
+          // trade name instead of leaving the dropdown blank
+          format: normalizeFormat(initialWine.format) ?? 'Bottle',
           drinking_window_start: initialWine.drinking_window_start,
           drinking_window_end: initialWine.drinking_window_end,
           alcohol_percent: initialWine.alcohol_percent ?? 0,
@@ -55,7 +58,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           tier: 1 as Tier,
           location: 'storage' as 'storage' | 'home',
           quantity: 1,
-          format: '750ml',
+          format: 'Bottle',
           drinking_window_start: new Date().getFullYear(),
           drinking_window_end: new Date().getFullYear() + 10,
           alcohol_percent: 0,
@@ -260,10 +263,9 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               onChange={handleChange}
               className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             >
-              <option>375ml</option>
-              <option>750ml</option>
-              <option>1.5L</option>
-              <option>3L</option>
+              {BOTTLE_FORMATS.map(format => (
+                <option key={format}>{format}</option>
+              ))}
             </select>
           </div>
         </div>
