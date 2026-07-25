@@ -36,6 +36,8 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           serving_temp_min: initialWine.serving_temp_min ?? 15,
           serving_temp_max: initialWine.serving_temp_max ?? 18,
           purchase_price: initialWine.purchase_price ?? 0,
+          purchase_date: initialWine.purchase_date ?? '',
+          merchant: initialWine.merchant ?? '',
           notes: initialWine.notes ?? '',
           critic_ratings: initialWine.critic_ratings ?? {},
           flavor_profile: initialWine.flavor_profile ?? '',
@@ -60,6 +62,8 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           serving_temp_min: 15,
           serving_temp_max: 18,
           purchase_price: 0,
+          purchase_date: '',
+          merchant: '',
           notes: '',
           critic_ratings: {},
           flavor_profile: '',
@@ -92,7 +96,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     // Translate the form's single quantity + location into the split
     // inventory fields the Wine record uses. When editing, bottles at
     // home stay at home and any quantity change is applied to storage.
-    const { location, quantity, purchase_price, ...wineFields } = formData
+    const { location, quantity, purchase_price, purchase_date, merchant, ...wineFields } = formData
     let quantity_in_storage: number
     let quantity_at_home: number
     if (initialWine) {
@@ -107,6 +111,9 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       await onSubmit({
         ...wineFields,
         purchase_price: purchase_price > 0 ? purchase_price : undefined,
+        // Blank optional text is "unrecorded", not an empty value
+        purchase_date: purchase_date.trim() || undefined,
+        merchant: merchant.trim() || undefined,
         quantity_in_storage,
         quantity_at_home,
       })
@@ -261,7 +268,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           </div>
         </div>
 
-        {/* Purchase Price */}
+        {/* Purchase details */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-on-surface mb-1">Price per Bottle (£)</label>
@@ -276,6 +283,29 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-on-surface mb-1">Purchase Date</label>
+            <input
+              type="date"
+              name="purchase_date"
+              value={formData.purchase_date}
+              onChange={handleChange}
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
+            />
+          </div>
+        </div>
+
+        {/* Merchant */}
+        <div>
+          <label className="block text-sm font-medium text-on-surface mb-1">Merchant</label>
+          <input
+            type="text"
+            name="merchant"
+            value={formData.merchant}
+            onChange={handleChange}
+            placeholder="e.g., Berry Bros. & Rudd"
+            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
+          />
         </div>
 
         {/* Drinking Window */}

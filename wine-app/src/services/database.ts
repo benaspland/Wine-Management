@@ -125,6 +125,28 @@ export async function restoreDatabase(backup: unknown): Promise<void> {
   await initializeDatabase()
 }
 
+/**
+ * Wipe all collection data — wines, delivery windows, consumption and
+ * delivery history, audit log — and start fresh. Cellar configuration
+ * (capacity, targets) is deliberately preserved: resetting is for
+ * re-importing a collection, not for re-doing setup. Destructive;
+ * callers must confirm with the user first.
+ */
+export async function resetDatabase(): Promise<void> {
+  const config = getTable('cellar_config').map((row) => ({ ...row }))
+
+  if (!adapter) {
+    adapter = createStorageAdapter()
+  }
+  const snapshot: DbSnapshot = {}
+  for (const name of TABLE_NAMES) {
+    snapshot[name] = []
+  }
+  snapshot.cellar_config = config
+  await adapter.save(snapshot)
+  await initializeDatabase()
+}
+
 export async function initializeDatabase(): Promise<void> {
   adapter = createStorageAdapter()
 
