@@ -3,6 +3,7 @@ import { useWineStore } from '../store/wineStore'
 import * as db from '../services/database'
 import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/import.service'
 import MessageModal from '../components/MessageModal'
+import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
 
@@ -41,8 +42,11 @@ export default function SettingsPage() {
   const [annualConsumptionTarget, setAnnualConsumptionTarget] = useState(30)
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [confirmingReset, setConfirmingReset] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
+
+  const totalBottles = wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)
 
   const showToast = useToastStore(state => state.show)
   const loadWines = useWineStore(state => state.loadWines)
@@ -200,13 +204,6 @@ export default function SettingsPage() {
   }
 
   const handleResetData = async () => {
-    const bottles = wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)
-    const proceed = confirm(
-      `Delete all ${wines.length} wines (${bottles} bottles), plus delivery windows and consumption history?\n\n` +
-        'Your cellar settings are kept. This cannot be undone — make sure you have a backup.'
-    )
-    if (!proceed) return
-
     setIsLoading(true)
     setMessage(null)
     try {
@@ -280,6 +277,16 @@ export default function SettingsPage() {
   return (
     <div className="px-6 max-w-2xl mx-auto py-8">
       <h2 className="font-headline text-5xl md:text-7xl mb-4 text-on-surface">Settings</h2>
+
+      <ConfirmDeleteDialog
+        isOpen={confirmingReset}
+        onClose={() => setConfirmingReset(false)}
+        title="Delete All Wine Data"
+        message={`Delete all ${wines.length} ${wines.length === 1 ? 'wine' : 'wines'} (${totalBottles} ${totalBottles === 1 ? 'bottle' : 'bottles'}), plus every delivery window and consumption record?`}
+        detail="Your cellar capacity and schedule settings are kept. This cannot be undone — make sure you have downloaded a backup."
+        confirmLabel="Delete Everything"
+        onConfirm={handleResetData}
+      />
 
       {/* Modal notification for import/export feedback */}
       {message && (
@@ -468,9 +475,7 @@ export default function SettingsPage() {
             </div>
             <div className="bg-surface-container-low p-4 rounded">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">Total Bottles</p>
-              <p className="font-headline text-3xl font-bold text-primary">
-                {wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)}
-              </p>
+              <p className="font-headline text-3xl font-bold text-primary">{totalBottles}</p>
             </div>
             <div className="bg-surface-container-low p-4 rounded">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">At Home</p>
@@ -497,8 +502,8 @@ export default function SettingsPage() {
           </p>
 
           <button
-            onClick={handleResetData}
-            disabled={isLoading}
+            onClick={() => setConfirmingReset(true)}
+            disabled={isLoading || wines.length === 0}
             className="w-full border border-error/40 text-error hover:bg-error/10 hover:border-error py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
           >
             {isLoading ? 'Working...' : 'Delete All Wine Data'}

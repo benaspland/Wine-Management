@@ -10,6 +10,9 @@ import { useToastStore } from '../store/toastStore'
 import { wineDisplayName } from '../services/wine.service'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 import { CircleCheck, Package, Wine as WineIcon, RefreshCw } from 'lucide-react'
+import ConsumptionSheet from '../components/ConsumptionSheet'
+import HoldButton from '../components/HoldButton'
+import type { ConsumptionLogEntry } from '../types/index'
 
 interface ScheduleEntry {
   month: string
@@ -43,25 +46,45 @@ export default function DrinkingSchedulePage() {
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [activeYear, setActiveYear] = useState<number | null>(null)
   const yearRefs = useRef(new Map<number, HTMLElement>())
+  // Hold-to-log: a bottle being logged with a chosen date and note
+  const [logging, setLogging] = useState<{ wineId: string; label: string } | null>(null)
+  // An already-logged bottle being annotated from the toast
+  const [amending, setAmending] = useState<{ entry: ConsumptionLogEntry; label: string } | null>(null)
 
-  const handleMarkConsumed = async (
+  /** Log a bottle, then offer to annotate or undo it from the toast. */
+  const logConsumption = async (
     wineId: string,
-    producerName: string,
-    wineName: string,
-    scheduleYear: number,
-    scheduleMonth: number
+    label: string,
+    consumedDate: string,
+    notes?: string
   ) => {
+    const entry = await workflows.consumeWine(wineId, consumedDate, notes)
+    await loadWines()
+    await generateDrinkingSchedule()
+
+    showToast(`${label} marked as consumed`, {
+      action: {
+        label: notes ? 'Edit note' : 'Add note',
+        run: () => setAmending({ entry, label }),
+      },
+      onUndo: async () => {
+        try {
+          await workflows.undoConsumeWine(entry.id)
+          await loadWines()
+          await generateDrinkingSchedule()
+        } catch (error) {
+          showToast(`Undo failed: ${(error as Error).message}`, { type: 'error' })
+        }
+      },
+    })
+  }
+
+  /** Short tap: log it now, with today's date. */
+  const handleMarkConsumed = async (wineId: string, producerName: string, wineName: string) => {
     setIsConsuming(true)
     try {
-      const wine = wines.find(w => w.id === wineId)
-      if (!wine) throw new Error('Wine not found')
-
-      const consumeDate = new Date().toISOString().split('T')[0]
-      await workflows.consumeWine(wineId, consumeDate, `Scheduled for ${scheduleMonth}/${scheduleYear}`)
-      await loadWines()
-      await generateDrinkingSchedule()
-
-      showToast(`${wineDisplayName(producerName, wineName)} marked as consumed`)
+      const today = new Date().toISOString().split('T')[0]
+      await logConsumption(wineId, wineDisplayName(producerName, wineName), today)
     } catch (error) {
       setMessage({
         type: 'error',
@@ -70,6 +93,11 @@ export default function DrinkingSchedulePage() {
     } finally {
       setIsConsuming(false)
     }
+  }
+
+  /** Hold: pick the date it was actually drunk, and note it. */
+  const handleLogWithDetail = (wineId: string, producerName: string, wineName: string) => {
+    setLogging({ wineId, label: wineDisplayName(producerName, wineName) })
   }
 
   // Generate drinking schedule
@@ -208,6 +236,37 @@ export default function DrinkingSchedulePage() {
 
   return (
     <div className="px-6 max-w-3xl mx-auto py-8">
+      {/* Hold-to-log: choose the date actually drunk, plus a note */}
+      {logging && (
+        <ConsumptionSheet
+          isOpen
+          onClose={() => setLogging(null)}
+          wineLabel={logging.label}
+          initialDate={new Date().toISOString().split('T')[0]}
+          onSubmit={async ({ consumedDate, notes }) => {
+            await logConsumption(logging.wineId, logging.label, consumedDate, notes || undefined)
+          }}
+        />
+      )}
+
+      {/* Annotating a bottle already logged */}
+      {amending && (
+        <ConsumptionSheet
+          isOpen
+          isAmendment
+          onClose={() => setAmending(null)}
+          wineLabel={amending.label}
+          initialDate={amending.entry.consumed_date}
+          initialNotes={amending.entry.notes}
+          onSubmit={async ({ consumedDate, notes }) => {
+            await workflows.amendConsumption(amending.entry.id, { consumedDate, notes })
+            await loadWines()
+            await generateDrinkingSchedule()
+            showToast('Tasting note saved')
+          }}
+        />
+      )}
+
       {/* Message Notification */}
       {message && (
         <MessageModal
@@ -340,15 +399,16 @@ export default function DrinkingSchedulePage() {
                             <span className="text-[9px]">storage</span>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => handleMarkConsumed(wine.id, wine.producer, wine.name, entry.year, MONTH_TO_NUMBER[entry.month] || 1)}
+                          <HoldButton
+                            onTap={() => handleMarkConsumed(wine.id, wine.producer, wine.name)}
+                            onHold={() => handleLogWithDetail(wine.id, wine.producer, wine.name)}
                             disabled={isConsuming}
-                            title="Mark as consumed"
+                            title="Tap to mark consumed, hold to set the date and add a note"
                             aria-label={`Mark ${wineDisplayName(wine.producer, wine.name)} as consumed`}
-                            className="shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
+                            className="shrink-0 h-10 w-10 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
                           >
                             <WineIcon size={16} aria-hidden="true" />
-                          </button>
+                          </HoldButton>
                         )}
                       </div>
                     )

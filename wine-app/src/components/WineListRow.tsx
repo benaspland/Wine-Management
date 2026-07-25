@@ -2,11 +2,14 @@ import type { Wine } from '../types/index'
 import LocationBadge from './LocationBadge'
 import { wineDisplayName } from '../services/wine.service'
 import { Wine as WineIcon } from 'lucide-react'
+import HoldButton from './HoldButton'
 
 interface WineListRowProps {
   wine: Wine
   onSelect: (wine: Wine) => void
   onConsume: (wineId: string) => Promise<void>
+  /** Hold: log with a chosen date and tasting note. */
+  onConsumeDetailed: (wine: Wine) => void
   isLoading?: boolean
 }
 
@@ -23,11 +26,21 @@ const TIER_DOT: Record<number, string> = {
  * card grid is not. One row ≈ one glance: what it is, where it is,
  * drink it now.
  */
-export default function WineListRow({ wine, onSelect, onConsume, isLoading }: WineListRowProps) {
-  const handleConsume = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+export default function WineListRow({
+  wine,
+  onSelect,
+  onConsume,
+  onConsumeDetailed,
+  isLoading,
+}: WineListRowProps) {
+  const handleConsume = () => {
     if (wine.quantity_at_home === 0) return
-    await onConsume(wine.id)
+    void onConsume(wine.id)
+  }
+
+  const handleConsumeDetailed = () => {
+    if (wine.quantity_at_home === 0) return
+    onConsumeDetailed(wine)
   }
 
   return (
@@ -49,15 +62,17 @@ export default function WineListRow({ wine, onSelect, onConsume, isLoading }: Wi
         </p>
       </div>
       <LocationBadge wine={wine} />
-      <button
-        onClick={handleConsume}
+      <HoldButton
+        onTap={handleConsume}
+        onHold={handleConsumeDetailed}
+        progressColor="rgba(255, 191, 0, 0.35)"
         disabled={wine.quantity_at_home === 0 || isLoading}
-        title={wine.quantity_at_home === 0 ? 'No bottles at home to drink' : 'Mark one bottle as consumed'}
+        title={wine.quantity_at_home === 0 ? 'No bottles at home to drink' : 'Tap to mark consumed, hold to set the date and add a note'}
         aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
-        className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
+        className="min-h-11 min-w-11 shrink-0 rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
       >
         <WineIcon size={18} aria-hidden="true" />
-      </button>
+      </HoldButton>
     </div>
   )
 }

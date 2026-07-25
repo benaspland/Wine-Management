@@ -1,10 +1,10 @@
 /**
- * WineDetailPanel component tests — the destructive delete flow (native
- * confirm dialog) and the availability-dependent action buttons.
+ * WineDetailPanel component tests — the destructive delete flow
+ * (hold-to-confirm dialog) and the availability-dependent action buttons.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import WineDetailPanel from '../WineDetailPanel'
 import type { Wine } from '../../types/index'
 
@@ -45,51 +45,124 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/**
+ * Deleting a wine is irreversible, so it takes a confirmation dialog
+ * naming what is lost, and the commit is a press-and-hold rather than a
+ * tap — a tap is the gesture used everywhere else and can be spent
+ * before the dialog has been read.
+ */
 describe('WineDetailPanel - delete confirmation', () => {
-  it('deletes and closes when the confirmation is accepted', async () => {
-    // happy-dom does not implement confirm; stub the global the panel calls
-    const confirmStub = vi.fn().mockReturnValue(true)
-    vi.stubGlobal('confirm', confirmStub)
-    const handlers = renderPanel(makeWine())
+  /** Hold the confirm button past the threshold. */
+  function holdToConfirm() {
+    const confirmButton = screen.getByLabelText('Delete')
+    fireEvent.pointerDown(confirmButton, { button: 0, clientX: 0, clientY: 0 })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    fireEvent.pointerUp(confirmButton)
+  }
+
+  it('asks before deleting, naming the wine and what is lost', () => {
+    renderPanel(makeWine({ quantity_in_storage: 10, quantity_at_home: 2 }))
 
     fireEvent.click(screen.getByText('Delete'))
 
-    await waitFor(() => expect(handlers.onDelete).toHaveBeenCalledWith('wine-1'))
-    expect(confirmStub).toHaveBeenCalledWith(
-      'Delete "R. Lopez de Heredia Vina Tondonia 2010"? This cannot be undone.'
-    )
-    expect(handlers.onClose).toHaveBeenCalled()
+    expect(screen.queryByText('Delete R. Lopez de Heredia Vina Tondonia 2010?')).not.toBeNull()
+    expect(screen.queryByText(/12 bottles will be removed/)).not.toBeNull()
   })
 
-  it('does nothing when the confirmation is dismissed', async () => {
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false))
+  it('deletes and closes once the hold completes', async () => {
+    vi.useFakeTimers()
+    try {
+      const handlers = renderPanel(makeWine())
+      fireEvent.click(screen.getByText('Delete'))
+
+      holdToConfirm()
+
+      await vi.waitFor(() => expect(handlers.onDelete).toHaveBeenCalledWith('wine-1'))
+      expect(handlers.onClose).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not delete on a mere tap of the confirm button', async () => {
+    vi.useFakeTimers()
+    try {
+      const handlers = renderPanel(makeWine())
+      fireEvent.click(screen.getByText('Delete'))
+
+      const confirmButton = screen.getByLabelText('Delete')
+      fireEvent.pointerDown(confirmButton, { button: 0, clientX: 0, clientY: 0 })
+      act(() => {
+        vi.advanceTimersByTime(150)
+      })
+      fireEvent.pointerUp(confirmButton)
+
+      await act(async () => {})
+      expect(handlers.onDelete).not.toHaveBeenCalled()
+      // ...and says why, rather than appearing broken
+      expect(screen.queryByText('Keep holding to confirm')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('abandons the hold if the finger drags away, as when scrolling', async () => {
+    vi.useFakeTimers()
+    try {
+      const handlers = renderPanel(makeWine())
+      fireEvent.click(screen.getByText('Delete'))
+
+      const confirmButton = screen.getByLabelText('Delete')
+      fireEvent.pointerDown(confirmButton, { button: 0, clientX: 0, clientY: 0 })
+      fireEvent.pointerMove(confirmButton, { clientX: 0, clientY: 40 })
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      fireEvent.pointerUp(confirmButton)
+
+      await act(async () => {})
+      expect(handlers.onDelete).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does nothing when the dialog is cancelled', async () => {
     const handlers = renderPanel(makeWine())
 
     fireEvent.click(screen.getByText('Delete'))
+    fireEvent.click(screen.getByText('Cancel'))
 
-    // Give any (wrong) async delete a chance to fire before asserting
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(handlers.onDelete).not.toHaveBeenCalled()
     expect(handlers.onClose).not.toHaveBeenCalled()
+    expect(screen.queryByText(/will be removed/)).toBeNull()
   })
 
   it('keeps the panel open and alerts when the delete fails', async () => {
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+    vi.useFakeTimers()
     const alertStub = vi.fn()
     vi.stubGlobal('alert', alertStub)
-    const handlers = {
-      onClose: vi.fn(),
-      onConsume: vi.fn(),
-      onMoveToHome: vi.fn(),
-      onEdit: vi.fn(),
-      onDelete: vi.fn().mockRejectedValue(new Error('boom')),
+    try {
+      const handlers = {
+        onClose: vi.fn(),
+        onConsume: vi.fn(),
+        onMoveToHome: vi.fn(),
+        onEdit: vi.fn(),
+        onDelete: vi.fn().mockRejectedValue(new Error('boom')),
+      }
+      render(<WineDetailPanel wine={makeWine()} {...handlers} />)
+      fireEvent.click(screen.getByText('Delete'))
+
+      holdToConfirm()
+
+      await vi.waitFor(() => expect(alertStub).toHaveBeenCalledWith('Error: boom'))
+      expect(handlers.onClose).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
     }
-    render(<WineDetailPanel wine={makeWine()} {...handlers} />)
-
-    fireEvent.click(screen.getByText('Delete'))
-
-    await waitFor(() => expect(alertStub).toHaveBeenCalledWith('Error: boom'))
-    expect(handlers.onClose).not.toHaveBeenCalled()
   })
 })
 

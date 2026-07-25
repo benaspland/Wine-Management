@@ -5,15 +5,18 @@ import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import { wineDisplayName } from '../services/wine.service'
 import { Wine as WineIcon } from 'lucide-react'
+import HoldButton from './HoldButton'
 
 interface WineCardProps {
   wine: Wine
   onSelect: (wine: Wine) => void
   onConsume: (wineId: string) => Promise<void>
+  /** Hold: log with a chosen date and tasting note. */
+  onConsumeDetailed: (wine: Wine) => void
   isLoading?: boolean
 }
 
-export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineCardProps) {
+export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed, isLoading }: WineCardProps) {
   const drinkingStatus = WineService.getDrinkingWindowLabel(wine)
   const drinkingColor =
     drinkingStatus === 'Ready to Drink' ? 'text-primary' :
@@ -28,10 +31,14 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
     wine.tier === 3 ? 'border border-primary/40 text-primary' :
     'bg-surface-container-high text-on-surface-variant'
 
-  const handleConsume = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleConsume = () => {
     if (wine.quantity_at_home === 0) return
-    await onConsume(wine.id)
+    void onConsume(wine.id)
+  }
+
+  const handleConsumeDetailed = () => {
+    if (wine.quantity_at_home === 0) return
+    onConsumeDetailed(wine)
   }
 
   return (
@@ -73,19 +80,23 @@ export default function WineCard({ wine, onSelect, onConsume, isLoading }: WineC
                 />
               </div>
             </div>
-            <button
-              onClick={handleConsume}
+            <HoldButton
+              onTap={handleConsume}
+              onHold={handleConsumeDetailed}
+              progressStyle="fill"
+              progressColor="rgba(255, 191, 0, 0.3)"
               disabled={wine.quantity_at_home === 0 || isLoading}
+              aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
               title={
                 wine.quantity_at_home === 0
                   ? 'No bottles at home to drink'
-                  : 'Mark one bottle as consumed'
+                  : 'Tap to mark consumed, hold to set the date and add a note'
               }
-              className="min-h-11 shrink-0 flex items-center gap-1.5 px-3.5 rounded-full bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
+              className="min-h-11 shrink-0 px-3.5 rounded-full bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
             >
               <WineIcon size={16} aria-hidden="true" />
               Drink
-            </button>
+            </HoldButton>
           </div>
 
           {/* Tier & Details Badges */}

@@ -5,6 +5,8 @@ import { useToastStore } from '../store/toastStore'
 import { getScheduledDeliveryDateForWine } from '../services/deliveryPlanning.service'
 import { wineDisplayName } from '../services/wine.service'
 import * as db from '../services/database'
+import * as workflows from '../services/workflows.service'
+import ConsumptionSheet from '../components/ConsumptionSheet'
 import WineCard from '../components/WineCard'
 import WineListRow from '../components/WineListRow'
 import WineDetailPanel from '../components/WineDetailPanel'
@@ -41,6 +43,10 @@ export default function CollectionPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(initialViewMode)
   const [selectedWineScheduledDate, setSelectedWineScheduledDate] = useState<string | undefined>()
   const [selectedWineLog, setSelectedWineLog] = useState<ConsumptionLogEntry[]>([])
+  // Hold-to-log: a bottle being logged with a chosen date and note
+  const [logging, setLogging] = useState<{ wineId: string; label: string } | null>(null)
+  // An already-logged bottle being annotated from the toast
+  const [amending, setAmending] = useState<{ entry: ConsumptionLogEntry; label: string } | null>(null)
 
   const searchTerm = useWineStore(state => state.searchTerm)
   const setSearchTerm = useWineStore(state => state.setSearchTerm)
@@ -100,25 +106,43 @@ export default function CollectionPage() {
     setSelectedWineLog(await db.getConsumptionLogByWineId(wineId))
   }
 
-  const handleConsume = async (wineId: string) => {
+  const wineLabel = (wine: Wine) => `${wineDisplayName(wine.producer, wine.name)} ${wine.vintage}`
+
+  /** Log a bottle, then offer to annotate or undo it from the toast. */
+  const logConsumption = async (wineId: string, consumedDate?: string, notes?: string) => {
     const wine = allWines.find(w => w.id === wineId)
-    const label = wine ? `${wineDisplayName(wine.producer, wine.name)} ${wine.vintage}` : 'Bottle'
+    const label = wine ? wineLabel(wine) : 'Bottle'
+
+    const entry = await consumeWine(wineId, consumedDate, notes)
+    showToast(`${label} consumed`, {
+      action: {
+        label: notes ? 'Edit note' : 'Add note',
+        run: () => setAmending({ entry, label }),
+      },
+      onUndo: async () => {
+        try {
+          await undoConsume(entry.id)
+          await refreshSelectedWine(wineId)
+        } catch (error) {
+          showToast(`Undo failed: ${(error as Error).message}`, { type: 'error' })
+        }
+      },
+    })
+    await refreshSelectedWine(wineId)
+  }
+
+  /** Short tap: log it now, with today's date. */
+  const handleConsume = async (wineId: string) => {
     try {
-      const entry = await consumeWine(wineId)
-      showToast(`${label} consumed`, {
-        onUndo: async () => {
-          try {
-            await undoConsume(entry.id)
-            await refreshSelectedWine(wineId)
-          } catch (error) {
-            showToast(`Undo failed: ${(error as Error).message}`, { type: 'error' })
-          }
-        },
-      })
-      await refreshSelectedWine(wineId)
+      await logConsumption(wineId)
     } catch (error) {
       showToast(`Could not consume: ${(error as Error).message}`, { type: 'error' })
     }
+  }
+
+  /** Hold: pick the date it was actually drunk, and note it. */
+  const handleConsumeDetailed = (wine: Wine) => {
+    setLogging({ wineId: wine.id, label: wineLabel(wine) })
   }
 
   const handleMoveToHome = async (wineId: string, quantity: number) => {
@@ -139,6 +163,36 @@ export default function CollectionPage() {
   return (
     <>
       <FilterDrawer open={showFilters} onClose={() => setShowFilters(false)} />
+
+      {/* Hold-to-log: choose the date actually drunk, plus a note */}
+      {logging && (
+        <ConsumptionSheet
+          isOpen
+          onClose={() => setLogging(null)}
+          wineLabel={logging.label}
+          initialDate={new Date().toISOString().split('T')[0]}
+          onSubmit={async ({ consumedDate, notes }) => {
+            await logConsumption(logging.wineId, consumedDate, notes || undefined)
+          }}
+        />
+      )}
+
+      {/* Annotating a bottle already logged */}
+      {amending && (
+        <ConsumptionSheet
+          isOpen
+          isAmendment
+          onClose={() => setAmending(null)}
+          wineLabel={amending.label}
+          initialDate={amending.entry.consumed_date}
+          initialNotes={amending.entry.notes}
+          onSubmit={async ({ consumedDate, notes }) => {
+            await workflows.amendConsumption(amending.entry.id, { consumedDate, notes })
+            await refreshSelectedWine(amending.entry.wine_id)
+            showToast('Tasting note saved')
+          }}
+        />
+      )}
 
       <div className="px-6 max-w-7xl mx-auto py-8">
         {/* Hero Section */}
@@ -246,6 +300,7 @@ export default function CollectionPage() {
                 wine={wine}
                 onSelect={handleSelectWine}
                 onConsume={handleConsume}
+                onConsumeDetailed={handleConsumeDetailed}
                 isLoading={loading}
               />
             ))}
@@ -261,6 +316,7 @@ export default function CollectionPage() {
                 wine={wine}
                 onSelect={handleSelectWine}
                 onConsume={handleConsume}
+                onConsumeDetailed={handleConsumeDetailed}
                 isLoading={loading}
               />
             ))}
