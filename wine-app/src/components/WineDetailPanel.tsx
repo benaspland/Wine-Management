@@ -3,7 +3,7 @@ import type { Wine, ConsumptionLogEntry } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
-import { wineDisplayName } from '../services/wine.service'
+import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
 import { X, Wine as WineIcon, Minus, Plus } from 'lucide-react'
 
 interface WineDetailPanelProps {
@@ -30,9 +30,7 @@ export default function WineDetailPanel({
   consumptionLog,
 }: WineDetailPanelProps) {
   const tierLabel = TIER_LABELS[wine.tier]
-  const criticRatings: Record<string, number> = typeof wine.critic_ratings === 'string'
-    ? JSON.parse(wine.critic_ratings || '{}')
-    : (wine.critic_ratings || {})
+  const criticRatings = criticRatingsOf(wine.critic_ratings)
   const totalBottles = wine.quantity_in_storage + wine.quantity_at_home
 
   // Bottles to bring home in one action; defaults to everything in storage.
@@ -202,6 +200,24 @@ export default function WineDetailPanel({
               <p className="text-sm font-medium">
                 £{wine.purchase_price.toLocaleString()} <span className="text-outline">/ bottle</span>
               </p>
+            </div>
+          )}
+          {wine.purchase_date && (
+            <div>
+              <p className="text-[10px] text-outline uppercase tracking-wider">Purchased</p>
+              <p className="text-sm font-medium">
+                {new Date(wine.purchase_date).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </p>
+            </div>
+          )}
+          {wine.merchant && (
+            <div className="col-span-2">
+              <p className="text-[10px] text-outline uppercase tracking-wider">Merchant</p>
+              <p className="text-sm font-medium">{wine.merchant}</p>
             </div>
           )}
           {scheduledDeliveryDate && (

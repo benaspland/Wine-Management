@@ -18,6 +18,7 @@ import * as path from 'path'
 import { fileURLToPath } from 'url'
 import * as db from '../database'
 import { ImportService } from '../import.service'
+import { criticRatingsOf } from '../wine.service'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -453,6 +454,78 @@ describe('ImportService - purchase price column', () => {
   })
 })
 
+describe('ImportService - purchase date and merchant columns', () => {
+  const HEADER_WITH_PROVENANCE = HEADER + ',Purchase Date,Merchant'
+
+  function rowWith(date: string, merchant: string, overrides: Partial<Record<string, string>> = {}) {
+    return `${row(overrides)},${date},${merchant}`
+  }
+
+  async function importProvenance(rows: string[]) {
+    const file = csvFile([HEADER_WITH_PROVENANCE, ...rows].join('\n'))
+    return ImportService.importFromCSV(file)
+  }
+
+  it('parses ISO and UK day-first dates to the same stored value', async () => {
+    const result = await importProvenance([
+      rowWith('2024-03-15', 'Berry Bros', { Wine: 'Chateau Uno' }),
+      rowWith('15/03/2024', 'Berry Bros', { Wine: 'Chateau Due' }),
+      rowWith('15.03.2024', 'Berry Bros', { Wine: 'Chateau Tre' }),
+    ])
+
+    expect(result.success).toBe(3)
+    const wines = await db.getAllWines()
+    expect(wines.map(w => w.purchase_date)).toEqual([
+      '2024-03-15',
+      '2024-03-15',
+      '2024-03-15',
+    ])
+  })
+
+  it('reads day first, not month first, for ambiguous UK dates', async () => {
+    // 01/02/2024 is 1 February in the UK, not 2 January
+    await importProvenance([rowWith('01/02/2024', 'Merchant')])
+    expect((await db.getAllWines())[0].purchase_date).toBe('2024-02-01')
+  })
+
+  it('leaves the date unset for blank, garbage or impossible values', async () => {
+    const result = await importProvenance([
+      rowWith('', 'Merchant', { Wine: 'Chateau Uno' }),
+      rowWith('last spring', 'Merchant', { Wine: 'Chateau Due' }),
+      rowWith('31/02/2024', 'Merchant', { Wine: 'Chateau Tre' }),
+    ])
+
+    expect(result.success).toBe(3)
+    const wines = await db.getAllWines()
+    expect(wines.every(w => w.purchase_date === undefined)).toBe(true)
+  })
+
+  it('keeps a merchant name containing a comma intact when quoted', async () => {
+    await importProvenance([rowWith('2024-03-15', '"Berry Bros. & Rudd, London"')])
+    expect((await db.getAllWines())[0].merchant).toBe('Berry Bros. & Rudd, London')
+  })
+
+  it('leaves the merchant unset when blank or a placeholder dash', async () => {
+    const result = await importProvenance([
+      rowWith('2024-03-15', '', { Wine: 'Chateau Uno' }),
+      rowWith('2024-03-15', '-', { Wine: 'Chateau Due' }),
+    ])
+
+    expect(result.success).toBe(2)
+    const wines = await db.getAllWines()
+    expect(wines.every(w => w.merchant === undefined)).toBe(true)
+  })
+
+  it('imports files without the columns unchanged (backward compatible)', async () => {
+    const result = await ImportService.importFromCSV(csv(row()))
+
+    expect(result.success).toBe(1)
+    const wine = (await db.getAllWines())[0]
+    expect(wine.purchase_date).toBeUndefined()
+    expect(wine.merchant).toBeUndefined()
+  })
+})
+
 describe('ImportService - field parsing', () => {
   async function importOne(overrides: Partial<Record<string, string>>) {
     const result = await ImportService.importFromCSV(csv(row(overrides)))
@@ -460,6 +533,16 @@ describe('ImportService - field parsing', () => {
     const wines = await db.getAllWines()
     return wines[0]
   }
+
+  it('stores the Wine Notes column', async () => {
+    const wine = await importOne({ 'Wine Notes': 'Drinking beautifully now.' })
+    expect(wine.notes).toBe('Drinking beautifully now.')
+  })
+
+  it('stores critic ratings so they survive a re-read', async () => {
+    const wine = await importOne({ 'Professional Critic Ratings': 'JS 97 : RP 96' })
+    expect(criticRatingsOf(wine.critic_ratings)).toEqual({ js: 97, rp: 96 })
+  })
 
   it('parses the drinking window into start and end years', async () => {
     const wine = await importOne({ 'Peak Drinking Window': '2026-2048' })

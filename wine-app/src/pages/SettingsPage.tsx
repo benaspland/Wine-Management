@@ -1,10 +1,38 @@
 import { useState, useRef, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
 import * as db from '../services/database'
-import { ImportService } from '../services/import.service'
+import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/import.service'
 import MessageModal from '../components/MessageModal'
 import { useToastStore } from '../store/toastStore'
-import { wineDisplayName } from '../services/wine.service'
+import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
+
+/** What each CSV column expects, shown on the import card. */
+const COLUMN_HELP: Record<string, string> = {
+  Vintage: '4-digit year, e.g. 2019',
+  Country: 'e.g. France',
+  Region: 'e.g. Bordeaux',
+  Wine: 'Full name — producer and cuvée, e.g. Chateau Meyney',
+  Quantity: 'Bottles owned; imported into storage',
+  Size: '375ml, 750ml, 1.5L or 3L',
+  'Peak Drinking Window': 'Start and end year, e.g. 2026-2040',
+  Classification: 'e.g. DOCG, 1er Cru',
+  'Wine Rating': '1-5, sets the tier (1 Everyday … 5 Icon)',
+  'Professional Critic Ratings': 'e.g. JS 97 : RP 96',
+  'Wine Notes': 'Free text',
+  Varietal: 'Colon-separated, e.g. Cabernet Sauvignon : Merlot',
+  'Alcohol Level': 'e.g. 13.5%',
+  'Flavour Profile': 'Colon-separated, e.g. Cassis : Graphite',
+  'Recommended Service Temp': 'e.g. 16-18°C',
+  'Purchase Price': 'Per bottle; £ and commas are fine, e.g. £32.50',
+  'Purchase Date': '15/03/2024 (day first) or 2024-03-15',
+  Merchant: 'Who you bought it from, e.g. Berry Bros. & Rudd',
+}
+
+/** Quote a CSV value only when it needs it, doubling any inner quotes. */
+function csvEscape(value: unknown): string {
+  const text = value === null || value === undefined ? '' : String(value)
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
 
 export default function SettingsPage() {
   const wines = useWineStore(state => state.wines)
@@ -171,60 +199,64 @@ export default function SettingsPage() {
     }
   }
 
+  const handleResetData = async () => {
+    const bottles = wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)
+    const proceed = confirm(
+      `Delete all ${wines.length} wines (${bottles} bottles), plus delivery windows and consumption history?\n\n` +
+        'Your cellar settings are kept. This cannot be undone — make sure you have a backup.'
+    )
+    if (!proceed) return
+
+    setIsLoading(true)
+    setMessage(null)
+    try {
+      await db.resetDatabase()
+      await loadWines()
+      triggerScheduleUpdate()
+      showToast('All wine data deleted')
+    } catch (error) {
+      setMessage({ type: 'error', text: `Reset failed: ${(error as Error).message}` })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleExport = async () => {
     setIsLoading(true)
     try {
-      // Create CSV content
-      const headers = [
-        'Vintage',
-        'Country',
-        'Region',
-        'Wine',
-        'Quantity',
-        'Size',
-        'Peak Drinking Window',
-        'Classification',
-        'Wine Rating',
-        'Professional Critic Ratings',
-        'Wine Notes',
-        'Varietal',
-        'Alcohol Level',
-        'Flavour Profile',
-        'Recommended Service Temp',
-        'Purchase Price',
-      ]
-
+      // Values are keyed by column name and emitted in CSV_COLUMNS order,
+      // so export can never drift out of step with what import reads.
       const rows = wines.map(wine => {
-        const criticRatings = Object.entries(wine.critic_ratings || {})
+        const criticRatings = Object.entries(criticRatingsOf(wine.critic_ratings))
           .map(([key, value]) => `${key.toUpperCase()} ${value}`)
           .join(' : ')
 
-        const peakWindow = `${wine.drinking_window_start}-${wine.drinking_window_end}`
-        const serviceTemp = `${wine.serving_temp_min}-${wine.serving_temp_max}°C`
-        // Deduped name so an export -> import round trip re-parses cleanly
-        const fullName = wineDisplayName(wine.producer, wine.name)
+        const values: Record<string, unknown> = {
+          Vintage: wine.vintage,
+          Country: wine.country,
+          Region: wine.region,
+          // Deduped name so an export -> import round trip re-parses cleanly
+          Wine: wineDisplayName(wine.producer, wine.name),
+          Quantity: wine.quantity_in_storage + wine.quantity_at_home,
+          Size: wine.format,
+          'Peak Drinking Window': `${wine.drinking_window_start}-${wine.drinking_window_end}`,
+          Classification: wine.classification,
+          'Wine Rating': wine.tier,
+          'Professional Critic Ratings': criticRatings,
+          'Wine Notes': wine.notes,
+          Varietal: wine.varietal,
+          'Alcohol Level': wine.alcohol_percent != null ? `${wine.alcohol_percent}%` : '',
+          'Flavour Profile': wine.flavor_profile,
+          'Recommended Service Temp': `${wine.serving_temp_min}-${wine.serving_temp_max}°C`,
+          'Purchase Price': wine.purchase_price ?? '',
+          'Purchase Date': wine.purchase_date ?? '',
+          Merchant: wine.merchant ?? '',
+        }
 
-        return [
-          wine.vintage,
-          wine.country,
-          wine.region,
-          `"${fullName}"`,
-          wine.quantity_in_storage + wine.quantity_at_home,
-          wine.format,
-          peakWindow,
-          wine.classification,
-          wine.tier,
-          `"${criticRatings}"`,
-          `"${wine.notes}"`,
-          wine.varietal,
-          `${wine.alcohol_percent}%`,
-          `"${wine.flavor_profile}"`,
-          serviceTemp,
-          wine.purchase_price ?? '',
-        ].join(',')
+        return CSV_COLUMNS.map(column => csvEscape(values[column])).join(',')
       })
 
-      const csvContent = [headers.join(','), ...rows].join('\n')
+      const csvContent = [CSV_COLUMNS.join(','), ...rows].join('\n')
 
       // Download
       const blob = new Blob([csvContent], { type: 'text/csv' })
@@ -324,12 +356,38 @@ export default function SettingsPage() {
             Upload a CSV file with your wine collection. Expected format:
           </p>
 
-          <div className="bg-surface-container-lowest p-4 rounded mb-6 text-xs text-outline font-mono overflow-x-auto">
-            <p>Vintage,Country,Region,Wine,Quantity,Size,Peak Drinking Window,Classification,Wine Rating,...</p>
-            <p className="text-outline-variant mt-2">
-              See documentation for full column requirements
-            </p>
+          <div className="bg-surface-container-lowest p-4 rounded-xl mb-4 text-xs text-outline font-mono overflow-x-auto">
+            <p className="whitespace-nowrap">{CSV_COLUMNS.join(',')}</p>
           </div>
+
+          <p className="text-xs text-outline mb-4">
+            <span className="text-on-surface-variant">
+              {CSV_REQUIRED_COLUMNS.join(', ')}
+            </span>{' '}
+            are required. Every other column is optional — leave it blank or omit it entirely.
+            Column order does not matter.
+          </p>
+
+          <details className="mb-6 group">
+            <summary className="cursor-pointer text-xs uppercase tracking-widest font-bold text-outline hover:text-on-surface transition-colors">
+              What each column expects
+            </summary>
+            <dl className="mt-3 space-y-2">
+              {CSV_COLUMNS.map(column => (
+                <div key={column} className="text-xs">
+                  <dt className="text-on-surface-variant font-medium">
+                    {column}
+                    {(CSV_REQUIRED_COLUMNS as readonly string[]).includes(column) && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wider text-primary-container">
+                        required
+                      </span>
+                    )}
+                  </dt>
+                  <dd className="text-outline">{COLUMN_HELP[column]}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
 
           <input
             ref={fileInputRef}
@@ -427,6 +485,24 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Danger zone */}
+        <div className="card border border-error/30">
+          <h3 className="font-headline text-2xl font-bold mb-2 text-error">Reset Collection Data</h3>
+          <p className="text-outline text-sm mb-6">
+            Deletes every wine, delivery window and consumption record so you can start over from a
+            fresh import. Your cellar capacity, delivery and consumption settings are kept.
+            Download a backup first — this cannot be undone.
+          </p>
+
+          <button
+            onClick={handleResetData}
+            disabled={isLoading}
+            className="w-full border border-error/40 text-error hover:bg-error/10 hover:border-error py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
+          >
+            {isLoading ? 'Working...' : 'Delete All Wine Data'}
+          </button>
         </div>
 
         {/* About */}

@@ -37,6 +37,8 @@ export interface Wine {
   image_url?: string;
   format?: string; // e.g., "750ml", "1.5L", "375ml", "3L"
   purchase_price?: number; // per bottle, in the user's currency
+  purchase_date?: string; // YYYY-MM-DD, when the wine was bought
+  merchant?: string; // who it was bought from
   quantity_in_storage: number; // Bottles at cellar/storage
   quantity_at_home: number; // Bottles at home, ready to drink
   notes?: string;

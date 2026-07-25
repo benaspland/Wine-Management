@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { wineDisplayName } from '../wine.service'
+import { wineDisplayName, criticRatingsOf } from '../wine.service'
 
 describe('wineDisplayName', () => {
   it('drops the name when the producer already ends with it', () => {
@@ -29,5 +29,30 @@ describe('wineDisplayName', () => {
     expect(wineDisplayName(undefined, 'Barolo')).toBe('Barolo')
     expect(wineDisplayName('', 'Barolo')).toBe('Barolo')
     expect(wineDisplayName('Producer', '')).toBe('Producer')
+  })
+})
+
+describe('criticRatingsOf', () => {
+  it('parses the JSON string the importer stores', () => {
+    expect(criticRatingsOf('{"js":97,"rp":96}')).toEqual({ js: 97, rp: 96 })
+  })
+
+  it('passes an object through unchanged', () => {
+    expect(criticRatingsOf({ js: 97 })).toEqual({ js: 97 })
+  })
+
+  it('never enumerates a raw string by character', () => {
+    // The bug this guards: Object.entries on the unparsed string yields
+    // {0: '{', 1: '"', ...}, which corrupted every CSV export.
+    const entries = Object.entries(criticRatingsOf('{"js":97}'))
+    expect(entries).toEqual([['js', 97]])
+  })
+
+  it('returns no ratings for empty, malformed or non-object values', () => {
+    expect(criticRatingsOf(undefined)).toEqual({})
+    expect(criticRatingsOf('')).toEqual({})
+    expect(criticRatingsOf('not json')).toEqual({})
+    expect(criticRatingsOf('null')).toEqual({})
+    expect(criticRatingsOf('42')).toEqual({})
   })
 })

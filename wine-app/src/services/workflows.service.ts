@@ -38,6 +38,9 @@ export interface ImportWineRow {
   critic_ratings?: string | Record<string, number>
   format?: string
   purchase_price?: number
+  purchase_date?: string
+  merchant?: string
+  notes?: string
   drinking_window_start: number
   drinking_window_end: number
   quantity_in_storage: number

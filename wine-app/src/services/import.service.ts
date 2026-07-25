@@ -19,7 +19,38 @@ interface CSVRow {
   'Flavour Profile': string
   'Recommended Service Temp': string
   'Purchase Price'?: string
+  'Purchase Date'?: string
+  Merchant?: string
 }
+
+/**
+ * The canonical CSV column order. Import reads these, export writes these,
+ * and the Settings screen documents these — one list so the three can
+ * never drift apart.
+ */
+export const CSV_COLUMNS = [
+  'Vintage',
+  'Country',
+  'Region',
+  'Wine',
+  'Quantity',
+  'Size',
+  'Peak Drinking Window',
+  'Classification',
+  'Wine Rating',
+  'Professional Critic Ratings',
+  'Wine Notes',
+  'Varietal',
+  'Alcohol Level',
+  'Flavour Profile',
+  'Recommended Service Temp',
+  'Purchase Price',
+  'Purchase Date',
+  'Merchant',
+] as const
+
+/** Columns a file must contain; everything else is optional. */
+export const CSV_REQUIRED_COLUMNS = ['Vintage', 'Country', 'Region', 'Wine', 'Quantity'] as const
 
 export class ImportService {
   static async importFromCSV(
@@ -33,9 +64,8 @@ export class ImportService {
     }
 
     const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''))
-    const requiredHeaders = ['Vintage', 'Country', 'Region', 'Wine', 'Quantity']
 
-    for (const header of requiredHeaders) {
+    for (const header of CSV_REQUIRED_COLUMNS) {
       if (!headers.includes(header)) {
         throw new Error(`Missing required column: ${header}`)
       }
@@ -156,6 +186,10 @@ export class ImportService {
     const rawPrice = (row['Purchase Price'] ?? '').replace(/[^0-9.]/g, '')
     const purchasePrice = rawPrice ? parseFloat(rawPrice) : NaN
 
+    // Optional purchase provenance. Unparseable values are left unrecorded
+    // rather than failing the row — they're reference data, not inventory.
+    const merchant = row.Merchant?.trim()
+
     return {
       name,
       vintage: parseInt(row.Vintage),
@@ -170,9 +204,12 @@ export class ImportService {
       serving_temp_min: tempMin,
       serving_temp_max: tempMax,
       flavor_profile: row['Flavour Profile'].trim() || undefined,
+      notes: row['Wine Notes']?.trim() || undefined,
       critic_ratings: JSON.stringify(criticRatings),
       format: format && format !== '-' ? format : undefined,
       purchase_price: !isNaN(purchasePrice) && purchasePrice > 0 ? purchasePrice : undefined,
+      purchase_date: this.parsePurchaseDate(row['Purchase Date']),
+      merchant: merchant && merchant !== '-' ? merchant : undefined,
       drinking_window_start: start,
       drinking_window_end: end,
       quantity_in_storage: quantity,
@@ -266,6 +303,40 @@ export class ImportService {
     const name = parts.slice(nameStartIndex).join(' ') || producer
 
     return { producer: producer.trim(), name: name.trim() }
+  }
+
+  /**
+   * Normalize a purchase date to YYYY-MM-DD. Accepts ISO (2024-03-15) and
+   * UK day-first (15/03/2024, 15-03-2024, 15.03.2024) — the two forms a
+   * spreadsheet in the UK actually produces. A 4-digit leading group means
+   * ISO; otherwise the first number is the day. Anything else, or an
+   * impossible date like 31/02, is treated as unrecorded.
+   */
+  static parsePurchaseDate(raw?: string): string | undefined {
+    const value = (raw ?? '').trim()
+    if (!value || value === '-') return undefined
+
+    const iso = value.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/)
+    if (iso) {
+      return this.toIsoDate(parseInt(iso[1]), parseInt(iso[2]), parseInt(iso[3]))
+    }
+
+    const dayFirst = value.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/)
+    if (dayFirst) {
+      return this.toIsoDate(parseInt(dayFirst[3]), parseInt(dayFirst[2]), parseInt(dayFirst[1]))
+    }
+
+    return undefined
+  }
+
+  /** Build YYYY-MM-DD, rejecting calendar-invalid dates (e.g. 31 February). */
+  private static toIsoDate(year: number, month: number, day: number): string | undefined {
+    if (month < 1 || month > 12 || day < 1 || day > 31) return undefined
+    const date = new Date(Date.UTC(year, month - 1, day))
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+      return undefined
+    }
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 
   private static parseDrinkingWindow(window: string): { start: number; end: number } {

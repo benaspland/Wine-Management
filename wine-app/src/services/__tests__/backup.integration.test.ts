@@ -37,6 +37,8 @@ async function seedRealisticState() {
     tier: 3,
     region: 'Rioja',
     purchase_price: 32.5,
+    purchase_date: '2024-03-15',
+    merchant: 'Berry Bros. & Rudd',
     drinking_window_start: 2020,
     drinking_window_end: 2040,
     quantity_in_storage: 6,
@@ -106,6 +108,8 @@ describe('restoreDatabase', () => {
     expect(wines[0].quantity_at_home).toBe(2) // 3 delivered, 1 consumed
     // New schema fields ride through the backup untouched
     expect(wines[0].purchase_price).toBe(32.5)
+    expect(wines[0].purchase_date).toBe('2024-03-15')
+    expect(wines[0].merchant).toBe('Berry Bros. & Rudd')
 
     expect((await db.getCellarConfig()).max_home_capacity).toBe(55)
     expect(await db.getConsumptionLogByWineId(wine.id)).toHaveLength(1)
@@ -179,5 +183,44 @@ describe('restoreDatabase', () => {
     ).rejects.toThrow(/missing wines table/)
 
     expect(await db.getAllWines()).toHaveLength(1)
+  })
+})
+
+describe('resetDatabase', () => {
+  it('clears collection data but keeps cellar settings', async () => {
+    const wine = await seedRealisticState()
+    await db.updateCellarConfig({ max_home_capacity: 100, annual_consumption_target: 42 })
+
+    await db.resetDatabase()
+
+    expect(await db.getAllWines()).toHaveLength(0)
+    expect(await db.getAllDeliveryWindows()).toHaveLength(0)
+    expect(await db.getConsumptionLogByWineId(wine.id)).toHaveLength(0)
+    expect(await db.getDeliveryCompletionByWineId(wine.id)).toHaveLength(0)
+
+    const config = await db.getCellarConfig()
+    expect(config.max_home_capacity).toBe(100)
+    expect(config.annual_consumption_target).toBe(42)
+  })
+
+  it('leaves the app usable — a fresh wine can be added straight after', async () => {
+    await seedRealisticState()
+    await db.resetDatabase()
+
+    const fresh = await db.createWine({
+      name: 'Barolo',
+      producer: 'Massolino',
+      vintage: 2019,
+      tier: 4,
+      region: 'Piedmont',
+      drinking_window_start: 2027,
+      drinking_window_end: 2045,
+      quantity_in_storage: 6,
+      quantity_at_home: 0,
+    })
+
+    const wines = await db.getAllWines()
+    expect(wines).toHaveLength(1)
+    expect(wines[0].id).toBe(fresh.id)
   })
 })

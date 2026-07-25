@@ -14,6 +14,28 @@ export function wineDisplayName(producer: string | undefined, name: string): str
   return `${p} ${n}`
 }
 
+/**
+ * Critic ratings as a plain object. The importer stores them as a JSON
+ * string while the form stores an object, so every reader must handle
+ * both — iterating a raw string yields one entry per character, which
+ * silently corrupts anything built from it (notably CSV export).
+ * Unparseable values are treated as "no ratings" rather than throwing.
+ */
+export function criticRatingsOf(
+  ratings: string | Record<string, number> | undefined
+): Record<string, number> {
+  if (!ratings) return {}
+  if (typeof ratings !== 'string') return ratings
+  try {
+    const parsed: unknown = JSON.parse(ratings)
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, number>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 export class WineService {
   // Check if wine can be consumed (within window)
   static canConsume(wine: Wine): boolean {
