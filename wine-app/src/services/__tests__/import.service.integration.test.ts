@@ -147,7 +147,9 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     const wines = await db.getAllWines()
 
     for (const wine of wines) {
-      expect(wine.name.trim()).not.toBe('')
+      // A château carries no separate name, so the requirement is that
+      // a wine is identifiable, not that both fields are populated
+      expect(`${wine.producer ?? ''}${wine.name}`.trim()).not.toBe('')
       expect(wine.producer?.trim()).not.toBe('')
       expect(wine.vintage).toBeGreaterThanOrEqual(1800)
       expect(wine.tier).toBeGreaterThanOrEqual(1)
@@ -184,7 +186,10 @@ describe('ImportService - real collection CSV (wine-data.csv)', () => {
     expect(bordeaux.every((w) => w.name !== 'Bordeaux')).toBe(true)
 
     const gloria = bordeaux.find((w) => w.producer === 'Chateau Gloria')
-    expect(gloria?.name).toBe('Gloria')
+    // The estate is the wine: repeating "Gloria" on a second line was
+    // the source of the "Chateau Meyney Meyney" stutter
+    expect(gloria).toBeDefined()
+    expect(gloria?.name).toBe('')
   })
 
   it('parses the Piedmont "Type: Producer, Cru" pattern into producer + name', async () => {
@@ -268,7 +273,7 @@ describe('ImportService - file structure and malformed input', () => {
     expect(result.errors[0]).toContain('Invalid drinking window: TBD')
 
     const wines = await db.getAllWines()
-    expect(wines.map((w) => w.name).sort()).toEqual(['Tre', 'Uno'])
+    expect(wines.map((w) => w.producer).sort()).toEqual(['Chateau Tre', 'Chateau Uno'])
   })
 
   it('parses quoted fields containing commas without shifting columns', async () => {
@@ -430,8 +435,8 @@ describe('ImportService - purchase price column', () => {
 
     expect(result.success).toBe(2)
     const wines = await db.getAllWines()
-    expect(wines.find(w => w.name === 'Uno')?.purchase_price).toBe(1250)
-    expect(wines.find(w => w.name === 'Due')?.purchase_price).toBe(40)
+    expect(wines.find(w => w.producer === 'Chateau Uno')?.purchase_price).toBe(1250)
+    expect(wines.find(w => w.producer === 'Chateau Due')?.purchase_price).toBe(40)
   })
 
   it('leaves the price unset when the value is empty or garbage', async () => {
@@ -616,18 +621,54 @@ describe('ImportService - field parsing', () => {
   it('extracts classification keywords from the wine name when the CSV field is empty', async () => {
     const wine = await importOne({ Wine: 'Chateau Testino Grand Cru', Classification: '-' })
     expect(wine.classification).toBe('Grand Cru')
-    // The keyword is removed from the display name
-    expect(wine.name).toBe('Testino')
+    // The keyword is lifted out rather than left cluttering the label
+    expect(wine.producer).toBe('Chateau Testino')
+    expect(wine.name).toBe('')
   })
 
-  it('parses Bordeaux château rows like any other wine (no region rename)', async () => {
+  it('lets the CSV Classification column win over one inferred from the name', async () => {
+    const wine = await importOne({
+      Wine: 'Chateau Testino Grand Cru',
+      Classification: '2eme Grand Cru Classe',
+    })
+    expect(wine.classification).toBe('2eme Grand Cru Classe')
+  })
+
+  it('treats a Bordeaux château as producer with no separate wine name', async () => {
     const wine = await importOne({
       Wine: 'Chateau Margaux',
       Country: 'France',
       Region: 'Bordeaux',
     })
     expect(wine.producer).toBe('Chateau Margaux')
-    expect(wine.name).toBe('Margaux')
+    // Not "Margaux": the estate is the wine, and a second line repeating
+    // it is what produced "Chateau Meyney Meyney" on screen
+    expect(wine.name).toBe('')
+  })
+
+  it('honours explicit Producer and Cuvee columns over inference', async () => {
+    const header = `${HEADER},Producer,Cuvee`
+    const file = csvFile(
+      [header, `${row({ Wine: 'Impossible To Parse Bottling' })},Wildly Odd Estate,Special Cuvee`].join('\n')
+    )
+    const result = await ImportService.importFromCSV(file)
+
+    expect(result.success).toBe(1)
+    const wine = (await db.getAllWines())[0]
+    expect(wine.producer).toBe('Wildly Odd Estate')
+    expect(wine.name).toBe('Special Cuvee')
+    // An explicitly stated split is never reported as guesswork
+    expect(result.uncertain).toEqual([])
+  })
+
+  it('reports a name it had to guess, without rejecting the row', async () => {
+    const result = await ImportService.importFromCSV(
+      csv(row({ Wine: 'Utterly Unknown Estate Mystery Bottling', Region: 'Atlantis' }))
+    )
+
+    expect(result.success).toBe(1)
+    expect(result.uncertain).toHaveLength(1)
+    expect(result.uncertain[0]).toContain('Utterly Unknown Estate Mystery Bottling')
   })
 
   it('stores the Size column as the wine format', async () => {

@@ -4,6 +4,7 @@ import * as db from '../services/database'
 import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/import.service'
 import MessageModal from '../components/MessageModal'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
+import { X } from 'lucide-react'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
 
@@ -27,6 +28,8 @@ const COLUMN_HELP: Record<string, string> = {
   'Purchase Price': 'Per bottle; £ and commas are fine, e.g. £32.50',
   'Purchase Date': '15/03/2024 (day first) or 2024-03-15',
   Merchant: 'Who you bought it from, e.g. Berry Bros. & Rudd',
+  Producer: 'Optional override — states the producer instead of inferring it from Wine',
+  Cuvee: 'Optional override — states the wine name instead of inferring it from Wine',
 }
 
 /** Quote a CSV value only when it needs it, doubling any inner quotes. */
@@ -43,6 +46,11 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [confirmingReset, setConfirmingReset] = useState(false)
+  const [importReport, setImportReport] = useState<{
+    summary: string
+    errors: string[]
+    uncertain: string[]
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
 
@@ -131,17 +139,17 @@ export default function SettingsPage() {
       const successMsg = `Imported ${result.success} wines successfully${skippedMsg}`
       const errorMsg = result.failed > 0 ? ` (${result.failed} failed)` : ''
 
-      if (result.failed > 0) {
-        setMessage({ type: 'error', text: successMsg + errorMsg })
-      } else {
+      // Detail belongs on screen, not in a console the phone cannot open
+      setImportReport({
+        summary: successMsg + errorMsg,
+        errors: result.errors,
+        uncertain: result.uncertain,
+      })
+
+      if (result.failed === 0 && result.errors.length === 0 && result.uncertain.length === 0) {
         showToast(successMsg)
+        setImportReport(null)
       }
-
-      if (result.errors.length > 0) {
-        console.warn('Import errors:', result.errors)
-      }
-
-      setTimeout(() => setMessage(null), 5000)
     } catch (error) {
       setMessage({ type: 'error', text: `Import failed: ${(error as Error).message}` })
     } finally {
@@ -248,6 +256,10 @@ export default function SettingsPage() {
           'Purchase Price': wine.purchase_price ?? '',
           'Purchase Date': wine.purchase_date ?? '',
           Merchant: wine.merchant ?? '',
+          // Exported explicitly so a re-import reproduces this exact
+          // split rather than re-deriving it from the combined name
+          Producer: wine.producer ?? '',
+          Cuvee: wine.name ?? '',
         }
 
         return CSV_COLUMNS.map(column => csvEscape(values[column])).join(',')
@@ -412,6 +424,60 @@ export default function SettingsPage() {
           >
             {isLoading ? 'Importing...' : 'Select CSV File'}
           </button>
+
+          {/* What the import actually did, on screen. Rows that failed
+              or whose name split was guessed are worth seeing now rather
+              than discovering on a card weeks later. */}
+          {importReport && (
+            <div className="mt-6 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm text-on-surface">{importReport.summary}</p>
+                <button
+                  onClick={() => setImportReport(null)}
+                  aria-label="Dismiss import report"
+                  className="text-outline hover:text-on-surface shrink-0"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {importReport.errors.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-widest font-bold text-error mb-2">
+                    {importReport.errors.length} row
+                    {importReport.errors.length === 1 ? '' : 's'} rejected
+                  </p>
+                  <ul className="space-y-1 max-h-48 overflow-y-auto">
+                    {importReport.errors.map((line, i) => (
+                      <li key={i} className="text-xs text-outline break-words">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {importReport.uncertain.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-widest font-bold text-primary-container mb-1">
+                    {importReport.uncertain.length} name
+                    {importReport.uncertain.length === 1 ? '' : 's'} guessed
+                  </p>
+                  <p className="text-xs text-outline mb-2">
+                    These were imported, but the producer and wine were split by guesswork. Add a
+                    Producer column to the CSV, or edit the wine, to fix them.
+                  </p>
+                  <ul className="space-y-1 max-h-48 overflow-y-auto">
+                    {importReport.uncertain.map((line, i) => (
+                      <li key={i} className="text-xs text-outline break-words">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Export Data */}

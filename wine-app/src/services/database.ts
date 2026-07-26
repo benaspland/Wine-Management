@@ -228,7 +228,12 @@ export async function getWineById(id: string): Promise<Wine | null> {
 }
 
 export async function getAllWines(): Promise<Wine[]> {
-  return [...getTable('wines')].sort((a, b) => a.name.localeCompare(b.name))
+  // Sort the way the wine is displayed. Sorting on name alone would
+  // clump every château together at the top, since estates whose name
+  // is the wine carry no separate name.
+  return [...getTable('wines')].sort((a, b) =>
+    `${a.producer ?? ''} ${a.name}`.trim().localeCompare(`${b.producer ?? ''} ${b.name}`.trim())
+  )
 }
 
 export async function findWineByNameVintageProducer(
