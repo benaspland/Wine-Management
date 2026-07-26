@@ -69,9 +69,15 @@ export async function importWineCollection(wines: ImportWineRow[]): Promise<Impo
   for (let rowNum = 0; rowNum < wines.length; rowNum++) {
     const row = wines[rowNum]
 
-    // Validate required fields
-    if (!row.name || row.name.trim() === '') {
-      result.failed.push({ rowNumber: rowNum + 1, field: 'name', error: 'Required field missing' })
+    // A wine needs something to call it, but not necessarily a name
+    // separate from its producer: for a Bordeaux château the estate is
+    // the wine, and an invented second line would only stutter.
+    if (!row.name?.trim() && !row.producer?.trim()) {
+      result.failed.push({
+        rowNumber: rowNum + 1,
+        field: 'name',
+        error: 'Needs a producer or a wine name',
+      })
       continue
     }
 
