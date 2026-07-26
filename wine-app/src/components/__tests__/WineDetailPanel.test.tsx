@@ -36,6 +36,7 @@ function renderPanel(wine: Wine) {
     onMoveToHome: vi.fn().mockResolvedValue(undefined),
     onEdit: vi.fn(),
     onDelete: vi.fn().mockResolvedValue(undefined),
+    onPhotoChange: vi.fn().mockResolvedValue(undefined),
   }
   render(<WineDetailPanel wine={wine} {...handlers} />)
   return handlers
@@ -152,6 +153,7 @@ describe('WineDetailPanel - delete confirmation', () => {
         onMoveToHome: vi.fn(),
         onEdit: vi.fn(),
         onDelete: vi.fn().mockRejectedValue(new Error('boom')),
+        onPhotoChange: vi.fn().mockResolvedValue(undefined),
       }
       render(<WineDetailPanel wine={makeWine()} {...handlers} />)
       fireEvent.click(screen.getByText('Delete'))
@@ -259,6 +261,7 @@ describe('WineDetailPanel - consumption history', () => {
       onMoveToHome: vi.fn(),
       onEdit: vi.fn(),
       onDelete: vi.fn(),
+      onPhotoChange: vi.fn().mockResolvedValue(undefined),
     }
     render(
       <WineDetailPanel

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Wine, ConsumptionLogEntry } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
-import { X, Wine as WineIcon, Minus, Plus } from 'lucide-react'
+import { X, Wine as WineIcon, Minus, Plus, Camera } from 'lucide-react'
+import { fileToStoredImage } from '../services/image.service'
 
 interface WineDetailPanelProps {
   wine: Wine
@@ -14,6 +15,8 @@ interface WineDetailPanelProps {
   onMoveToHome: (wineId: string, quantity: number) => Promise<void>
   onEdit: (wine: Wine) => void
   onDelete: (wineId: string) => Promise<void>
+  /** Save a freshly taken label photo without leaving the panel. */
+  onPhotoChange: (wineId: string, imageUrl: string) => Promise<void>
   isLoading?: boolean
   scheduledDeliveryDate?: string
   consumptionLog?: ConsumptionLogEntry[]
@@ -26,6 +29,7 @@ export default function WineDetailPanel({
   onMoveToHome,
   onEdit,
   onDelete,
+  onPhotoChange,
   isLoading,
   scheduledDeliveryDate,
   consumptionLog,
@@ -40,6 +44,25 @@ export default function WineDetailPanel({
   const [moveQuantity, setMoveQuantity] = useState(Math.max(1, wine.quantity_in_storage))
   const stepperKey = `${wine.id}:${wine.quantity_in_storage}`
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const [savingPhoto, setSavingPhoto] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+
+  const handlePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setSavingPhoto(true)
+    setPhotoError(null)
+    try {
+      await onPhotoChange(wine.id, await fileToStoredImage(file))
+    } catch (error) {
+      setPhotoError((error as Error).message)
+    } finally {
+      setSavingPhoto(false)
+      if (photoInputRef.current) photoInputRef.current.value = ''
+    }
+  }
   const [lastStepperKey, setLastStepperKey] = useState(stepperKey)
   if (lastStepperKey !== stepperKey) {
     setLastStepperKey(stepperKey)
@@ -125,7 +148,7 @@ export default function WineDetailPanel({
             <div className="absolute -top-12 -left-8 font-headline text-[10rem] opacity-5 font-bold select-none">
               {wine.vintage}
             </div>
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-3">
               {wine.image_url ? (
                 <img
                   alt={wineDisplayName(wine.producer, wine.name)}
@@ -138,6 +161,31 @@ export default function WineDetailPanel({
                 <div className="w-full h-24 bg-surface-container rounded-2xl flex items-center justify-center opacity-50">
                   <WineIcon size={32} className="text-outline" aria-hidden="true" />
                 </div>
+              )}
+
+              {/* Photographing the label happens with the bottle in hand,
+                  so it must not require opening the edit form first */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhoto}
+                className="hidden"
+                data-testid="panel-photo-input"
+              />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={savingPhoto || isLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold tracking-widest uppercase text-outline hover:text-on-surface border border-outline-variant/20 hover:border-outline-variant/50 disabled:opacity-50 transition-colors"
+              >
+                <Camera size={14} aria-hidden="true" />
+                {savingPhoto ? 'Saving...' : wine.image_url ? 'Replace Photo' : 'Add Photo'}
+              </button>
+              {photoError && (
+                <p role="alert" className="text-xs text-error">
+                  {photoError}
+                </p>
               )}
             </div>
           </div>

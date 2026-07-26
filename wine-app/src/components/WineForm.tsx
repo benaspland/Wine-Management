@@ -429,9 +429,6 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
         <WineImagePicker
           imageUrl={formData.image_url}
           onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
-          producer={formData.producer}
-          wineName={formData.name}
-          vintage={formData.vintage}
         />
 
         {/* Submit */}

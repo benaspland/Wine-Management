@@ -1,120 +1,107 @@
-import { useWineImageSearch } from '../hooks/useWineImageSearch'
-import { Search } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Camera } from 'lucide-react'
+import { fileToStoredImage } from '../services/image.service'
 
 interface WineImagePickerProps {
   imageUrl: string
   onImageChange: (url: string) => void
-  /** Fields used to build the search query */
-  producer: string
-  wineName: string
-  vintage?: number
 }
 
 /**
- * Bottle-image field for the wine form: manual URL entry, web search
- * via the image worker, thumbnail picker, and preview with remove.
+ * Bottle-image field for the wine form. Photographs of your own bottles
+ * are the point here — stock photography can't know what a specific
+ * producer and vintage look like — so the camera leads and the URL box
+ * is kept as a quieter fallback for pasting a merchant's image.
  */
-export default function WineImagePicker({
-  imageUrl,
-  onImageChange,
-  producer,
-  wineName,
-  vintage,
-}: WineImagePickerProps) {
-  const { results, searching, pickerOpen, search, closePicker } = useWineImageSearch()
+export default function WineImagePicker({ imageUrl, onImageChange }: WineImagePickerProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [working, setWorking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSearch = () => {
-    if (!producer && !wineName) {
-      alert('Enter a producer or wine name first')
-      return
+  const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setWorking(true)
+    setError(null)
+    try {
+      onImageChange(await fileToStoredImage(file))
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setWorking(false)
+      // Allow re-picking the same file after a removal
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
-    search(producer, wineName, vintage)
-  }
-
-  const handleSelect = (url: string) => {
-    onImageChange(url)
-    closePicker()
   }
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-on-surface mb-1">Bottle Image</label>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          name="image_url"
-          value={imageUrl}
-          onChange={(e) => onImageChange(e.target.value)}
-          placeholder="Image URL or search..."
-          className="flex-1 bg-surface-container-low text-on-surface px-3 py-2 rounded border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
-        />
-        <button
-          type="button"
-          onClick={handleSearch}
-          disabled={searching}
-          className="px-3 py-2 bg-primary-container text-on-primary rounded hover:bg-primary transition-colors disabled:opacity-50 flex items-center gap-1"
-        >
-          <Search size={16} aria-hidden="true" />
-          {searching ? 'Searching...' : 'Search'}
-        </button>
-      </div>
+      <label className="block text-sm font-medium text-on-surface mb-1">Bottle Photo</label>
 
-      {/* Image preview */}
+      {/* No capture attribute: Android then offers camera *and* gallery,
+          so an existing photo works as well as a fresh one */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFile}
+        className="hidden"
+        data-testid="wine-photo-input"
+      />
+
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={working}
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-primary-container hover:text-on-primary disabled:opacity-50 transition-colors text-xs font-bold tracking-widest uppercase"
+      >
+        <Camera size={16} aria-hidden="true" />
+        {working ? 'Processing...' : imageUrl ? 'Replace Photo' : 'Take or Choose Photo'}
+      </button>
+
+      {error && (
+        <p role="alert" className="text-xs text-error">
+          {error}
+        </p>
+      )}
+
       {imageUrl && (
         <div className="flex items-center gap-3 mt-2">
           <img
             src={imageUrl}
-            alt="Wine bottle"
-            className="h-20 w-auto object-contain rounded border border-outline-variant/20"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+            alt="Bottle"
+            className="h-20 w-auto object-contain rounded-lg border border-outline-variant/20"
+            onError={e => {
+              ;(e.target as HTMLImageElement).style.display = 'none'
+            }}
           />
           <button
             type="button"
             onClick={() => onImageChange('')}
-            className="text-xs text-red-400 hover:text-red-300"
+            className="text-xs text-error hover:opacity-80"
           >
             Remove
           </button>
         </div>
       )}
 
-      {/* Image picker grid */}
-      {pickerOpen && (
-        <div className="mt-2 p-3 bg-surface-container-low rounded border border-outline-variant/20">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs text-outline uppercase tracking-wider">Select an image</span>
-            <button
-              type="button"
-              onClick={closePicker}
-              className="text-outline hover:text-on-surface text-sm"
-            >
-              Close
-            </button>
-          </div>
-          {searching ? (
-            <p className="text-sm text-outline py-4 text-center">Searching for images...</p>
-          ) : results.length === 0 ? (
-            <p className="text-sm text-outline py-4 text-center">No images found</p>
-          ) : (
-            <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-              {results.map((img, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelect(img.url)}
-                  className="relative group border border-outline-variant/20 rounded overflow-hidden hover:border-primary transition-colors aspect-square"
-                >
-                  <img
-                    src={img.thumbnail}
-                    alt={img.title}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <details className="pt-1">
+        <summary className="cursor-pointer text-xs text-outline hover:text-on-surface-variant">
+          or paste an image URL
+        </summary>
+        <input
+          type="text"
+          name="image_url"
+          value={imageUrl.startsWith('data:') ? '' : imageUrl}
+          onChange={e => onImageChange(e.target.value)}
+          placeholder="https://..."
+          className="mt-2 w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
+        />
+        <p className="text-xs text-outline mt-1">
+          A linked image needs a connection to display, and disappears if the site removes it.
+        </p>
+      </details>
     </div>
   )
 }
