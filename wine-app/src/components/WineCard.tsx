@@ -1,6 +1,7 @@
 import type { Wine } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import { WineService } from '../services/wine.service'
+import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import { wineDisplayName } from '../services/wine.service'
 import { Wine as WineIcon } from 'lucide-react'
@@ -78,25 +79,31 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
 
         <div className="p-5 flex-1 flex flex-col gap-4">
           {/* The wine leads. Region was set in amber caps above the name,
-              which made the place louder than the thing. */}
+              which made the place louder than the thing.
+
+              Producer, wine and classification come from WineInfo — the
+              same component the detail panel uses — so each sits on its
+              own line and the two screens present identity identically.
+              Run together on one line, "Peter Lauer Kupp Riesling #18"
+              gave no clue where the estate ended and the wine began,
+              and "Chateau Tronquoy Saint-Estephe" read as one long name
+              rather than an estate and its appellation. WineInfo also
+              drops the second line where it would merely repeat the
+              producer, as a château's does. */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              {/* Sans, not the headline serif: serif is this app's
-                  chrome — page titles and section headings — while the
-                  data itself is set in Inter, as the list and detail
-                  panel already do */}
-              <h3 className="text-lg font-semibold leading-tight text-on-surface">
-                {wineDisplayName(wine.producer, wine.name)}
-              </h3>
-              <p className="text-xs text-outline mt-1">
+              <WineInfo
+                wine={wine}
+                producerSize="lg"
+                nameSize="sm"
+                classificationSize="xs"
+                showClassification={true}
+                layout="vertical"
+              />
+              <p className="text-xs text-outline mt-1.5">
                 {wine.vintage} · {wine.region}
                 {wine.country ? `, ${wine.country}` : ''}
               </p>
-              {wine.classification && wine.classification !== '-' && (
-                <p className="text-xs text-outline-variant italic opacity-70 mt-0.5">
-                  {wine.classification}
-                </p>
-              )}
             </div>
 
             {/* Icon only, matching the list and the schedule: the same
