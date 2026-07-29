@@ -285,25 +285,29 @@ export default function WineDetailPanel({
               </p>
             </div>
           )}
+          {/* Sits beside Purchased so the two dates read as a pair —
+              when it arrived, when it leaves storage — instead of the
+              delivery stranded alone below a full-width merchant */}
+          {scheduledDeliveryDate && (
+            <div>
+              <p className="text-[10px] text-outline uppercase tracking-wider">
+                {new Date(scheduledDeliveryDate) <= new Date() ? 'Delivered' : 'Scheduled Delivery'}
+              </p>
+              <p className="text-sm font-medium">
+                {new Date(scheduledDeliveryDate).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </p>
+            </div>
+          )}
           {wine.merchant && (
             <div className="col-span-2">
               <p className="text-[10px] text-outline uppercase tracking-wider">Merchant</p>
               <p className="text-sm font-medium">{wine.merchant}</p>
             </div>
           )}
-          {scheduledDeliveryDate && (
-              <div>
-                <p className="text-[10px] text-outline uppercase tracking-wider">
-                  {new Date(scheduledDeliveryDate) <= new Date() ? 'Delivered' : 'Scheduled Delivery'}
-                </p>
-                <p className="text-sm font-medium">
-                  {new Date(scheduledDeliveryDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Varietal — its own row rather than a half-width grid cell,

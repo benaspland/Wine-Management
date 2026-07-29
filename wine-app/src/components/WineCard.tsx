@@ -48,9 +48,12 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
     >
       <div className={`bg-surface-container-low p-6 rounded-2xl transition-all duration-300 hover:bg-surface-container h-full flex flex-col ${wine.image_url ? 'pt-0' : ''}`}>
         {/* Bottle image only when one exists — a 320px placeholder box per
-            wine was the biggest scroll cost in the grid */}
+            wine was the biggest scroll cost in the grid. Kept modest for
+            the same reason: a label photo at 320px pushed the wine's own
+            name off the screen, so the picture arrived before the thing
+            it belongs to. */}
         {wine.image_url && (
-          <div className="relative -mt-12 mb-6 flex justify-center h-80">
+          <div className="relative -mt-6 mb-4 flex justify-center h-44">
             <img
               alt={wineDisplayName(wine.producer, wine.name)}
               loading="lazy"
