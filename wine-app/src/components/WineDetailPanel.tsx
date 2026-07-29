@@ -5,7 +5,7 @@ import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
-import { X, Wine as WineIcon, Minus, Plus } from 'lucide-react'
+import { X, Minus, Plus } from 'lucide-react'
 import { useBackDismiss } from '../hooks/useBackDismiss'
 
 interface WineDetailPanelProps {
@@ -124,36 +124,39 @@ export default function WineDetailPanel({
         </button>
 
         <div className="p-8 pt-20 md:pt-14 space-y-10">
-          {/* Hero Bottle */}
-          <div className="relative group">
-            <div className="absolute -top-12 -left-8 font-headline text-[10rem] opacity-5 font-bold select-none">
-              {wine.vintage}
-            </div>
+          {/* The photo, when there is one.
+              A giant vintage used to sit behind this at 5% opacity. Two
+              problems: a portrait label covered its middle, leaving a
+              stray digit either side, and it was the only place the
+              vintage appeared at all — decoration was carrying real
+              information. The number has moved into the identity line
+              below, and with no photo there is now simply no hero: a
+              grey slab with a glass in it filled the slot without saying
+              anything, and cost a screenful of scroll to do so. */}
+          {wine.image_url && (
             <div className="flex justify-center">
-              {wine.image_url ? (
-                <img
-                  alt={wineDisplayName(wine.producer, wine.name)}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-[230px] h-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] transform hover:scale-105 transition-transform duration-700"
-                  src={wine.image_url}
-                />
-              ) : (
-                <div className="w-full h-24 bg-surface-container rounded-2xl flex items-center justify-center opacity-50">
-                  <WineIcon size={32} className="text-outline" aria-hidden="true" />
-                </div>
-              )}
-
+              <img
+                alt={wineDisplayName(wine.producer, wine.name)}
+                loading="lazy"
+                decoding="async"
+                className="w-[230px] h-auto object-contain rounded-xl border border-outline-variant/10 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+                src={wine.image_url}
+              />
             </div>
-          </div>
+          )}
 
           {/* Header Info */}
           <div className="space-y-3">
-            <div className="flex flex-col gap-1 text-primary-container font-label text-xs tracking-[0.2em] font-bold uppercase">
-              <span className="opacity-80">
-                {wine.region}, {wine.country}
+            {/* Vintage first, as it reads on a label — and in the same
+                "vintage · place" form the card and list rows use */}
+            <p className="font-label text-xs tracking-[0.2em] font-bold uppercase">
+              <span className="text-on-surface">{wine.vintage}</span>
+              <span className="text-primary-container opacity-80">
+                {' · '}
+                {wine.region}
+                {wine.country ? `, ${wine.country}` : ''}
               </span>
-            </div>
+            </p>
             <WineInfo
               wine={wine}
               producerSize="2xl"
