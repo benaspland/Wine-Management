@@ -22,7 +22,11 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
     'max-w-md'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    // Above the detail panel (z-50), below toasts (z-60). At the same
+    // z-index the panel won on DOM order, and since it is full-width on a
+    // phone it buried this dialog completely — the delete confirmation
+    // was unreachable on the device but fine on a wider screen.
+    <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className={`bg-surface rounded-2xl shadow-2xl w-full ${sizeClass} max-h-[90vh] overflow-y-auto`}>
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-outline-variant/10 sticky top-0 bg-surface z-10">
