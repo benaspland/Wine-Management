@@ -299,7 +299,7 @@ export default function CollectionPage() {
 
         {/* Wine Grid */}
         {!loading && wines.length > 0 && viewMode === 'grid' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-20 gap-x-12 pt-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-6">
             {wines.map(wine => (
               <WineCard
                 key={wine.id}

@@ -44,7 +44,9 @@ describe('WineCard - Drink action', () => {
   it('consumes without opening the detail panel', async () => {
     const handlers = renderCard(makeWine({ quantity_at_home: 2 }))
 
-    fireEvent.click(screen.getByText('Drink'))
+    // Icon only, so it is found by its accessible name rather than
+    // visible text — the same control as the list and schedule views
+    fireEvent.click(screen.getByLabelText(/^Drink /))
 
     await waitFor(() => expect(handlers.onConsume).toHaveBeenCalledWith('wine-1'))
     expect(handlers.onSelect).not.toHaveBeenCalled()
@@ -56,7 +58,7 @@ describe('WineCard - Drink action', () => {
     // detail panel instead.
     renderCard(makeWine({ quantity_at_home: 0, quantity_in_storage: 6 }))
 
-    expect(screen.queryByText('Drink')).toBeNull()
+    expect(screen.queryByLabelText(/^Drink /)).toBeNull()
   })
 
   it('opens the detail panel when the card body is clicked', () => {
