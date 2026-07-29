@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useBackDismiss } from '../hooks/useBackDismiss'
 
 interface ModalProps {
   isOpen: boolean
@@ -10,6 +11,9 @@ interface ModalProps {
 }
 
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+  // The phone's back gesture should close the dialog, not leave the page
+  useBackDismiss(isOpen, onClose)
+
   if (!isOpen) return null
 
   const sizeClass =

@@ -7,6 +7,7 @@ import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
 import { X, Wine as WineIcon, Minus, Plus, Camera } from 'lucide-react'
 import { fileToStoredImage } from '../services/image.service'
+import { useBackDismiss } from '../hooks/useBackDismiss'
 
 interface WineDetailPanelProps {
   wine: Wine
@@ -68,6 +69,9 @@ export default function WineDetailPanel({
     setLastStepperKey(stepperKey)
     setMoveQuantity(Math.max(1, wine.quantity_in_storage))
   }
+
+  // Back closes the panel rather than leaving the cellar behind it
+  useBackDismiss(true, onClose)
 
   // Escape closes the panel, matching the backdrop click
   useEffect(() => {
@@ -205,24 +209,31 @@ export default function WineDetailPanel({
               showClassification={true}
               layout="vertical"
             />
-          </div>
 
-          {/* Scores */}
-          {Object.keys(criticRatings).length > 0 && (
-            <div className="flex gap-4">
-              {Object.entries(criticRatings).slice(0, 2).map(([critic, score]) => (
-                <div
-                  key={critic}
-                  className="flex-1 bg-surface-container-low p-5 rounded-xl border-l-2 border-primary-container"
-                >
-                  <p className="text-[10px] text-outline tracking-widest uppercase mb-1">
-                    {critic.toUpperCase()}
-                  </p>
-                  <p className="font-headline text-3xl font-bold text-on-surface">{score}</p>
-                </div>
-              ))}
+            {/* Tier decides how the schedulers treat this wine, so it
+                belongs with its identity rather than buried by the
+                inventory count at the foot of the panel. Scores sit
+                alongside it: both answer "how good is this?" */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="bg-primary-container text-on-primary-fixed-variant px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-full">
+                {tierLabel}
+              </span>
+              {Object.entries(criticRatings)
+                .slice(0, 3)
+                .map(([critic, score]) => (
+                  <span
+                    key={critic}
+                    className="flex items-baseline gap-1.5 bg-surface-container-low border border-outline-variant/20 px-3 py-1 rounded-full"
+                    title={`${critic.toUpperCase()} ${score}`}
+                  >
+                    <span className="text-[10px] text-outline tracking-widest uppercase">
+                      {critic.toUpperCase()}
+                    </span>
+                    <span className="text-sm font-bold text-on-surface tabular-nums">{score}</span>
+                  </span>
+                ))}
             </div>
-          )}
+          </div>
 
           {/* Critic Notes */}
           {wine.notes && (
@@ -249,10 +260,6 @@ export default function WineDetailPanel({
               <p className="text-sm font-medium">
                 {wine.serving_temp_min}°C — {wine.serving_temp_max}°C
               </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-outline uppercase tracking-wider">Varietal</p>
-              <p className="text-sm font-medium">{wine.varietal}</p>
             </div>
             <div>
               <p className="text-[10px] text-outline uppercase tracking-wider">Alcohol</p>
@@ -299,6 +306,26 @@ export default function WineDetailPanel({
             )}
           </div>
 
+          {/* Varietal — its own row rather than a half-width grid cell,
+              because a blend runs to several grapes and wrapped badly.
+              Same lozenges as the flavour profile: both are lists of
+              short tags, so they should read the same way. */}
+          {wine.varietal && (
+            <div className="space-y-3">
+              <h3 className="font-headline text-xl font-bold">Varietal</h3>
+              <div className="flex flex-wrap gap-2">
+                {wine.varietal.split(':').map((grape, idx) => (
+                  <span
+                    key={idx}
+                    className="bg-surface-container-high px-3 py-1 text-xs rounded-full text-on-surface-variant border border-outline-variant/20"
+                  >
+                    {grape.trim()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Flavor Profile */}
           {wine.flavor_profile && (
             <div className="space-y-3">
@@ -316,12 +343,9 @@ export default function WineDetailPanel({
             </div>
           )}
 
-          {/* Tier & Inventory */}
+          {/* Inventory. Tier used to sit here too, but it belongs with
+              the wine's identity at the top, not with bottle counts. */}
           <div className="flex items-center gap-2 pt-4 border-t border-outline-variant/10">
-            <span className="text-[10px] text-outline uppercase tracking-wider">Tier</span>
-            <span className="bg-primary-container text-on-primary-fixed-variant px-3 py-1 text-xs font-bold tracking-widest uppercase rounded-sm">
-              {tierLabel}
-            </span>
             <div className="ml-auto flex items-center gap-3">
               <LocationBadge wine={wine} />
               <span className="text-[10px] text-outline uppercase tracking-wider">
