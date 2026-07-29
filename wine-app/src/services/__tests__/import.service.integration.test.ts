@@ -746,6 +746,22 @@ describe('ImportService - field parsing', () => {
     expect(result.uncertain).toEqual([])
   })
 
+  it('treats blank override columns as absent, not as an empty name', async () => {
+    // A file exported from the app, or the template handed to a user,
+    // carries these columns with nothing in them. Read as values rather
+    // than as absent, they wiped the parsed name from every wine.
+    const header = `${HEADER},Producer,Cuvee`
+    const file = csvFile(
+      [header, `${row({ Wine: 'Peter Lauer Kupp Riesling #18', Region: 'Saar' })},,`].join('\n')
+    )
+    const result = await ImportService.importFromCSV(file)
+
+    expect(result.success).toBe(1)
+    const wine = (await db.getAllWines())[0]
+    expect(wine.producer).toBe('Peter Lauer')
+    expect(wine.name).toBe('Kupp Riesling #18')
+  })
+
   it('reports a name it had to guess, without rejecting the row', async () => {
     const result = await ImportService.importFromCSV(
       csv(row({ Wine: 'Utterly Unknown Estate Mystery Bottling', Region: 'Atlantis' }))

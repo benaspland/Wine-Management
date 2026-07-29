@@ -180,8 +180,12 @@ export class ImportService {
     const explicitCuvee = row.Cuvee?.trim()
 
     const parsed = parseWineName(row.Wine, row.Region?.trim(), knownProducers)
+    // Blank means "infer it", not "the name is empty". With ?? here, a
+    // Cuvee column present but left blank — as it is in a file exported
+    // from the app, or any template — silently replaced every parsed
+    // wine name with nothing, leaving producers with no wine.
     const producer = explicitProducer || parsed.producer
-    const name = explicitCuvee ?? parsed.name
+    const name = explicitCuvee || parsed.name
 
     // The CSV column is authoritative; the parser only fills the gap
     const columnClassification = row.Classification?.trim()
