@@ -24,7 +24,8 @@ test('boots, persists, and loads every asset under the subpath', async ({ page }
   await page.goto(`${BASE}/cellar`)
   await expect(page.getByText('Private Collection').first()).toBeVisible()
   await page.getByText('Add Wine').first().click()
-  await page.fill('input[name="producer"]', 'Château Prod')
+  // Not a château: see the note in e2e/lifecycle.spec.ts
+  await page.fill('input[name="producer"]', 'Prod Estate')
   await page.fill('input[name="name"]', 'Base Path Cuvée')
   await page.fill('input[name="region"]', 'Rioja')
   await page.fill('input[name="quantity"]', '3')
