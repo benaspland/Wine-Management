@@ -51,6 +51,8 @@ export interface ImportResult {
   imported: number
   skipped: number
   failed: ImportError[]
+  /** Non-fatal problems worth showing the user, e.g. over capacity. */
+  warnings: string[]
 }
 
 export interface ImportError {
@@ -64,6 +66,7 @@ export async function importWineCollection(wines: ImportWineRow[]): Promise<Impo
     imported: 0,
     skipped: 0,
     failed: [],
+    warnings: [],
   }
 
   for (let rowNum = 0; rowNum < wines.length; rowNum++) {
@@ -156,8 +159,11 @@ export async function importWineCollection(wines: ImportWineRow[]): Promise<Impo
   const config = await db.getCellarConfig()
 
   if (totalAtHome > config.max_home_capacity) {
-    console.warn(
-      `[Workflows] Home inventory (${totalAtHome}) exceeds capacity (${config.max_home_capacity})`
+    // Reachable as soon as an import states bottles already at home,
+    // so it has to be visible rather than sitting in a console
+    result.warnings.push(
+      `${totalAtHome} bottles are now at home, over your ${config.max_home_capacity} bottle capacity. ` +
+        'Raise the capacity in Settings, or move some back to storage.'
     )
   }
 

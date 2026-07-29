@@ -463,6 +463,91 @@ describe('ImportService - purchase price column', () => {
   })
 })
 
+/**
+ * A collection imported from a merchant list arrives as though every
+ * bottle sits in professional storage, which is wrong for a cellar that
+ * has been drawn on for years. Stating what is already in the house
+ * beats correcting 125 wines one at a time through the detail panel.
+ */
+describe('ImportService - At Home column', () => {
+  const HEADER_WITH_HOME = HEADER + ',At Home'
+
+  function rowWithHome(atHome: string, overrides: Partial<Record<string, string>> = {}) {
+    return `${row(overrides)},${atHome}`
+  }
+
+  async function importHome(rows: string[]) {
+    return ImportService.importFromCSV(csvFile([HEADER_WITH_HOME, ...rows].join('\n')))
+  }
+
+  it('splits the quantity between home and storage', async () => {
+    await importHome([rowWithHome('2', { Quantity: '6' })])
+
+    const wine = (await db.getAllWines())[0]
+    expect(wine.quantity_at_home).toBe(2)
+    expect(wine.quantity_in_storage).toBe(4)
+  })
+
+  it('puts everything at home when all bottles are in the house', async () => {
+    await importHome([rowWithHome('6', { Quantity: '6' })])
+
+    const wine = (await db.getAllWines())[0]
+    expect(wine.quantity_at_home).toBe(6)
+    expect(wine.quantity_in_storage).toBe(0)
+  })
+
+  it('cannot conjure bottles that are not owned', async () => {
+    // A typo of 60 for 6 must not invent 54 bottles
+    await importHome([rowWithHome('60', { Quantity: '6' })])
+
+    const wine = (await db.getAllWines())[0]
+    expect(wine.quantity_at_home).toBe(6)
+    expect(wine.quantity_in_storage).toBe(0)
+  })
+
+  it('ignores blank, negative and non-numeric values', async () => {
+    const result = await importHome([
+      rowWithHome('', { Wine: 'Chateau Uno' }),
+      rowWithHome('-3', { Wine: 'Chateau Due' }),
+      rowWithHome('some', { Wine: 'Chateau Tre' }),
+    ])
+
+    expect(result.success).toBe(3)
+    const wines = await db.getAllWines()
+    expect(wines.every(w => w.quantity_at_home === 0)).toBe(true)
+    expect(wines.every(w => w.quantity_in_storage === 6)).toBe(true)
+  })
+
+  it('sends everything to storage when the column is absent', async () => {
+    await ImportService.importFromCSV(csv(row({ Quantity: '6' })))
+
+    const wine = (await db.getAllWines())[0]
+    expect(wine.quantity_at_home).toBe(0)
+    expect(wine.quantity_in_storage).toBe(6)
+  })
+
+  it('warns when the stated home inventory exceeds cellar capacity', async () => {
+    await db.updateCellarConfig({ max_home_capacity: 10 })
+
+    const result = await importHome([
+      rowWithHome('6', { Wine: 'Chateau Uno', Quantity: '6' }),
+      rowWithHome('6', { Wine: 'Chateau Due', Quantity: '6' }),
+    ])
+
+    expect(result.success).toBe(2)
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0]).toContain('12 bottles')
+    expect(result.warnings[0]).toContain('10 bottle capacity')
+  })
+
+  it('says nothing when home inventory is within capacity', async () => {
+    await db.updateCellarConfig({ max_home_capacity: 100 })
+    const result = await importHome([rowWithHome('6', { Quantity: '6' })])
+
+    expect(result.warnings).toEqual([])
+  })
+})
+
 describe('ImportService - purchase date and merchant columns', () => {
   const HEADER_WITH_PROVENANCE = HEADER + ',Purchase Date,Merchant'
 

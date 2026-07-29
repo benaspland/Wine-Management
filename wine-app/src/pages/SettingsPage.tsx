@@ -14,7 +14,8 @@ const COLUMN_HELP: Record<string, string> = {
   Country: 'e.g. France',
   Region: 'e.g. Bordeaux',
   Wine: 'Full name — producer and cuvée, e.g. Chateau Meyney',
-  Quantity: 'Bottles owned; imported into storage',
+  Quantity: 'Total bottles owned',
+  'At Home': 'How many of those are already in the house; the rest go to storage',
   Size: 'Bottle, Half Bottle, Magnum — or a volume like 75cl, 750ml, 1.5L',
   'Peak Drinking Window': 'Start and end year, e.g. 2026-2040',
   Classification: 'e.g. DOCG, 1er Cru',
@@ -50,6 +51,7 @@ export default function SettingsPage() {
     summary: string
     errors: string[]
     uncertain: string[]
+    warnings: string[]
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
@@ -144,9 +146,15 @@ export default function SettingsPage() {
         summary: successMsg + errorMsg,
         errors: result.errors,
         uncertain: result.uncertain,
+        warnings: result.warnings,
       })
 
-      if (result.failed === 0 && result.errors.length === 0 && result.uncertain.length === 0) {
+      if (
+        result.failed === 0 &&
+        result.errors.length === 0 &&
+        result.uncertain.length === 0 &&
+        result.warnings.length === 0
+      ) {
         showToast(successMsg)
         setImportReport(null)
       }
@@ -243,6 +251,7 @@ export default function SettingsPage() {
           // Deduped name so an export -> import round trip re-parses cleanly
           Wine: wineDisplayName(wine.producer, wine.name),
           Quantity: wine.quantity_in_storage + wine.quantity_at_home,
+          'At Home': wine.quantity_at_home,
           Size: wine.format,
           'Peak Drinking Window': `${wine.drinking_window_start}-${wine.drinking_window_end}`,
           Classification: wine.classification,
@@ -440,6 +449,12 @@ export default function SettingsPage() {
                   <X size={16} />
                 </button>
               </div>
+
+              {importReport.warnings.map((line, i) => (
+                <p key={i} className="text-xs text-primary-container">
+                  {line}
+                </p>
+              ))}
 
               {importReport.errors.length > 0 && (
                 <div>
