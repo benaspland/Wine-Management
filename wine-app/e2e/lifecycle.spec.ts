@@ -69,3 +69,46 @@ test('delivery and drinking schedule pages render', async ({ page }) => {
   await page.goto('/schedule')
   await expect(page.getByText('Drinking Schedule').first()).toBeVisible()
 })
+
+/**
+ * The delete confirmation opens from inside the detail panel. On a phone
+ * that panel is full-width, so a dialog at the same stacking level is
+ * buried by it entirely and the confirm button cannot be pressed — the
+ * delete silently did nothing on a device while passing at desktop
+ * width, where the 480px panel leaves the dialog reachable. Hence the
+ * explicit narrow viewport.
+ */
+test('delete works at phone width, where the panel is full-screen', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 })
+
+  await page.goto('/cellar')
+  await page.getByText('Add Wine').first().click()
+  await page.fill('input[name="producer"]', 'Chateau Phone')
+  await page.fill('input[name="vintage"]', '2020')
+  await page.fill('input[name="region"]', 'Bordeaux')
+  await page.fill('input[name="quantity"]', '3')
+  await page.locator('button:has-text("Save Wine")').click()
+  await expect(page.getByText('Chateau Phone').first()).toBeVisible()
+
+  await page.getByText('Chateau Phone').first().click()
+  await page.locator('aside button:has-text("Delete")').click()
+  await expect(page.getByText('Delete Chateau Phone 2020?')).toBeVisible()
+
+  const confirm = page.getByLabel('Delete', { exact: true })
+  // The confirm button must be the topmost element at its own centre;
+  // a hold aimed there would otherwise land on the panel behind it
+  const reachable = await confirm.evaluate(button => {
+    const box = button.getBoundingClientRect()
+    const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+    return button === top || button.contains(top as Node)
+  })
+  expect(reachable).toBe(true)
+
+  const box = (await confirm.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(1200)
+  await page.mouse.up()
+
+  await expect(page.getByText('Chateau Phone')).toHaveCount(0)
+})

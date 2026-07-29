@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Wine, ConsumptionLogEntry } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
-import { X, Wine as WineIcon, Minus, Plus, Camera } from 'lucide-react'
-import { fileToStoredImage } from '../services/image.service'
+import { X, Wine as WineIcon, Minus, Plus } from 'lucide-react'
 import { useBackDismiss } from '../hooks/useBackDismiss'
 
 interface WineDetailPanelProps {
@@ -16,8 +15,6 @@ interface WineDetailPanelProps {
   onMoveToHome: (wineId: string, quantity: number) => Promise<void>
   onEdit: (wine: Wine) => void
   onDelete: (wineId: string) => Promise<void>
-  /** Save a freshly taken label photo without leaving the panel. */
-  onPhotoChange: (wineId: string, imageUrl: string) => Promise<void>
   isLoading?: boolean
   scheduledDeliveryDate?: string
   consumptionLog?: ConsumptionLogEntry[]
@@ -30,7 +27,6 @@ export default function WineDetailPanel({
   onMoveToHome,
   onEdit,
   onDelete,
-  onPhotoChange,
   isLoading,
   scheduledDeliveryDate,
   consumptionLog,
@@ -45,25 +41,6 @@ export default function WineDetailPanel({
   const [moveQuantity, setMoveQuantity] = useState(Math.max(1, wine.quantity_in_storage))
   const stepperKey = `${wine.id}:${wine.quantity_in_storage}`
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const photoInputRef = useRef<HTMLInputElement>(null)
-  const [savingPhoto, setSavingPhoto] = useState(false)
-  const [photoError, setPhotoError] = useState<string | null>(null)
-
-  const handlePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setSavingPhoto(true)
-    setPhotoError(null)
-    try {
-      await onPhotoChange(wine.id, await fileToStoredImage(file))
-    } catch (error) {
-      setPhotoError((error as Error).message)
-    } finally {
-      setSavingPhoto(false)
-      if (photoInputRef.current) photoInputRef.current.value = ''
-    }
-  }
   const [lastStepperKey, setLastStepperKey] = useState(stepperKey)
   if (lastStepperKey !== stepperKey) {
     setLastStepperKey(stepperKey)
@@ -152,13 +129,13 @@ export default function WineDetailPanel({
             <div className="absolute -top-12 -left-8 font-headline text-[10rem] opacity-5 font-bold select-none">
               {wine.vintage}
             </div>
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex justify-center">
               {wine.image_url ? (
                 <img
                   alt={wineDisplayName(wine.producer, wine.name)}
                   loading="lazy"
                   decoding="async"
-                  className="w-64 h-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] transform hover:scale-105 transition-transform duration-700"
+                  className="w-[230px] h-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] transform hover:scale-105 transition-transform duration-700"
                   src={wine.image_url}
                 />
               ) : (
@@ -167,30 +144,6 @@ export default function WineDetailPanel({
                 </div>
               )}
 
-              {/* Photographing the label happens with the bottle in hand,
-                  so it must not require opening the edit form first */}
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePhoto}
-                className="hidden"
-                data-testid="panel-photo-input"
-              />
-              <button
-                type="button"
-                onClick={() => photoInputRef.current?.click()}
-                disabled={savingPhoto || isLoading}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold tracking-widest uppercase text-outline hover:text-on-surface border border-outline-variant/20 hover:border-outline-variant/50 disabled:opacity-50 transition-colors"
-              >
-                <Camera size={14} aria-hidden="true" />
-                {savingPhoto ? 'Saving...' : wine.image_url ? 'Replace Photo' : 'Add Photo'}
-              </button>
-              {photoError && (
-                <p role="alert" className="text-xs text-error">
-                  {photoError}
-                </p>
-              )}
             </div>
           </div>
 
@@ -247,7 +200,8 @@ export default function WineDetailPanel({
             </div>
           )}
 
-          {/* Key Details Grid */}
+          {/* Key details, read top to bottom as: when to drink it and
+              when it arrives, how to serve it, then what it cost. */}
           <div className="grid grid-cols-2 gap-y-4 pt-4 border-t border-outline-variant/10">
             <div>
               <p className="text-[10px] text-outline uppercase tracking-wider">Optimal Window</p>
@@ -255,6 +209,21 @@ export default function WineDetailPanel({
                 {wine.drinking_window_start} — {wine.drinking_window_end}
               </p>
             </div>
+            {scheduledDeliveryDate && (
+              <div>
+                <p className="text-[10px] text-outline uppercase tracking-wider">
+                  {new Date(scheduledDeliveryDate) <= new Date() ? 'Delivered' : 'Scheduled Delivery'}
+                </p>
+                <p className="text-sm font-medium">
+                  {new Date(scheduledDeliveryDate).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </p>
+              </div>
+            )}
+
             <div>
               <p className="text-[10px] text-outline uppercase tracking-wider">Serving Temp</p>
               <p className="text-sm font-medium">
@@ -265,49 +234,33 @@ export default function WineDetailPanel({
               <p className="text-[10px] text-outline uppercase tracking-wider">Alcohol</p>
               <p className="text-sm font-medium">{wine.alcohol_percent}% ABV</p>
             </div>
+
+            {wine.purchase_date && (
+              <div>
+                <p className="text-[10px] text-outline uppercase tracking-wider">Purchased</p>
+                <p className="text-sm font-medium">
+                  {new Date(wine.purchase_date).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </p>
+              </div>
+            )}
             {typeof wine.purchase_price === 'number' && wine.purchase_price > 0 && (
-            <div>
-              <p className="text-[10px] text-outline uppercase tracking-wider">Purchase Price</p>
-              <p className="text-sm font-medium">
-                £{wine.purchase_price.toLocaleString()} <span className="text-outline">/ bottle</span>
-              </p>
-            </div>
-          )}
-          {wine.purchase_date && (
-            <div>
-              <p className="text-[10px] text-outline uppercase tracking-wider">Purchased</p>
-              <p className="text-sm font-medium">
-                {new Date(wine.purchase_date).toLocaleDateString('en-GB', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </p>
-            </div>
-          )}
-          {/* Sits beside Purchased so the two dates read as a pair —
-              when it arrived, when it leaves storage — instead of the
-              delivery stranded alone below a full-width merchant */}
-          {scheduledDeliveryDate && (
-            <div>
-              <p className="text-[10px] text-outline uppercase tracking-wider">
-                {new Date(scheduledDeliveryDate) <= new Date() ? 'Delivered' : 'Scheduled Delivery'}
-              </p>
-              <p className="text-sm font-medium">
-                {new Date(scheduledDeliveryDate).toLocaleDateString('en-GB', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </p>
-            </div>
-          )}
-          {wine.merchant && (
-            <div className="col-span-2">
-              <p className="text-[10px] text-outline uppercase tracking-wider">Merchant</p>
-              <p className="text-sm font-medium">{wine.merchant}</p>
-            </div>
-          )}
+              <div>
+                <p className="text-[10px] text-outline uppercase tracking-wider">Purchase Price</p>
+                <p className="text-sm font-medium">
+                  £{wine.purchase_price.toLocaleString()} <span className="text-outline">/ bottle</span>
+                </p>
+              </div>
+            )}
+            {wine.merchant && (
+              <div className="col-span-2">
+                <p className="text-[10px] text-outline uppercase tracking-wider">Merchant</p>
+                <p className="text-sm font-medium">{wine.merchant}</p>
+              </div>
+            )}
           </div>
 
           {/* Varietal — its own row rather than a half-width grid cell,
