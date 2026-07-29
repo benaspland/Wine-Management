@@ -1,5 +1,5 @@
 import type { Wine } from '../types/index'
-import { wineDisplayName } from '../services/wine.service'
+import { wineDisplayName, wineTileName } from '../services/wine.service'
 import { Wine as WineIcon, House, Warehouse } from 'lucide-react'
 import HoldButton from './HoldButton'
 
@@ -61,7 +61,7 @@ export default function WineListRow({
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-on-surface leading-snug line-clamp-2">
-          {wineDisplayName(wine.producer, wine.name)}
+          {wineTileName(wine.producer, wine.name, wine.region)}
         </p>
         <div className="flex items-center gap-2 mt-0.5 text-xs text-outline">
           <span className="truncate">

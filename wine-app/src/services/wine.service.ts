@@ -1,4 +1,5 @@
 import type { Wine } from '../types/index'
+import { isEstateWine } from './wineName.service'
 
 /**
  * One-line display name that avoids the "Chateau Meyney Meyney" effect:
@@ -12,6 +13,25 @@ export function wineDisplayName(producer: string | undefined, name: string): str
   if (!p) return n
   if (!n || p.toLowerCase().endsWith(n.toLowerCase())) return p
   return `${p} ${n}`
+}
+
+/**
+ * One-line label for the compact surfaces — the cellar list and the
+ * grid card.
+ *
+ * Where the second line is an appellation rather than a cuvée, it is
+ * dropped: "Chateau Tronquoy Saint-Estephe" reads as one long name, and
+ * the appellation is geography the region line beside it already
+ * carries. A cuvée is kept, because without it two wines from the same
+ * estate are indistinguishable. The detail panel still shows both.
+ */
+export function wineTileName(
+  producer: string | undefined,
+  name: string,
+  region?: string
+): string {
+  if (isEstateWine(producer, region)) return producer?.trim() || name.trim()
+  return wineDisplayName(producer, name)
 }
 
 /**

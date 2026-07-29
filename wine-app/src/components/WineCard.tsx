@@ -4,6 +4,7 @@ import { WineService } from '../services/wine.service'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import { wineDisplayName } from '../services/wine.service'
+import { isEstateWine } from '../services/wineName.service'
 import { Wine as WineIcon } from 'lucide-react'
 import HoldButton from './HoldButton'
 
@@ -92,12 +93,18 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               producer, as a château's does. */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
+              {/* An estate's second line is its appellation, which the
+                  region line below already covers — so it is dropped
+                  here and kept for the detail panel. A cuvée stays: it
+                  is the only thing separating two wines from the same
+                  estate. */}
               <WineInfo
                 wine={wine}
                 producerSize="lg"
                 nameSize="sm"
                 classificationSize="xs"
                 showClassification={true}
+                showName={!isEstateWine(wine.producer, wine.region)}
                 layout="vertical"
               />
               <p className="text-xs text-outline mt-1.5">

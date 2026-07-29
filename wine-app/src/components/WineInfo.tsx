@@ -17,6 +17,11 @@ interface WineInfoProps {
   nameSize?: 'sm' | 'base' | 'lg'
   classificationSize?: 'xs' | 'sm'
   showClassification?: boolean
+  /**
+   * Set false where the second line adds nothing — a compact card whose
+   * region line already carries the appellation, for instance.
+   */
+  showName?: boolean
   layout?: 'vertical' | 'inline' // vertical = separate lines, inline = same line
 }
 
@@ -30,6 +35,7 @@ export default function WineInfo({
   nameSize = 'base',
   classificationSize = 'sm',
   showClassification = true,
+  showName = true,
   layout = 'vertical',
 }: WineInfoProps) {
   const sizeMap = {
@@ -46,7 +52,7 @@ export default function WineInfo({
   // the other — showing both reads as a stutter).
   const producerLower = (wine.producer ?? '').trim().toLowerCase()
   const nameLower = (wine.name ?? '').trim().toLowerCase()
-  const shouldHideName = !nameLower || producerLower.endsWith(nameLower)
+  const shouldHideName = !showName || !nameLower || producerLower.endsWith(nameLower)
 
   if (layout === 'inline') {
     return (
