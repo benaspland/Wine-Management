@@ -93,6 +93,54 @@ describe('WineForm - add mode quantity mapping', () => {
     vi.unstubAllGlobals()
   })
 
+  /**
+   * The second field holds different things depending on the wine. An
+   * estate is its own wine, so what goes there is the appellation and it
+   * is optional; anything else needs a cuvée or it cannot be told apart
+   * from its siblings. Required by the form only — imported wines are
+   * allowed to lack one.
+   */
+  it('labels the second field Appellation for an estate, and lets it be blank', async () => {
+    const alertStub = vi.fn()
+    vi.stubGlobal('alert', alertStub)
+
+    setField('producer', 'Chateau Meyney')
+    expect(screen.queryByText('Appellation')).not.toBeNull()
+    expect(screen.queryByText('Wine Name')).toBeNull()
+
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(alertStub).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('labels it Wine Name for everything else, and requires one', async () => {
+    const alertStub = vi.fn()
+    vi.stubGlobal('alert', alertStub)
+
+    setField('producer', 'Massolino')
+    expect(screen.queryByText('Wine Name')).not.toBeNull()
+    expect(screen.queryByText('Appellation')).toBeNull()
+
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(alertStub).toHaveBeenCalledWith('A wine name is required'))
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    // Supplying one lets it through
+    setField('name', 'Barolo Margheria')
+    fireEvent.click(screen.getByText('Save Wine'))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    vi.unstubAllGlobals()
+  })
+
+  it('treats a Bordeaux wine as an estate even without a château prefix', async () => {
+    setField('producer', 'Some Bordeaux Estate')
+    setField('region', 'Bordeaux')
+    expect(screen.queryByText('Appellation')).not.toBeNull()
+  })
+
   it('saves a producer-only wine, as a Bordeaux château has no cuvée', async () => {
     const alertStub = vi.fn()
     vi.stubGlobal('alert', alertStub)

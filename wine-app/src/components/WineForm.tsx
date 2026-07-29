@@ -4,6 +4,50 @@ import { TIER_LABELS } from '../types/index'
 import Modal from './Modal'
 import WineImagePicker from './WineImagePicker'
 import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
+import { isEstateWine } from '../services/wineName.service'
+
+/** One input style, so every field in the form looks like the others. */
+const INPUT =
+  'w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary'
+
+/** A titled group of related fields. */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-4">
+      <h3 className="text-[11px] font-bold tracking-[0.2em] uppercase text-primary-container">
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * A labelled field. The asterisk alone marks what is required — spelling
+ * out "(optional)" on one field implies the unmarked ones are not.
+ */
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string
+  required?: boolean
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-on-surface mb-1">
+        {label}
+        {required && <span className="text-primary-container"> *</span>}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-outline mt-1">{hint}</p>}
+    </div>
+  )
+}
 
 interface WineFormProps {
   isOpen: boolean
@@ -88,14 +132,23 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     setFormData(prev => ({ ...prev, [name]: parsed }))
   }
 
+  // A château or a Clos is its own wine; anything else needs a cuvée to
+  // tell it apart from its siblings. Shared with the importer so the
+  // label here matches the split it produces.
+  const estateWine = isEstateWine(formData.producer, formData.region)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // The wine name is optional: for a Bordeaux château the estate is
-    // the wine, and demanding a second line forces a duplicate of the
-    // producer — which is exactly the stutter the importer removes.
     if (!formData.producer.trim()) {
       alert('A producer is required')
+      return
+    }
+
+    // Required by the form, not the data model: an estate legitimately
+    // has no second line, and imported wines are allowed to lack one
+    if (!estateWine && !formData.name.trim()) {
+      alert('A wine name is required')
       return
     }
 
@@ -134,310 +187,178 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       {/* noValidate: validation is handled in handleSubmit; native number
           constraint checks (step) also false-negative on decimals in some
           DOM implementations */}
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
-        {/* Producer & Name */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Producer *</label>
-            <input
-              type="text"
-              name="producer"
-              value={formData.producer}
-              onChange={handleChange}
-              placeholder="e.g., Château Margaux"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
+      <form onSubmit={handleSubmit} noValidate className="space-y-8">
+        {/* Fields are grouped by what they describe and ordered by how
+            often they matter, rather than paired arbitrarily two to a
+            row. Identity first: without it there is no wine. */}
+        <Section title="Identity">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Producer" required>
+              <input
+                type="text"
+                name="producer"
+                value={formData.producer}
+                onChange={handleChange}
+                placeholder="e.g., Château Margaux"
+                className={INPUT}
+              />
+            </Field>
+            {/* An estate is its own wine, so the second line holds the
+                appellation and is optional. Everywhere else it is the
+                cuvée, and a wine without one cannot be told apart from
+                its siblings. */}
+            <Field label={estateWine ? 'Appellation' : 'Wine Name'} required={!estateWine}>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder={estateWine ? 'e.g., Pauillac' : "e.g., Meursault 'Boucheres'"}
+                className={INPUT}
+              />
+            </Field>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">
-              Wine Name <span className="text-outline font-normal">(optional)</span>
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="e.g., Meursault 'Boucheres'"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Vintage">
+              <input type="number" name="vintage" value={formData.vintage} onChange={handleChange} className={INPUT} />
+            </Field>
+            <Field label="Classification">
+              <input
+                type="text"
+                name="classification"
+                value={formData.classification}
+                onChange={handleChange}
+                placeholder="e.g., 1er Cru, DOCG"
+                className={INPUT}
+              />
+            </Field>
           </div>
-        </div>
-
-        {/* Location & Vintage */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Location</label>
-            <select
-              name="location"
-              value={formData.location}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            >
-              <option value="home">Home</option>
-              <option value="storage">Storage</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Vintage</label>
-            <input
-              type="number"
-              name="vintage"
-              value={formData.vintage}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
-
-        {/* Country & Region */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Country</label>
-            <input
-              type="text"
-              name="country"
-              value={formData.country}
-              onChange={handleChange}
-              placeholder="e.g., France"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Region</label>
-            <input
-              type="text"
-              name="region"
-              value={formData.region}
-              onChange={handleChange}
-              placeholder="e.g., Bordeaux"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
-
-        {/* Wine Type & Tier */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Wine Type</label>
-            <select
-              name="wine_type"
-              value={formData.wine_type}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            >
-              <option>Red</option>
-              <option>White</option>
-              <option>Rosé</option>
-              <option>Sparkling</option>
-              <option>Fortified</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Tier</label>
-            <select
-              name="tier"
-              value={formData.tier}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            >
+          <Field label="Tier" hint="Drives how often the schedulers reach for this wine">
+            <select name="tier" value={formData.tier} onChange={handleChange} className={INPUT}>
               {Object.entries(TIER_LABELS).map(([num, label]) => (
                 <option key={num} value={num}>{label}</option>
               ))}
             </select>
-          </div>
-        </div>
+          </Field>
+        </Section>
 
-        {/* Quantity & Format */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Quantity</label>
-            <input
-              type="number"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleChange}
-              min="0"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
+        <Section title="Origin">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Country">
+              <input type="text" name="country" value={formData.country} onChange={handleChange} placeholder="e.g., France" className={INPUT} />
+            </Field>
+            <Field label="Region">
+              <input type="text" name="region" value={formData.region} onChange={handleChange} placeholder="e.g., Bordeaux" className={INPUT} />
+            </Field>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Format</label>
-            <select
-              name="format"
-              value={formData.format}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            >
-              {BOTTLE_FORMATS.map(format => (
-                <option key={format}>{format}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Wine Type">
+              <select name="wine_type" value={formData.wine_type} onChange={handleChange} className={INPUT}>
+                <option>Red</option>
+                <option>White</option>
+                <option>Rosé</option>
+                <option>Sparkling</option>
+                <option>Fortified</option>
+              </select>
+            </Field>
+            <Field label="Alcohol %">
+              <input type="number" name="alcohol_percent" value={formData.alcohol_percent} onChange={handleChange} step="0.1" min="0" max="20" className={INPUT} />
+            </Field>
           </div>
-        </div>
+          <Field label="Varietal" hint="Separate a blend with colons">
+            <input type="text" name="varietal" value={formData.varietal} onChange={handleChange} placeholder="e.g., Cabernet Sauvignon : Merlot" className={INPUT} />
+          </Field>
+        </Section>
 
-        {/* Purchase details */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Price per Bottle (£)</label>
-            <input
-              type="number"
-              name="purchase_price"
-              value={formData.purchase_price || ''}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              placeholder="optional"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
+        <Section title="In the cellar">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Quantity">
+              <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} min="0" className={INPUT} />
+            </Field>
+            <Field label="Format">
+              <select name="format" value={formData.format} onChange={handleChange} className={INPUT}>
+                {BOTTLE_FORMATS.map(format => (
+                  <option key={format}>{format}</option>
+                ))}
+              </select>
+            </Field>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Purchase Date</label>
-            <input
-              type="date"
-              name="purchase_date"
-              value={formData.purchase_date}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
+          {/* Only meaningful when adding: an edit leaves bottles where
+              they already are, so offering the choice would imply an
+              effect it does not have */}
+          {!initialWine && (
+            <Field label="Where are they" hint="Bottles at home can be drunk tonight; storage waits for a delivery">
+              <select name="location" value={formData.location} onChange={handleChange} className={INPUT}>
+                <option value="storage">Storage</option>
+                <option value="home">Home</option>
+              </select>
+            </Field>
+          )}
+        </Section>
 
-        {/* Merchant */}
-        <div>
-          <label className="block text-sm font-medium text-on-surface mb-1">Merchant</label>
-          <input
-            type="text"
-            name="merchant"
-            value={formData.merchant}
-            onChange={handleChange}
-            placeholder="e.g., Berry Bros. & Rudd"
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
+        <Section title="Purchase">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Price per Bottle (£)">
+              <input
+                type="number"
+                name="purchase_price"
+                value={formData.purchase_price || ''}
+                onChange={handleChange}
+                step="0.01"
+                min="0"
+                placeholder="optional"
+                className={INPUT}
+              />
+            </Field>
+            <Field label="Purchase Date">
+              <input type="date" name="purchase_date" value={formData.purchase_date} onChange={handleChange} className={INPUT} />
+            </Field>
+          </div>
+          <Field label="Merchant">
+            <input type="text" name="merchant" value={formData.merchant} onChange={handleChange} placeholder="e.g., Berry Bros. & Rudd" className={INPUT} />
+          </Field>
+        </Section>
+
+        <Section title="Drinking & service">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Window Start Year">
+              <input type="number" name="drinking_window_start" value={formData.drinking_window_start} onChange={handleChange} className={INPUT} />
+            </Field>
+            <Field label="Window End Year">
+              <input type="number" name="drinking_window_end" value={formData.drinking_window_end} onChange={handleChange} className={INPUT} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Serving Temp Min (°C)">
+              <input type="number" name="serving_temp_min" value={formData.serving_temp_min} onChange={handleChange} className={INPUT} />
+            </Field>
+            <Field label="Serving Temp Max (°C)">
+              <input type="number" name="serving_temp_max" value={formData.serving_temp_max} onChange={handleChange} className={INPUT} />
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="Tasting">
+          <Field label="Flavour Profile" hint="Separate notes with colons">
+            <input type="text" name="flavor_profile" value={formData.flavor_profile} onChange={handleChange} placeholder="e.g., Blackberry : Cassis : Graphite" className={INPUT} />
+          </Field>
+          <Field label="Notes">
+            <textarea
+              name="notes"
+              value={formData.notes}
+              onChange={handleChange}
+              rows={3}
+              placeholder="Critic notes, tasting notes..."
+              className={`${INPUT} resize-none`}
+            />
+          </Field>
+          <WineImagePicker
+            imageUrl={formData.image_url}
+            onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
           />
-        </div>
+        </Section>
 
-        {/* Drinking Window */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Window Start Year</label>
-            <input
-              type="number"
-              name="drinking_window_start"
-              value={formData.drinking_window_start}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Window End Year</label>
-            <input
-              type="number"
-              name="drinking_window_end"
-              value={formData.drinking_window_end}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
-
-        {/* Serving Temperature */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Serving Temp Min (°C)</label>
-            <input
-              type="number"
-              name="serving_temp_min"
-              value={formData.serving_temp_min}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Serving Temp Max (°C)</label>
-            <input
-              type="number"
-              name="serving_temp_max"
-              value={formData.serving_temp_max}
-              onChange={handleChange}
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
-
-        {/* Alcohol & Varietal */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Alcohol %</label>
-            <input
-              type="number"
-              name="alcohol_percent"
-              value={formData.alcohol_percent}
-              onChange={handleChange}
-              step="0.1"
-              min="0"
-              max="20"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Classification</label>
-            <input
-              type="text"
-              name="classification"
-              value={formData.classification}
-              onChange={handleChange}
-              placeholder="e.g., Reserva, DOCG"
-              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
-
-        {/* Notes */}
-        <div>
-          <label className="block text-sm font-medium text-on-surface mb-1">Notes</label>
-          <textarea
-            name="notes"
-            value={formData.notes}
-            onChange={handleChange}
-            rows={3}
-            placeholder="Critic notes, tasting notes..."
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary resize-none"
-          />
-        </div>
-
-        {/* Varietal */}
-        <div>
-          <label className="block text-sm font-medium text-on-surface mb-1">Varietal (colon-separated)</label>
-          <input
-            type="text"
-            name="varietal"
-            value={formData.varietal}
-            onChange={handleChange}
-            placeholder="e.g., Cabernet Sauvignon : Merlot"
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-          />
-        </div>
-
-        {/* Flavor Profile */}
-        <div>
-          <label className="block text-sm font-medium text-on-surface mb-1">Flavor Profile (colon-separated)</label>
-          <input
-            type="text"
-            name="flavor_profile"
-            value={formData.flavor_profile}
-            onChange={handleChange}
-            placeholder="e.g., Blackberry : Cassis : Graphite"
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
-          />
-        </div>
-
-        {/* Image */}
-        <WineImagePicker
-          imageUrl={formData.image_url}
-          onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
-        />
-
-        {/* Submit */}
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-3 pt-2">
           <button
             type="button"
             onClick={onClose}
