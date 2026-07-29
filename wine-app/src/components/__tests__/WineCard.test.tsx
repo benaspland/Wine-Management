@@ -50,14 +50,13 @@ describe('WineCard - Drink action', () => {
     expect(handlers.onSelect).not.toHaveBeenCalled()
   })
 
-  it('is disabled when no bottles are at home', () => {
-    const handlers = renderCard(makeWine({ quantity_at_home: 0 }))
+  it('offers no Drink action when no bottles are at home', () => {
+    // Shown-but-disabled read as a broken control: it invited taps and
+    // explained nothing. Bottles in storage are brought home from the
+    // detail panel instead.
+    renderCard(makeWine({ quantity_at_home: 0, quantity_in_storage: 6 }))
 
-    const button = screen.getByText('Drink').closest('button') as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-
-    fireEvent.click(button)
-    expect(handlers.onConsume).not.toHaveBeenCalled()
+    expect(screen.queryByText('Drink')).toBeNull()
   })
 
   it('opens the detail panel when the card body is clicked', () => {

@@ -80,23 +80,23 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
                 />
               </div>
             </div>
-            <HoldButton
-              onTap={handleConsume}
-              onHold={handleConsumeDetailed}
-              progressStyle="fill"
-              progressColor="rgba(255, 191, 0, 0.3)"
-              disabled={wine.quantity_at_home === 0 || isLoading}
-              aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
-              title={
-                wine.quantity_at_home === 0
-                  ? 'No bottles at home to drink'
-                  : 'Tap to mark consumed, hold to set the date and add a note'
-              }
-              className="min-h-11 shrink-0 px-3.5 rounded-full bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 disabled:hover:bg-surface-container-highest disabled:hover:text-on-surface-variant transition-colors"
-            >
-              <WineIcon size={16} aria-hidden="true" />
-              Drink
-            </HoldButton>
+            {/* Hidden rather than disabled when nothing is at home: a
+                greyed-out control invites taps and explains nothing */}
+            {wine.quantity_at_home > 0 && (
+              <HoldButton
+                onTap={handleConsume}
+                onHold={handleConsumeDetailed}
+                progressStyle="fill"
+                progressColor="rgba(255, 191, 0, 0.3)"
+                disabled={isLoading}
+                aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
+                title="Tap to mark consumed, hold to set the date and add a note"
+                className="min-h-11 shrink-0 px-3.5 rounded-full bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 transition-colors"
+              >
+                <WineIcon size={16} aria-hidden="true" />
+                Drink
+              </HoldButton>
+            )}
           </div>
 
           {/* Tier & Details Badges */}
