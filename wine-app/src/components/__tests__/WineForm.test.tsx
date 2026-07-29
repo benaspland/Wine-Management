@@ -78,7 +78,7 @@ describe('WineForm - add mode quantity mapping', () => {
     expect(submitted.quantity_at_home).toBe(4)
   })
 
-  it('requires producer and name before submitting', async () => {
+  it('requires a producer, but not a separate wine name', async () => {
     // happy-dom does not implement alert; stub the global the form calls
     const alertStub = vi.fn()
     vi.stubGlobal('alert', alertStub)
@@ -86,10 +86,27 @@ describe('WineForm - add mode quantity mapping', () => {
     fireEvent.click(screen.getByText('Save Wine'))
 
     await waitFor(() =>
-      expect(alertStub).toHaveBeenCalledWith('Producer and wine name are required')
+      expect(alertStub).toHaveBeenCalledWith('A producer is required')
     )
     expect(onSubmit).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('saves a producer-only wine, as a Bordeaux château has no cuvée', async () => {
+    const alertStub = vi.fn()
+    vi.stubGlobal('alert', alertStub)
+
+    fireEvent.change(screen.getByPlaceholderText('e.g., Château Margaux'), {
+      target: { value: 'Chateau Meyney' },
+    })
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const submitted = onSubmit.mock.calls[0][0]
+    expect(submitted.producer).toBe('Chateau Meyney')
+    expect(submitted.name).toBe('')
+    expect(alertStub).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 })

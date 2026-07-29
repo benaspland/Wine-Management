@@ -91,8 +91,11 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.producer.trim() || !formData.name.trim()) {
-      alert('Producer and wine name are required')
+    // The wine name is optional: for a Bordeaux château the estate is
+    // the wine, and demanding a second line forces a duplicate of the
+    // producer — which is exactly the stutter the importer removes.
+    if (!formData.producer.trim()) {
+      alert('A producer is required')
       return
     }
 
@@ -146,13 +149,15 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">Wine Name *</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">
+              Wine Name <span className="text-outline font-normal">(optional)</span>
+            </label>
             <input
               type="text"
               name="name"
               value={formData.name}
               onChange={handleChange}
-              placeholder="e.g., Margaux"
+              placeholder="e.g., Meursault 'Boucheres'"
               className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
             />
           </div>
