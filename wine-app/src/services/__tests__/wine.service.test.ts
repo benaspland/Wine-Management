@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { wineDisplayName, criticRatingsOf } from '../wine.service'
+import { wineDisplayName, wineTileName, criticRatingsOf } from '../wine.service'
 
 describe('wineDisplayName', () => {
   it('drops the name when the producer already ends with it', () => {
@@ -29,6 +29,39 @@ describe('wineDisplayName', () => {
     expect(wineDisplayName(undefined, 'Barolo')).toBe('Barolo')
     expect(wineDisplayName('', 'Barolo')).toBe('Barolo')
     expect(wineDisplayName('Producer', '')).toBe('Producer')
+  })
+})
+
+/**
+ * The compact surfaces drop an appellation but keep a cuvée. The
+ * appellation is geography the region line beside it already carries,
+ * and "Chateau Tronquoy Saint-Estephe" reads as one long name; a cuvée
+ * is the only thing telling two wines from the same estate apart.
+ */
+describe('wineTileName', () => {
+  it('shows the estate alone when the second line is an appellation', () => {
+    expect(wineTileName('Chateau Tronquoy', 'Saint-Estephe', 'Bordeaux')).toBe('Chateau Tronquoy')
+    expect(wineTileName('Clos Mogador', 'Priorat', 'Priorat')).toBe('Clos Mogador')
+  })
+
+  it('keeps the cuvée for everything else', () => {
+    expect(wineTileName('Peter Lauer', 'Kupp Riesling #18', 'Saar')).toBe(
+      'Peter Lauer Kupp Riesling #18'
+    )
+    expect(wineTileName('Massolino', 'Barolo Margheria', 'Piedmont')).toBe(
+      'Massolino Barolo Margheria'
+    )
+    expect(wineTileName('Domaine Latour-Giraud', "Meursault 'Boucheres'", 'Burgundy')).toBe(
+      "Domaine Latour-Giraud Meursault 'Boucheres'"
+    )
+  })
+
+  it('still collapses a name that merely repeats the producer', () => {
+    expect(wineTileName('Chateau Meyney', 'Meyney', 'Bordeaux')).toBe('Chateau Meyney')
+  })
+
+  it('falls back to the name when there is no producer', () => {
+    expect(wineTileName(undefined, 'Barolo', 'Piedmont')).toBe('Barolo')
   })
 })
 

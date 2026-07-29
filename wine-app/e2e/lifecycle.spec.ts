@@ -15,10 +15,13 @@ test('add a wine, persist it across reload, then delete it', async ({ page }) =>
 
   // Add a wine via the form
   await page.getByText('Add Wine').first().click()
-  await page.fill('input[name="producer"]', 'Château Test')
+  // Deliberately not a château: an estate's second line is its
+  // appellation and the compact views drop it, so a fixture named
+  // "Château …" would have no cuvée to assert on
+  await page.fill('input[name="producer"]', 'Smoke Estate')
   await page.fill('input[name="name"]', 'Smoke Cuvée')
   await page.fill('input[name="vintage"]', '2018')
-  await page.fill('input[name="region"]', 'Bordeaux')
+  await page.fill('input[name="region"]', 'Burgundy')
   await page.fill('input[name="country"]', 'France')
   await page.fill('input[name="quantity"]', '6')
   await page.locator('button:has-text("Save Wine")').click()
@@ -40,7 +43,7 @@ test('add a wine, persist it across reload, then delete it', async ({ page }) =>
   // — a plain tap on the confirm button is refused.
   await page.getByText('Smoke Cuvée').first().click()
   await page.locator('button:has-text("Delete")').first().click()
-  await expect(page.getByText('Delete Château Test Smoke Cuvée 2018?')).toBeVisible()
+  await expect(page.getByText('Delete Smoke Estate Smoke Cuvée 2018?')).toBeVisible()
 
   const confirmDelete = page.getByLabel('Delete', { exact: true })
   await confirmDelete.click()
