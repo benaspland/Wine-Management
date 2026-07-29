@@ -86,22 +86,27 @@ export default function WineListRow({
         </div>
       </div>
 
-      {/* Only shown when there is something to drink. A permanently
-          greyed-out glass reads as a broken control rather than an
-          unavailable one — bringing a bottle home is done from the
-          detail panel, which this row opens. */}
+      {/* Only shown when there is something to drink: a permanently
+          greyed-out glass reads as broken rather than unavailable, and
+          bringing a bottle home is done from the detail panel this row
+          opens.
+
+          Icon only, and filled rather than outlined. A labelled pill
+          cost roughly 190px — enough that the one row with an action
+          was the only one whose name could not fit. Identical to the
+          consume button on the schedule page, so the same mark means
+          the same thing wherever it appears. */}
       {atHome && (
         <HoldButton
           onTap={handleConsume}
           onHold={handleConsumeDetailed}
-          progressColor="rgba(255, 191, 0, 0.35)"
+          progressColor="rgba(255, 255, 255, 0.4)"
           disabled={isLoading}
           title="Tap to mark consumed, hold to set the date and add a note"
           aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
-          className="min-h-11 shrink-0 px-3.5 rounded-full bg-surface-container-highest text-on-surface-variant text-xs font-bold tracking-widest uppercase hover:bg-primary-container hover:text-on-primary disabled:opacity-40 transition-colors"
+          className="h-10 w-10 shrink-0 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
         >
           <WineIcon size={16} aria-hidden="true" />
-          Drink
         </HoldButton>
       )}
     </div>
