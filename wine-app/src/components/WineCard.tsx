@@ -81,7 +81,11 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               which made the place louder than the thing. */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <h3 className="font-headline text-xl leading-tight text-on-surface">
+              {/* Sans, not the headline serif: serif is this app's
+                  chrome — page titles and section headings — while the
+                  data itself is set in Inter, as the list and detail
+                  panel already do */}
+              <h3 className="text-lg font-semibold leading-tight text-on-surface">
                 {wineDisplayName(wine.producer, wine.name)}
               </h3>
               <p className="text-xs text-outline mt-1">

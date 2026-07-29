@@ -195,6 +195,17 @@ const CLASSIFICATION_TOKENS = [
 /** Estate prefixes that mean the whole string names the producer. */
 const ESTATE_PREFIX = /^(Chateau|Château|Ch\.|Clos|Domaine de|Castello di)\s+/i
 
+/**
+ * True when the estate itself is the wine, as for a Bordeaux château or
+ * Clos Mogador. Such wines carry no cuvée: the second line, if used at
+ * all, holds the appellation. Shared with the wine form so the label it
+ * shows and the split the importer produces agree.
+ */
+export function isEstateWine(producer?: string, region?: string): boolean {
+  if (ESTATE_PREFIX.test((producer ?? '').trim())) return true
+  return (region ?? '').trim().toLowerCase() === 'bordeaux'
+}
+
 const COLOUR_MARKERS: Array<{ pattern: RegExp; colour: 'Red' | 'White' | 'Rosé' }> = [
   { pattern: /\((?:rouge|red)\)/i, colour: 'Red' },
   { pattern: /\((?:blanc|white)\)/i, colour: 'White' },
