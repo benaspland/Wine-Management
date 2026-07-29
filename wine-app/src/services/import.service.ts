@@ -10,6 +10,7 @@ interface CSVRow {
   Region: string
   Wine: string
   Quantity: string
+  'At Home'?: string
   Size: string
   'Peak Drinking Window': string
   Classification: string
@@ -38,6 +39,7 @@ export const CSV_COLUMNS = [
   'Region',
   'Wine',
   'Quantity',
+  'At Home',
   'Size',
   'Peak Drinking Window',
   'Classification',
@@ -68,6 +70,8 @@ export class ImportService {
     errors: string[]
     /** Rows whose producer/name split was guessed rather than recognised. */
     uncertain: string[]
+    /** Non-fatal problems, e.g. home inventory over capacity. */
+    warnings: string[]
   }> {
     const text = await file.text()
     const lines = text.trim().split('\n')
@@ -124,6 +128,7 @@ export class ImportService {
       failed: errors.length + result.failed.length,
       errors: errors.concat(result.failed.map(f => `Row ${f.rowNumber}: ${f.field} - ${f.error}`)),
       uncertain,
+      warnings: result.warnings,
     }
   }
 
@@ -206,6 +211,13 @@ export class ImportService {
       throw new Error(`Invalid quantity: ${row.Quantity}`)
     }
 
+    // Bottles already in the house. Imports otherwise assume everything
+    // sits in professional storage, which is wrong for a collection
+    // that has been drawn on for years. Clamped to the quantity owned:
+    // a typo cannot conjure bottles that are not there.
+    const rawAtHome = parseInt(row['At Home'] ?? '')
+    const atHome = Number.isInteger(rawAtHome) ? Math.min(Math.max(rawAtHome, 0), quantity) : 0
+
     // Sources describe the same bottle many ways; store one trade name
     const format = normalizeFormat(row.Size)
 
@@ -242,8 +254,8 @@ export class ImportService {
       merchant: merchant && merchant !== '-' ? merchant : undefined,
       drinking_window_start: start,
       drinking_window_end: end,
-      quantity_in_storage: quantity,
-      quantity_at_home: 0, // Imported wines go to storage
+      quantity_in_storage: quantity - atHome,
+      quantity_at_home: atHome,
       },
       // Explicit columns make a row trustworthy however odd the label
       confident: parsed.confident || Boolean(explicitProducer),
