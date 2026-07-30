@@ -4,7 +4,6 @@ import { WineService } from '../services/wine.service'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import { wineDisplayName } from '../services/wine.service'
-import { isEstateWine } from '../services/wineName.service'
 import { Wine as WineIcon } from 'lucide-react'
 import HoldButton from './HoldButton'
 
@@ -82,29 +81,24 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
           {/* The wine leads. Region was set in amber caps above the name,
               which made the place louder than the thing.
 
-              Producer, wine and classification come from WineInfo — the
-              same component the detail panel uses — so each sits on its
-              own line and the two screens present identity identically.
-              Run together on one line, "Peter Lauer Kupp Riesling #18"
-              gave no clue where the estate ended and the wine began,
-              and "Chateau Tronquoy Saint-Estephe" read as one long name
-              rather than an estate and its appellation. WineInfo also
-              drops the second line where it would merely repeat the
+              Identity comes from WineInfo — the component the detail
+              panel uses — so producer, wine and classification each get
+              their own line and the two screens agree. The second line
+              carries whatever the wine has there: a cuvée for most, an
+              appellation for an estate. Both belong on a card, which
+              gives them a line of their own; it is the cellar list,
+              putting producer and wine on one line, that has to drop an
+              appellation to avoid reading as a single run-on name.
+              WineInfo still hides a name that merely repeats the
               producer, as a château's does. */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              {/* An estate's second line is its appellation, which the
-                  region line below already covers — so it is dropped
-                  here and kept for the detail panel. A cuvée stays: it
-                  is the only thing separating two wines from the same
-                  estate. */}
               <WineInfo
                 wine={wine}
                 producerSize="lg"
                 nameSize="sm"
                 classificationSize="xs"
                 showClassification={true}
-                showName={!isEstateWine(wine.producer, wine.region)}
                 layout="vertical"
               />
               <p className="text-xs text-outline mt-1.5">
