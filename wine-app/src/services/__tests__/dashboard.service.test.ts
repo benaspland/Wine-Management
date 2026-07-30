@@ -1,15 +1,11 @@
 /**
- * Dashboard stats — pure derivations from the wine list and consumption
- * log that power the Overview page.
+ * Dashboard stats — pure derivations from the wine list that power the
+ * Overview page.
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  computeDashboardStats,
-  computeDrinkingPace,
-  nextDelivery,
-} from '../dashboard.service'
-import type { Wine, ConsumptionLogEntry } from '../../types/index'
+import { computeDashboardStats, nextDelivery } from '../dashboard.service'
+import type { Wine } from '../../types/index'
 import type { DeliveryDisplayEntry } from '../schedule.service'
 
 let seq = 0
@@ -136,54 +132,54 @@ describe('computeDashboardStats', () => {
     expect(stats.readyToDrinkWines).toBe(2)
     expect(stats.windowWatch.waitingWines).toBe(1)
     expect(stats.windowWatch.closingSoonWines).toBe(1) // window ends 2027 <= 2028
-    expect(stats.windowWatch.closingSoonest[0].name).toBe('Urgent')
-    expect(stats.windowWatch.closingSoonest[0].windowEnd).toBe(2027)
+    expect(stats.windowWatch.drinkFirst[0].name).toBe('Urgent')
+    expect(stats.windowWatch.drinkFirst[0].windowEnd).toBe(2027)
   })
 
-  it('lists at most the three most urgent closing wines, soonest first', () => {
+  it('names at most five wines, nearest the end of their window first', () => {
     const stats = computeDashboardStats(
-      [
-        wine({ drinking_window_end: 2028, name: 'C' }),
-        wine({ drinking_window_end: 2026, name: 'A' }),
-        wine({ drinking_window_end: 2027, name: 'B' }),
-        wine({ drinking_window_end: 2027, name: 'B2' }),
-      ].map(w => ({ ...w, drinking_window_start: 2020 })),
+      [2040, 2026, 2035, 2032, 2038, 2030, 2036].map((end, i) =>
+        wine({ drinking_window_start: 2020, drinking_window_end: end, name: `W${i}` })
+      ),
       NOW
     )
 
-    expect(stats.windowWatch.closingSoonest).toHaveLength(3)
-    expect(stats.windowWatch.closingSoonest.map(w => w.name)).toEqual(['A', 'B', 'B2'])
-  })
-})
-
-describe('computeDrinkingPace', () => {
-  function entry(date: string): ConsumptionLogEntry {
-    seq += 1
-    return {
-      id: `log-${seq}`,
-      wine_id: 'w-1',
-      consumed_date: date,
-      created_at: date,
-    }
-  }
-
-  it('counts only the current year and compares against a pro-rata target', () => {
-    const log = [entry('2026-01-15'), entry('2026-03-02'), entry('2025-11-20')]
-    // July 1st = almost exactly half the year
-    const pace = computeDrinkingPace(log, 30, new Date(2026, 6, 1))
-
-    expect(pace.consumedThisYear).toBe(2)
-    expect(pace.target).toBe(30)
-    expect(pace.expectedByNow).toBe(15)
-    expect(pace.delta).toBe(-13)
+    expect(stats.windowWatch.drinkFirst).toHaveLength(5)
+    expect(stats.windowWatch.drinkFirst.map(w => w.windowEnd)).toEqual([
+      2026, 2030, 2032, 2035, 2036,
+    ])
   })
 
-  it('reports ahead of pace with a positive delta', () => {
-    const log = Array.from({ length: 10 }, (_, i) => entry(`2026-01-${String(i + 1).padStart(2, '0')}`))
-    const pace = computeDrinkingPace(log, 30, new Date(2026, 1, 1)) // Feb 1 ≈ 8.5%
+  it('lists what to drink first even when nothing is at risk, flagging only the urgent', () => {
+    // The regression this guards: a list restricted to closing-soon wines
+    // is empty for years in a young cellar, leaving a dead panel where
+    // the answer to "what do I open next" should be.
+    const stats = computeDashboardStats(
+      [
+        wine({ drinking_window_start: 2020, drinking_window_end: 2040, name: 'Later' }),
+        wine({ drinking_window_start: 2020, drinking_window_end: 2033, name: 'Sooner' }),
+      ],
+      NOW
+    )
 
-    expect(pace.consumedThisYear).toBe(10)
-    expect(pace.delta).toBeGreaterThan(0)
+    expect(stats.windowWatch.closingSoonWines).toBe(0)
+    expect(stats.windowWatch.drinkFirst.map(w => w.name)).toEqual(['Sooner', 'Later'])
+    expect(stats.windowWatch.drinkFirst.every(w => !w.urgent)).toBe(true)
+  })
+
+  it('flags only the wines inside the closing-soon horizon', () => {
+    const stats = computeDashboardStats(
+      [
+        wine({ drinking_window_start: 2020, drinking_window_end: 2027, name: 'Urgent' }),
+        wine({ drinking_window_start: 2020, drinking_window_end: 2030, name: 'Fine' }),
+      ],
+      NOW
+    )
+
+    expect(stats.windowWatch.drinkFirst.map(w => [w.name, w.urgent])).toEqual([
+      ['Urgent', true],
+      ['Fine', false],
+    ])
   })
 })
 

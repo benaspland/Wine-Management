@@ -4,10 +4,9 @@ import { useWineStore } from '../store/wineStore'
 import * as db from '../services/database'
 import * as planner from '../services/deliveryPlanning.service'
 import {
+  CLOSING_SOON_YEARS,
   computeDashboardStats,
-  computeDrinkingPace,
   nextDelivery,
-  type DrinkingPace,
 } from '../services/dashboard.service'
 import { wineDisplayName } from '../services/wine.service'
 import DonutChart from '../components/dashboard/DonutChart'
@@ -38,15 +37,37 @@ function formatDeliveryDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function StatTile({ label, value, sub, to }: { label: string; value: string; sub?: string; to: string }) {
+interface StatTileProps {
+  label: string
+  value: string
+  sub?: string
+  to: string
+  /** Applies the tap-through's filter before the route changes. */
+  onClick?: () => void
+  /** A date is not a quantity: it gets prose sizing, not the number ramp. */
+  variant?: 'number' | 'text'
+  /** Amber sub-line, for a warning that only exists sometimes. */
+  subUrgent?: boolean
+}
+
+function StatTile({ label, value, sub, to, onClick, variant = 'number', subUrgent }: StatTileProps) {
   return (
     <Link
       to={to}
-      className="block bg-surface-container-low rounded-2xl p-4 hover:bg-surface-container transition-colors"
+      onClick={onClick}
+      className="flex flex-col bg-surface-container-low rounded-2xl p-4 hover:bg-surface-container transition-colors"
     >
       <p className="text-xs text-outline uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-2xl font-sans font-semibold text-on-surface">{value}</p>
-      {sub && <p className="text-xs text-outline mt-0.5">{sub}</p>}
+      <p
+        className={`font-sans font-semibold text-on-surface ${
+          variant === 'number' ? 'text-2xl' : 'text-lg leading-snug'
+        }`}
+      >
+        {value}
+      </p>
+      {sub && (
+        <p className={`text-xs mt-0.5 ${subUrgent ? 'text-[#c98500]' : 'text-outline'}`}>{sub}</p>
+      )}
     </Link>
   )
 }
@@ -76,6 +97,11 @@ export default function DashboardPage() {
     setWindowFilter('ready')
     setSortBy('window')
   }
+  const presetMaturing = () => {
+    clearFilters()
+    setWindowFilter('waiting')
+    setSortBy('window')
+  }
   const presetRegion = (region: string) => {
     clearFilters()
     setRegionFilter(region)
@@ -89,7 +115,6 @@ export default function DashboardPage() {
     setWineTypeFilter(type)
   }
 
-  const [pace, setPace] = useState<DrinkingPace | null>(null)
   const [capacity, setCapacity] = useState(80)
   const [delivery, setDelivery] = useState<NextDeliveryInfo | null>(null)
 
@@ -99,13 +124,9 @@ export default function DashboardPage() {
     let cancelled = false
 
     const load = async () => {
-      const [config, log] = await Promise.all([
-        db.getCellarConfig(),
-        db.getConsumptionLogByYear(new Date().getFullYear()),
-      ])
+      const config = await db.getCellarConfig()
       if (cancelled) return
       setCapacity(config.max_home_capacity)
-      setPace(computeDrinkingPace(log, config.annual_consumption_target || 30))
 
       try {
         const schedule = await planner.buildDeliverySchedule(wines)
@@ -130,13 +151,20 @@ export default function DashboardPage() {
     onClick: () => presetType(slice.label),
   }))
 
-  const paceCaption = pace
-    ? pace.delta === 0
-      ? 'On pace for the year'
-      : pace.delta > 0
-        ? `${pace.delta} ${pace.delta === 1 ? 'bottle' : 'bottles'} ahead of pace`
-        : `${-pace.delta} ${pace.delta === -1 ? 'bottle' : 'bottles'} behind pace`
-    : undefined
+  const closing = stats.windowWatch
+  const closingHorizon = new Date().getFullYear() + CLOSING_SOON_YEARS
+  const urgentShown = closing.drinkFirst.filter(w => w.urgent).length
+  const anyUrgent = urgentShown > 0
+
+  // Prefer the at-risk cut when the list could not fit them all, and
+  // fall back to the whole ready set. Null when the list already shows
+  // everything there is.
+  const moreToSee =
+    closing.closingSoonWines > urgentShown
+      ? { label: `All ${closing.closingSoonWines} closing by ${closingHorizon}`, onClick: presetDrinkSoon }
+      : closing.readyWines > closing.drinkFirst.length
+        ? { label: `All ${closing.readyWines} ready, soonest first`, onClick: presetReady }
+        : null
 
   // Fresh install: point at the two ways in instead of empty charts
   if (stats.totalWines === 0) {
@@ -167,7 +195,9 @@ export default function DashboardPage() {
     <div className="px-6 max-w-5xl mx-auto py-8">
       <h2 className="font-headline text-4xl md:text-7xl mb-8 text-on-surface">Cellar Overview</h2>
 
-      {/* KPI row */}
+      {/* What I have, what's ready, what's at risk, what's coming. Each
+          tile applies its own filter on the way through, the same
+          promise the charts below make. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatTile
           label="Total bottles"
@@ -178,29 +208,46 @@ export default function DashboardPage() {
               : `${stats.totalWines} wines`
           }
           to="/cellar"
+          onClick={clearFilters}
         />
+        {/* The at-risk count rides in the sub-line rather than taking a
+            tile of its own: for a young cellar it is zero for years on
+            end, and a permanently blank quarter of the top row buys
+            nothing. It surfaces, in amber, on the day it matters. */}
         <StatTile
           label="Ready to drink"
           value={String(stats.readyToDrinkWines)}
-          sub="wines in window"
+          sub={
+            closing.closingSoonWines > 0
+              ? `${closing.closingSoonWines} closing by ${closingHorizon}`
+              : `of ${stats.totalWines} wines`
+          }
+          subUrgent={closing.closingSoonWines > 0}
           to="/cellar"
+          onClick={presetReady}
         />
         <StatTile
-          label="Consumed this year"
-          value={pace ? String(pace.consumedThisYear) : '—'}
-          sub={pace ? `target ${pace.target}` : undefined}
-          to="/schedule"
+          label="Maturing"
+          value={String(closing.waitingWines)}
+          sub="not ready yet"
+          to="/cellar"
+          onClick={presetMaturing}
         />
         <StatTile
           label="Next delivery"
           value={delivery ? formatDeliveryDate(delivery.date) : 'None'}
           sub={delivery ? `${delivery.bottles} bottles · ${delivery.wines} wines` : 'nothing scheduled'}
           to="/deliveries"
+          variant="text"
         />
       </div>
 
-      {/* Meters */}
-      <div className="bg-surface-container-low rounded-2xl p-5 mb-6 space-y-5">
+      {/* The one genuine ceiling in the app: rack space at home. The
+          annual target sat here too, as bottles drunk out of a goal —
+          but that figure is an input to the delivery planner, not a
+          score, and a meter made a planning assumption look like a
+          grade you could fail. */}
+      <div className="bg-surface-container-low rounded-2xl p-5 mb-6">
         <Meter
           label="Home cellar"
           value={stats.bottlesAtHome}
@@ -208,22 +255,11 @@ export default function DashboardPage() {
           unit="bottles"
           caption={`${stats.bottlesInStorage} bottles in professional storage`}
         />
-        {pace && (
-          <Meter
-            label="Drinking pace"
-            value={pace.consumedThisYear}
-            max={pace.target}
-            unit="bottles"
-            tickFraction={pace.target > 0 ? pace.expectedByNow / pace.target : undefined}
-            tickLabel={`Expected by now: ${pace.expectedByNow}`}
-            caption={paceCaption}
-          />
-        )}
       </div>
 
       {/* Composition */}
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low rounded-2xl p-5">
+        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By type</h3>
           <DonutChart
             segments={donutSegments}
@@ -232,7 +268,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="bg-surface-container-low rounded-2xl p-5">
+        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Top regions</h3>
           <BarList
             rows={stats.topRegions.map(r =>
@@ -252,7 +288,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low rounded-2xl p-5">
+        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By tier</h3>
           <BarList
             rows={stats.byTier.map(t => ({
@@ -265,38 +301,60 @@ export default function DashboardPage() {
           <p className="text-xs text-outline mt-3">wines per tier</p>
         </div>
 
-        {/* Window watch */}
-        <div className="bg-surface-container-low rounded-2xl p-5">
-          <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Drinking windows</h3>
-          <div className="flex gap-6 mb-4 text-sm">
-            <Link to="/cellar" onClick={presetReady} className="hover:opacity-80">
-              <p className="text-2xl font-sans font-semibold text-on-surface">{stats.windowWatch.readyWines}</p>
-              <p className="text-xs text-outline">ready now</p>
-            </Link>
-            <div>
-              <p className="text-2xl font-sans font-semibold text-on-surface">{stats.windowWatch.waitingWines}</p>
-              <p className="text-xs text-outline">still waiting</p>
-            </div>
-            <Link to="/cellar" onClick={presetDrinkSoon} className="hover:opacity-80">
-              <p className={`text-2xl font-sans font-semibold ${stats.windowWatch.closingSoonWines > 0 ? 'text-[#c98500]' : 'text-on-surface'}`}>
-                {stats.windowWatch.closingSoonWines}
-              </p>
-              <p className="text-xs text-outline">closing soon</p>
-            </Link>
-          </div>
+        {/* The counts this card used to lead with — ready, waiting,
+            closing — are the KPI row's job now, so all this card does is
+            name wines: the ones nearest the end of their window, which
+            is the question a cellar owner actually asks. Only those
+            inside the two-year horizon carry the amber flag, so the
+            flag means something when it appears. */}
+        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
+          <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Drink first</h3>
 
-          {stats.windowWatch.closingSoonest.length > 0 && (
-            <ul className="space-y-2 border-t border-outline-variant/10 pt-3">
-              {stats.windowWatch.closingSoonest.map(w => (
-                <li key={w.id} className="flex items-center gap-2 text-sm">
-                  <TriangleAlert size={14} className="text-[#c98500] shrink-0" aria-hidden="true" />
-                  <span className="text-on-surface-variant truncate">
-                    {wineDisplayName(w.producer, w.name)} {w.vintage}
-                  </span>
-                  <span className="text-outline ml-auto whitespace-nowrap">until {w.windowEnd}</span>
-                </li>
-              ))}
-            </ul>
+          {closing.drinkFirst.length > 0 ? (
+            <>
+              <ul className="space-y-2.5">
+                {closing.drinkFirst.map(w => (
+                  <li key={w.id} className="flex items-center gap-2 text-sm">
+                    {/* The gutter is only reserved when some row in the
+                        list fills it; otherwise every name sits indented
+                        against a column that never appears. */}
+                    {anyUrgent &&
+                      (w.urgent ? (
+                        <TriangleAlert size={14} className="text-[#c98500] shrink-0" aria-hidden="true" />
+                      ) : (
+                        <span className="w-[14px] shrink-0" aria-hidden="true" />
+                      ))}
+                    {/* min-w-0: a flex child will not shrink below its
+                        content width without it, so truncate alone lets a
+                        long name widen the whole page */}
+                    <span className="text-on-surface-variant truncate min-w-0">
+                      {wineDisplayName(w.producer, w.name)} {w.vintage}
+                    </span>
+                    <span
+                      className={`ml-auto whitespace-nowrap ${w.urgent ? 'text-[#c98500]' : 'text-outline'}`}
+                    >
+                      until {w.windowEnd}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {/* Only offer a way through when there is something the
+                  list has not already shown — "All 1 closing by 2028"
+                  under a row naming that very wine is a dead link. */}
+              {moreToSee && (
+                <Link
+                  to="/cellar"
+                  onClick={moreToSee.onClick}
+                  className="block mt-4 pt-3 border-t border-outline-variant/10 text-xs text-outline hover:text-on-surface transition-colors"
+                >
+                  {moreToSee.label} →
+                </Link>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-outline">
+              Nothing is in its drinking window yet — the whole cellar is still maturing.
+            </p>
           )}
         </div>
       </div>

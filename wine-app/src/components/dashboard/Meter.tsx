@@ -1,8 +1,11 @@
 /**
- * A single ratio against a limit. The fill carries severity (accent
+ * A single ratio against a real limit. The fill carries severity (accent
  * until near the limit, danger at/over it); the track is a dim step of
- * the same hue so the whole bar reads as one control. An optional tick
- * marks a reference point (e.g. expected pace).
+ * the same hue so the whole bar reads as one control.
+ *
+ * Only use this where the maximum is a genuine ceiling — a meter reads
+ * as a score out of a target, so pointing one at a soft planning figure
+ * turns an assumption into a grade.
  */
 
 interface MeterProps {
@@ -11,16 +14,13 @@ interface MeterProps {
   max: number
   /** Text after the numbers, e.g. "bottles". */
   unit?: string
-  /** 0..1 position for a reference tick (e.g. where you should be). */
-  tickFraction?: number
-  tickLabel?: string
   caption?: string
 }
 
 const ACCENT = '#ffbf00'
 const DANGER = '#e66767'
 
-export default function Meter({ label, value, max, unit, tickFraction, tickLabel, caption }: MeterProps) {
+export default function Meter({ label, value, max, unit, caption }: MeterProps) {
   const fraction = max > 0 ? Math.min(1, value / max) : 0
   const nearLimit = max > 0 && value / max >= 0.95
   const fill = nearLimit ? DANGER : ACCENT
@@ -46,13 +46,6 @@ export default function Meter({ label, value, max, unit, tickFraction, tickLabel
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${fraction * 100}%`, backgroundColor: fill }}
         />
-        {tickFraction !== undefined && tickFraction > 0 && tickFraction < 1 && (
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-on-surface/60"
-            style={{ left: `${tickFraction * 100}%` }}
-            title={tickLabel}
-          />
-        )}
       </div>
       {caption && <p className="text-xs text-outline mt-1.5">{caption}</p>}
     </div>
