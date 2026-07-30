@@ -195,7 +195,9 @@ export default function DashboardPage() {
     <div className="px-6 max-w-5xl mx-auto py-8">
       <h2 className="font-headline text-4xl md:text-7xl mb-8 text-on-surface">Cellar Overview</h2>
 
-      {/* What I have, what's ready, what's at risk, what's coming. Each
+      {/* Two rows, two questions. The first pairs the size of the cellar
+          with what is about to join it; the second splits that cellar
+          into what can be opened now and what is still laying down. Each
           tile applies its own filter on the way through, the same
           promise the charts below make. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -209,6 +211,13 @@ export default function DashboardPage() {
           }
           to="/cellar"
           onClick={clearFilters}
+        />
+        <StatTile
+          label="Next delivery"
+          value={delivery ? formatDeliveryDate(delivery.date) : 'None'}
+          sub={delivery ? `${delivery.bottles} bottles · ${delivery.wines} wines` : 'nothing scheduled'}
+          to="/deliveries"
+          variant="text"
         />
         {/* The at-risk count rides in the sub-line rather than taking a
             tile of its own: for a young cellar it is zero for years on
@@ -232,13 +241,6 @@ export default function DashboardPage() {
           sub="not ready yet"
           to="/cellar"
           onClick={presetMaturing}
-        />
-        <StatTile
-          label="Next delivery"
-          value={delivery ? formatDeliveryDate(delivery.date) : 'None'}
-          sub={delivery ? `${delivery.bottles} bottles · ${delivery.wines} wines` : 'nothing scheduled'}
-          to="/deliveries"
-          variant="text"
         />
       </div>
 
