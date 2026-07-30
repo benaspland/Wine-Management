@@ -1,4 +1,4 @@
-import type { Wine, ConsumptionLogEntry } from '../types/index'
+import type { Wine } from '../types/index'
 import type { DeliveryDisplayEntry } from './schedule.service'
 
 /**
@@ -22,22 +22,28 @@ export interface TierBar {
   wines: number
 }
 
+export interface DrinkFirstWine {
+  id: string
+  name: string
+  producer?: string
+  vintage: number
+  windowEnd: number
+  /** Inside the closing-soon horizon — worth flagging, not just listing. */
+  urgent: boolean
+}
+
 export interface WindowWatch {
   readyWines: number
   waitingWines: number
   /** In-window wines whose window closes within CLOSING_SOON_YEARS. */
   closingSoonWines: number
-  /** The in-window wines closing soonest, most urgent first. */
-  closingSoonest: Array<{ id: string; name: string; producer?: string; vintage: number; windowEnd: number }>
-}
-
-export interface DrinkingPace {
-  consumedThisYear: number
-  target: number
-  /** Bottles you would have drunk by today at a steady target rate. */
-  expectedByNow: number
-  /** consumed - expected; negative = behind pace. */
-  delta: number
+  /**
+   * The in-window wines nearest the end of their window: what to open
+   * next. Deliberately not restricted to the urgent ones — a young
+   * cellar has nothing closing for years, and a list that empties out
+   * whenever things are healthy is a panel of dead space.
+   */
+  drinkFirst: DrinkFirstWine[]
 }
 
 export interface DashboardStats {
@@ -67,6 +73,8 @@ const TIER_LABELS: Record<number, string> = {
 /** In-window wines whose window ends within this many years are "closing soon". */
 export const CLOSING_SOON_YEARS = 2
 const TOP_REGIONS = 6
+/** How many wines the dashboard names outright in the drink-first list. */
+const DRINK_FIRST_LISTED = 5
 
 function bottleCount(wine: Wine): number {
   return wine.quantity_in_storage + wine.quantity_at_home
@@ -125,15 +133,16 @@ export function computeDashboardStats(wines: Wine[], now: Date = new Date()): Da
   const ready = owned.filter(w => isInWindow(w, year))
   const waiting = owned.filter(w => w.drinking_window_start > year)
   const closingSoon = ready.filter(w => w.drinking_window_end <= year + CLOSING_SOON_YEARS)
-  const closingSoonest = [...closingSoon]
+  const drinkFirst = [...ready]
     .sort((a, b) => a.drinking_window_end - b.drinking_window_end)
-    .slice(0, 3)
+    .slice(0, DRINK_FIRST_LISTED)
     .map(w => ({
       id: w.id,
       name: w.name,
       producer: w.producer,
       vintage: w.vintage,
       windowEnd: w.drinking_window_end,
+      urgent: w.drinking_window_end <= year + CLOSING_SOON_YEARS,
     }))
 
   return {
@@ -151,32 +160,8 @@ export function computeDashboardStats(wines: Wine[], now: Date = new Date()): Da
       readyWines: ready.length,
       waitingWines: waiting.length,
       closingSoonWines: closingSoon.length,
-      closingSoonest,
+      drinkFirst,
     },
-  }
-}
-
-export function computeDrinkingPace(
-  log: ConsumptionLogEntry[],
-  target: number,
-  now: Date = new Date()
-): DrinkingPace {
-  const year = now.getFullYear()
-  const consumedThisYear = log.filter(
-    entry => new Date(entry.consumed_date).getFullYear() === year
-  ).length
-
-  const startOfYear = new Date(year, 0, 1)
-  const endOfYear = new Date(year + 1, 0, 1)
-  const yearFraction =
-    (now.getTime() - startOfYear.getTime()) / (endOfYear.getTime() - startOfYear.getTime())
-  const expectedByNow = Math.round(target * yearFraction)
-
-  return {
-    consumedThisYear,
-    target,
-    expectedByNow,
-    delta: consumedThisYear - expectedByNow,
   }
 }
 
