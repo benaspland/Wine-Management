@@ -12,6 +12,7 @@ import WineListRow from '../components/WineListRow'
 import WineDetailPanel from '../components/WineDetailPanel'
 import WineForm from '../components/WineForm'
 import FilterDrawer from '../components/FilterDrawer'
+import ActiveFilters from '../components/ActiveFilters'
 import { Plus, Search, SlidersHorizontal, LayoutGrid, List } from 'lucide-react'
 
 const VIEW_MODE_KEY = 'wine-app-view-mode'
@@ -69,6 +70,7 @@ export default function CollectionPage() {
   ].filter(Boolean).length
 
   const totalBottles = wines.reduce((sum, w) => sum + w.quantity_in_storage + w.quantity_at_home, 0)
+  const isFiltered = activeFilterCount > 0 || searchTerm.trim().length > 0
 
   const switchViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode)
@@ -195,55 +197,72 @@ export default function CollectionPage() {
       )}
 
       <div className="px-6 max-w-7xl mx-auto py-8">
-        {/* Hero Section */}
-        <div className="mb-8">
-          <h2 className="font-headline text-4xl md:text-7xl mb-4 text-on-surface">Private Collection</h2>
-          <div className="flex items-baseline gap-4 mb-6">
-            <span className="text-primary font-label tracking-widest text-sm uppercase">
-              {totalBottles} Bottles
-            </span>
-            <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
-            <span className="text-outline text-sm italic">
-              {wines.length} {wines.length === 1 ? 'Wine' : 'Wines'}
-            </span>
-          </div>
+        {/* Header. The counts used to be an amber tracked-caps figure
+            and an italic serif one, welded together by a hairline rule
+            that divided nothing — three type treatments for a single
+            fact. One quiet line in the app's data font says it, and
+            says outright when a filter is hiding most of the cellar. */}
+        <div className="mb-5">
+          <h2 className="font-headline text-4xl md:text-6xl text-on-surface">Private Collection</h2>
+          <p className="text-sm text-outline mt-2">
+            {isFiltered
+              ? `${wines.length} of ${allWines.length} wines`
+              : `${allWines.length} ${allWines.length === 1 ? 'wine' : 'wines'}`}
+            {' · '}
+            {totalBottles} {totalBottles === 1 ? 'bottle' : 'bottles'}
+          </p>
+        </div>
 
-          {/* Toolbar: search + filters + view + add */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-48">
+        {/* Toolbar, two rows at a common height: find, then view and
+            create. Both ends of each row are occupied, so nothing
+            floats. Only one control is amber — Add Wine, the single
+            action that changes the cellar; it was previously a
+            full-width slab shouting louder than any wine on the page,
+            with the view toggle competing in the same colour. */}
+        <div className="flex flex-col gap-3 mb-6">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
               <Search
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none"
                 aria-hidden="true"
               />
+              {/* Short enough to survive the narrowest phone: the old
+                  placeholder was visibly clipped mid-word */}
               <input
                 type="search"
-                placeholder="Search producer, name, region..."
+                placeholder="Search the cellar"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full bg-surface-container-low text-on-surface pl-9 pr-3 py-2.5 rounded-full border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
+                className="h-10 w-full bg-surface-container-low text-on-surface pl-9 pr-3 rounded-full border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
               />
             </div>
 
             <button
               onClick={() => setShowFilters(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-low border border-outline-variant/20 text-on-surface-variant hover:border-primary text-sm font-medium transition-colors"
+              aria-label="Filter and sort"
+              className={`h-10 flex items-center gap-2 px-3.5 shrink-0 rounded-full border text-sm font-medium transition-colors ${
+                activeFilterCount > 0
+                  ? 'border-primary/50 text-primary bg-primary/10'
+                  : 'border-outline-variant/20 bg-surface-container-low text-on-surface-variant hover:border-primary'
+              }`}
             >
               <SlidersHorizontal size={16} aria-hidden="true" />
               <span className="hidden sm:inline">Filter & Sort</span>
               {activeFilterCount > 0 && (
-                <span className="bg-primary-container text-on-primary text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
+                <span className="text-xs font-bold tabular-nums">{activeFilterCount}</span>
               )}
             </button>
 
-            <div className="flex rounded-full border border-outline-variant/20 overflow-hidden">
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="h-10 flex shrink-0 rounded-full border border-outline-variant/20 overflow-hidden">
               <button
                 onClick={() => switchViewMode('grid')}
                 aria-label="Grid view"
                 aria-pressed={viewMode === 'grid'}
-                className={`p-2.5 transition-colors ${viewMode === 'grid' ? 'bg-primary-container text-on-primary' : 'bg-surface-container-low text-outline hover:text-on-surface'}`}
+                className={`px-4 transition-colors ${viewMode === 'grid' ? 'bg-surface-container-highest text-on-surface' : 'bg-surface-container-low text-outline hover:text-on-surface'}`}
               >
                 <LayoutGrid size={16} />
               </button>
@@ -251,7 +270,7 @@ export default function CollectionPage() {
                 onClick={() => switchViewMode('list')}
                 aria-label="List view"
                 aria-pressed={viewMode === 'list'}
-                className={`p-2.5 transition-colors ${viewMode === 'list' ? 'bg-primary-container text-on-primary' : 'bg-surface-container-low text-outline hover:text-on-surface'}`}
+                className={`px-4 transition-colors ${viewMode === 'list' ? 'bg-surface-container-highest text-on-surface' : 'bg-surface-container-low text-outline hover:text-on-surface'}`}
               >
                 <List size={16} />
               </button>
@@ -262,12 +281,14 @@ export default function CollectionPage() {
                 setEditingWine(null)
                 setShowForm(true)
               }}
-              className="flex items-center gap-2 bg-primary-container text-on-primary px-5 py-2.5 rounded-full font-medium hover:bg-primary transition-colors active:scale-95"
+              className="h-10 flex shrink-0 items-center gap-1.5 bg-primary-container text-on-primary pl-3.5 pr-4 rounded-full text-sm font-semibold hover:bg-primary transition-colors active:scale-95"
             >
-              <Plus size={18} aria-hidden="true" />
+              <Plus size={16} aria-hidden="true" />
               Add Wine
             </button>
           </div>
+
+          <ActiveFilters />
         </div>
 
         {/* Loading */}
@@ -293,7 +314,7 @@ export default function CollectionPage() {
 
         {/* Wine Grid */}
         {!loading && wines.length > 0 && viewMode === 'grid' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {wines.map(wine => (
               <WineCard
                 key={wine.id}
