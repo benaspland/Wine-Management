@@ -9,6 +9,7 @@ import {
   nextDelivery,
 } from '../services/dashboard.service'
 import { wineDisplayName } from '../services/wine.service'
+import PageHeading from '../components/PageHeading'
 import BarList from '../components/dashboard/BarList'
 import StackedBar from '../components/dashboard/StackedBar'
 import { Wine as WineIcon, Truck, CalendarDays, TriangleAlert } from 'lucide-react'
@@ -61,7 +62,7 @@ function StatTile({ label, value, sub, to, onClick, variant = 'number', subUrgen
     <Link
       to={to}
       onClick={onClick}
-      className="flex flex-col bg-surface-container-low border border-outline-variant rounded-[14px] p-4 hover:bg-surface-container transition-colors"
+      className="panel flex flex-col p-4 hover:bg-surface-container transition-colors"
     >
       <p className="text-xs text-outline uppercase tracking-wider mb-1">{label}</p>
       <p
@@ -204,8 +205,8 @@ export default function DashboardPage() {
   if (stats.totalWines === 0) {
     return (
       <div className="px-6 max-w-5xl mx-auto py-8">
-        <h2 className="font-headline text-[26px] md:text-5xl font-semibold mt-3.5 mb-4 text-on-surface">Cellar Overview</h2>
-        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] text-center">
+        <PageHeading title="Cellar Overview" />
+        <div className="panel p-[18px] text-center">
           <WineIcon size={40} className="text-outline mx-auto mb-4" aria-hidden="true" />
           <p className="text-on-surface mb-2 font-medium">Your cellar is empty</p>
           <p className="text-outline text-sm mb-6">
@@ -215,7 +216,7 @@ export default function DashboardPage() {
             <Link to="/cellar" className="btn-primary">Go to Cellar</Link>
             <Link
               to="/settings"
-              className="border border-outline-variant/30 text-outline-variant hover:text-outline px-6 py-3 text-xs tracking-widest uppercase font-bold rounded-full transition-colors"
+              className="border border-outline-variant text-outline-variant hover:text-outline px-6 py-3 text-xs tracking-widest uppercase font-bold rounded-full transition-colors"
             >
               Import CSV
             </Link>
@@ -227,7 +228,7 @@ export default function DashboardPage() {
 
   return (
     <div className="px-6 max-w-5xl mx-auto py-8">
-      <h2 className="font-headline text-[26px] md:text-5xl font-semibold mt-3.5 mb-4 text-on-surface">Cellar Overview</h2>
+      <PageHeading title="Cellar Overview" />
 
       {/* Two rows, two questions. The first pairs the size of the cellar
           with what is about to join it; the second splits that cellar
@@ -284,7 +285,7 @@ export default function DashboardPage() {
           ceiling; home and storage are simply two parts of one total,
           so they are drawn that way. */}
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+        <div className="panel p-[18px] min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Where it lives</h3>
           <StackedBar
             segments={locationSegments}
@@ -301,7 +302,7 @@ export default function DashboardPage() {
         {/* A donut cost a third of the card's width to say this, clipped
             its own labels, and — with a generic categorical palette —
             painted Red blue and White green. */}
-        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+        <div className="panel p-[18px] min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By type</h3>
           <StackedBar
             segments={typeSegments}
@@ -312,7 +313,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+        <div className="panel p-[18px] min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By tier</h3>
           <BarList
             rows={stats.byTier.map(t => ({
@@ -325,7 +326,7 @@ export default function DashboardPage() {
           <p className="text-xs text-outline mt-3">wines per tier</p>
         </div>
 
-        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+        <div className="panel p-[18px] min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Top regions</h3>
           <BarList
             rows={stats.topRegions.map(r =>
@@ -351,7 +352,7 @@ export default function DashboardPage() {
           inside the two-year horizon carry the amber flag, so the
           flag means something when it appears. */}
       <div className="mb-6">
-        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+        <div className="panel p-[18px] min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Drink first</h3>
 
           {closing.drinkFirst.length > 0 ? (
@@ -394,7 +395,7 @@ export default function DashboardPage() {
                 <Link
                   to="/cellar"
                   onClick={moreToSee.onClick}
-                  className="block mt-4 pt-3 border-t border-outline-variant/10 text-xs text-outline hover:text-on-surface transition-colors"
+                  className="block mt-4 pt-3 border-t border-outline-variant/60 text-xs text-outline hover:text-on-surface transition-colors"
                 >
                   {moreToSee.label} →
                 </Link>

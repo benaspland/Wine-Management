@@ -8,12 +8,12 @@ export default function MessageModal({ type, text, onClose }: MessageModalProps)
   const isSuccess = type === 'success'
   const icon = isSuccess ? '✓' : '✕'
   const title = isSuccess ? 'Success' : 'Error'
-  const color = isSuccess ? '#00DCFF' : '#FF6B6B'
-  const borderColor = isSuccess ? 'border-l-[#00DCFF]' : 'border-l-[#FF6B6B]'
+  const color = isSuccess ? 'rgb(var(--success))' : 'rgb(var(--danger))'
+  const borderColor = isSuccess ? 'border-l-success' : 'border-l-danger'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className={`bg-surface rounded-2xl shadow-lg p-8 max-w-md mx-4 border-l-4 ${borderColor}`}>
+      <div className={`bg-surface-container-low border border-outline-variant rounded-[14px] shadow-lg p-6 max-w-md mx-4 border-l-4 ${borderColor}`}>
         <div className="flex items-start gap-4">
           <div className="text-3xl" style={{ color }}>
             {icon}

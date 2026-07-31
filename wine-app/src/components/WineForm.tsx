@@ -6,9 +6,9 @@ import WineImagePicker from './WineImagePicker'
 import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
 import { isEstateWine } from '../services/wineName.service'
 
-/** One input style, so every field in the form looks like the others. */
-const INPUT =
-  'w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary'
+/** The app-wide field style, shared with the filter drawer and the
+    settings form rather than redefined here. */
+const INPUT = 'field'
 
 /** A titled group of related fields. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -363,7 +363,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
+            className="flex-1 border border-outline-variant text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
           >
             Cancel
           </button>

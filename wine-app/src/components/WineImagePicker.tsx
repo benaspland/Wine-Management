@@ -64,7 +64,7 @@ export default function WineImagePicker({ imageUrl, onImageChange }: WineImagePi
           <img
             src={imageUrl}
             alt="Bottle"
-            className="h-28 w-24 object-cover rounded-xl border border-outline-variant/20 shrink-0"
+            className="h-28 w-24 object-cover rounded-xl border border-outline-variant shrink-0"
             onError={e => {
               ;(e.target as HTMLImageElement).style.display = 'none'
             }}
@@ -121,7 +121,7 @@ export default function WineImagePicker({ imageUrl, onImageChange }: WineImagePi
             value={imageUrl.startsWith('data:') ? '' : imageUrl}
             onChange={e => onImageChange(e.target.value)}
             placeholder="https://..."
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
+            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant focus:outline-none focus:border-primary text-sm"
           />
           <p className="text-xs text-outline mt-1">
             A linked image needs a connection, and disappears if the site removes it.

@@ -21,7 +21,7 @@ export default function TopAppBar() {
   const location = useLocation()
 
   return (
-    <header className="hidden md:block fixed top-0 w-full z-50 bg-surface-container-lowest/70 backdrop-blur-xl border-b border-outline-variant/40">
+    <header className="hidden md:block fixed top-0 w-full z-50 bg-surface-container-lowest/70 backdrop-blur-xl border-b border-outline-variant/60">
       <div className="flex justify-between items-center px-6 h-16">
         <h1 className="font-headline font-bold tracking-[0.2em] uppercase text-xl text-on-surface">
           THE CELLAR

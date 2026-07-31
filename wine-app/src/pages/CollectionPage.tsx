@@ -13,6 +13,7 @@ import WineDetailPanel from '../components/WineDetailPanel'
 import WineForm from '../components/WineForm'
 import FilterDrawer from '../components/FilterDrawer'
 import ActiveFilters from '../components/ActiveFilters'
+import PageHeading from '../components/PageHeading'
 import { Plus, Search, SlidersHorizontal, LayoutGrid, List } from 'lucide-react'
 
 const VIEW_MODE_KEY = 'wine-app-view-mode'
@@ -202,16 +203,18 @@ export default function CollectionPage() {
             that divided nothing — three type treatments for a single
             fact. One quiet line in the app's data font says it, and
             says outright when a filter is hiding most of the cellar. */}
-        <div className="mb-5">
-          <h2 className="font-headline text-4xl md:text-6xl text-on-surface">Private Collection</h2>
-          <p className="text-sm text-outline mt-2">
-            {isFiltered
-              ? `${wines.length} of ${allWines.length} wines`
-              : `${allWines.length} ${allWines.length === 1 ? 'wine' : 'wines'}`}
-            {' · '}
-            {totalBottles} {totalBottles === 1 ? 'bottle' : 'bottles'}
-          </p>
-        </div>
+        <PageHeading
+          title="Private Collection"
+          sub={
+            <>
+              {isFiltered
+                ? `${wines.length} of ${allWines.length} wines`
+                : `${allWines.length} ${allWines.length === 1 ? 'wine' : 'wines'}`}
+              {' · '}
+              {totalBottles} {totalBottles === 1 ? 'bottle' : 'bottles'}
+            </>
+          }
+        />
 
         {/* Toolbar, two rows at a common height: find, then view and
             create. Both ends of each row are occupied, so nothing
@@ -234,7 +237,7 @@ export default function CollectionPage() {
                 placeholder="Search the cellar"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="h-10 w-full bg-surface-container-low text-on-surface pl-9 pr-3 rounded-full border border-outline-variant/20 focus:outline-none focus:border-primary text-sm"
+                className="h-10 w-full bg-surface-container-low text-on-surface pl-9 pr-3 rounded-full border border-outline-variant focus:outline-none focus:border-primary text-sm"
               />
             </div>
 
@@ -244,7 +247,7 @@ export default function CollectionPage() {
               className={`h-10 flex items-center gap-2 px-3.5 shrink-0 rounded-full border text-sm font-medium transition-colors ${
                 activeFilterCount > 0
                   ? 'border-primary/50 text-primary bg-primary/10'
-                  : 'border-outline-variant/20 bg-surface-container-low text-on-surface-variant hover:border-primary'
+                  : 'border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-primary'
               }`}
             >
               <SlidersHorizontal size={16} aria-hidden="true" />
@@ -257,7 +260,7 @@ export default function CollectionPage() {
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <div className="h-10 flex shrink-0 rounded-full border border-outline-variant/20 overflow-hidden">
+            <div className="h-10 flex shrink-0 rounded-full border border-outline-variant overflow-hidden">
               <button
                 onClick={() => switchViewMode('grid')}
                 aria-label="Grid view"

@@ -46,7 +46,7 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
 
   return (
     <div onClick={() => onSelect(wine)} className="group cursor-pointer h-full">
-      <div className="bg-surface-container-low rounded-2xl overflow-hidden h-full flex flex-col transition-colors duration-300 hover:bg-surface-container">
+      <div className="panel overflow-hidden h-full flex flex-col transition-colors duration-300 hover:bg-surface-container">
         {/* Label photo as the card's header rather than an object floating
             over its top edge. The overhang was designed for cut-out bottle
             renders, where a neck rising past the card reads as deliberate;
@@ -148,7 +148,7 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
 
           {/* Footer sits at the card's foot whatever the name's length,
               so a grid of cards lines up along the bottom */}
-          <div className="mt-auto pt-3 border-t border-outline-variant/10 flex justify-between items-center">
+          <div className="mt-auto pt-3 border-t border-outline-variant/60 flex justify-between items-center">
             <LocationBadge wine={wine} />
             <span className="text-[10px] text-outline font-bold tracking-widest uppercase">
               {wine.format}

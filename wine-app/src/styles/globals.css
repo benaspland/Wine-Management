@@ -69,14 +69,41 @@ html {
   transform: scale(0.95);
 }
 
+/* The one box treatment. Sections used to be told apart only by a
+   slightly lighter fill, which on a phone in daylight is no edge at
+   all — hence a real border, at full token strength. */
+.panel {
+  background-color: rgb(var(--surface));
+  border: 1px solid rgb(var(--border));
+  border-radius: 14px;
+}
+
+/* A panel with the standard padding baked in. */
 .card {
   background-color: rgb(var(--surface));
   border: 1px solid rgb(var(--border));
-  padding: 1.5rem;
   border-radius: 14px;
-  transition: background-color 0.3s;
+  padding: 18px;
 }
 
-.card:hover {
+/* Form controls read as boxes you can type in, so they carry the same
+   edge as the panels around them. */
+.field {
+  width: 100%;
   background-color: rgb(var(--surface-2));
+  color: rgb(var(--text-primary));
+  border: 1px solid rgb(var(--border));
+  border-radius: 10px;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.field:focus {
+  outline: none;
+  border-color: rgb(var(--accent));
+}
+
+.field:disabled {
+  opacity: 0.5;
 }
