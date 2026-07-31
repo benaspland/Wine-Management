@@ -1,4 +1,5 @@
 import type { Tier } from '../types/index'
+import { detectWineType, normalizeWineType } from './wineType.service'
 import { normalizeFormat } from './format.service'
 import { parseWineName } from './wineName.service'
 import type { ImportWineRow } from './workflows.service'
@@ -26,6 +27,7 @@ interface CSVRow {
   Merchant?: string
   Producer?: string
   Cuvee?: string
+  'Wine Type'?: string
 }
 
 /**
@@ -55,6 +57,7 @@ export const CSV_COLUMNS = [
   'Merchant',
   'Producer',
   'Cuvee',
+  'Wine Type',
 ] as const
 
 /** Columns a file must contain; everything else is optional. */
@@ -243,7 +246,11 @@ export class ImportService {
       producer: producer,
       classification: classification || undefined,
       // An explicit "(Rouge)" on the label beats guessing from varietal
-      wine_type: parsed.colour ?? this.detectWineType(row.Varietal),
+      wine_type:
+        normalizeWineType(row['Wine Type']) ??
+        parsed.colour ??
+        detectWineType(row.Varietal, row.Wine) ??
+        'Red',
       varietal: row.Varietal.trim(),
       country: row.Country.trim(),
       alcohol_percent: isNaN(alcoholPercent) ? undefined : alcoholPercent,
@@ -339,50 +346,4 @@ export class ImportService {
     return result
   }
 
-  private static detectWineType(varietal: string): 'Red' | 'White' | 'Rosé' | 'Sparkling' | 'Fortified' {
-    const lower = varietal.toLowerCase()
-
-    // Sparkling indicators
-    if (lower.includes('champagne') || lower.includes('prosecco') || lower.includes('cava')) {
-      return 'Sparkling'
-    }
-
-    // Fortified indicators
-    if (lower.includes('port') || lower.includes('sherry') || lower.includes('madeira')) {
-      return 'Fortified'
-    }
-
-    // Red wine indicators
-    if (
-      lower.includes('cabernet') ||
-      lower.includes('merlot') ||
-      lower.includes('pinot noir') ||
-      lower.includes('syrah') ||
-      lower.includes('tempranillo') ||
-      lower.includes('nebbiolo') ||
-      lower.includes('sangiovese')
-    ) {
-      return 'Red'
-    }
-
-    // White wine indicators
-    if (
-      lower.includes('chardonnay') ||
-      lower.includes('sauvignon') ||
-      lower.includes('riesling') ||
-      lower.includes('pinot gris') ||
-      lower.includes('grüner') ||
-      lower.includes('albariño')
-    ) {
-      return 'White'
-    }
-
-    // Rosé indicators
-    if (lower.includes('rosé') || lower.includes('rose')) {
-      return 'Rosé'
-    }
-
-    // Default to Red if uncertain (most wines are red)
-    return 'Red'
-  }
 }

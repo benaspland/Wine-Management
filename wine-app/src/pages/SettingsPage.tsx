@@ -33,6 +33,7 @@ const COLUMN_HELP: Record<string, string> = {
   Merchant: 'Who you bought it from, e.g. Berry Bros. & Rudd',
   Producer: 'Optional override — states the producer instead of inferring it from Wine',
   Cuvee: 'Optional override — states the wine name instead of inferring it from Wine',
+  'Wine Type': 'Optional override — Red, White, Rosé, Sparkling or Fortified',
 }
 
 /** Quote a CSV value only when it needs it, doubling any inner quotes. */
