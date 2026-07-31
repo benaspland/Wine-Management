@@ -61,12 +61,17 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
                 line carries whatever the wine has there: a cuvée for
                 most, an appellation for an estate. */}
             <div>
+              {/* No classification here. "1er Cru", "VDP Grosse Lage",
+                  "Grand Cru Classe de Graves" — a line each, on every
+                  card, saying something that does not help you pick a
+                  bottle off a list. It stays in the detail panel, where
+                  there is room for what a wine *is* as well as which
+                  one it is. */}
               <WineInfo
                 wine={wine}
                 producerSize="base"
                 nameSize="sm"
-                classificationSize="xs"
-                showClassification={true}
+                showClassification={false}
                 layout="vertical"
               />
               <p className="text-xs text-outline mt-1.5">
