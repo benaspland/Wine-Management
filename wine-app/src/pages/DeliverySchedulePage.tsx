@@ -95,7 +95,7 @@ export default function DeliverySchedulePage() {
             className="h-full rounded-full transition-all duration-500"
             style={{
               width: `${cellarCapacity > 0 ? Math.min(100, (currentWinesAtHome / cellarCapacity) * 100) : 0}%`,
-              backgroundColor: availableCapacity <= cellarCapacity * 0.05 ? '#e66767' : '#ffbf00',
+              backgroundColor: availableCapacity <= cellarCapacity * 0.05 ? 'rgb(var(--danger))' : 'rgb(var(--accent))',
             }}
           />
         </div>

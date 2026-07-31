@@ -22,7 +22,7 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
     drinkingStatus === 'Ready to Drink' || drinkingStatus === 'Peak'
       ? 'text-primary'
       : drinkingStatus === 'Past Peak' || drinkingStatus === 'Last Year'
-        ? 'text-[#e0a03c]'
+        ? 'text-warn'
         : 'text-outline'
 
   const tierLabel = TIER_LABELS[wine.tier]
@@ -65,7 +65,7 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
             />
             <div
               aria-hidden="true"
-              className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/20 to-[#1c1b1b]"
+              className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/20 to-surface-container-low"
             />
             <img
               alt={wineDisplayName(wine.producer, wine.name)}

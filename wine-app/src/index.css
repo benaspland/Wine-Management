@@ -1,3 +1,7 @@
+/* Skin tokens first: the palette in tailwind.config.js is expressed
+   entirely in terms of them, and the default set has to be in place
+   before the first paint. */
+@import "./styles/skins.css";
 @import "tailwindcss";
 /* Tailwind v4 does not auto-load JS config files; without this the whole
    custom theme (surface colors, font-headline, ...) silently no-ops. */

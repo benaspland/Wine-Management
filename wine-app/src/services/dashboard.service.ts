@@ -28,6 +28,8 @@ export interface DrinkFirstWine {
   producer?: string
   vintage: number
   windowEnd: number
+  /** Colours the row's dot, tying the list to the by-type breakdown. */
+  wineType: string
   /** Inside the closing-soon horizon — worth flagging, not just listing. */
   urgent: boolean
 }
@@ -142,6 +144,7 @@ export function computeDashboardStats(wines: Wine[], now: Date = new Date()): Da
       producer: w.producer,
       vintage: w.vintage,
       windowEnd: w.drinking_window_end,
+      wineType: w.wine_type ?? 'Red',
       urgent: w.drinking_window_end <= year + CLOSING_SOON_YEARS,
     }))
 

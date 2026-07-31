@@ -9,23 +9,27 @@ import {
   nextDelivery,
 } from '../services/dashboard.service'
 import { wineDisplayName } from '../services/wine.service'
-import DonutChart from '../components/dashboard/DonutChart'
 import BarList from '../components/dashboard/BarList'
-import Meter from '../components/dashboard/Meter'
+import StackedBar from '../components/dashboard/StackedBar'
 import { Wine as WineIcon, Truck, CalendarDays, TriangleAlert } from 'lucide-react'
 
 /**
- * CVD-validated dark-mode categorical palette (5 slots, fixed order).
- * Types are assigned slots in canonical order so each type keeps its
- * color regardless of which types the collection contains.
+ * Wine-type colours, from the skin tokens shared with every other
+ * surface that colours a wine by type.
+ *
+ * The previous set was a generic categorical palette that painted Red
+ * blue and White green — legible as categories, nonsense as wine. These
+ * read as what they are, so the legend needs no decoding.
  */
 const TYPE_COLORS: Record<string, string> = {
-  Red: '#3987e5',
-  White: '#008300',
-  'Rosé': '#d55181',
-  Sparkling: '#c98500',
-  Fortified: '#199e70',
+  Red: 'rgb(var(--wine-red))',
+  White: 'rgb(var(--wine-white))',
+  'Rosé': 'rgb(var(--wine-rose))',
+  Sparkling: 'rgb(var(--wine-sparkling))',
+  Fortified: 'rgb(var(--wine-fortified))',
 }
+
+const UNKNOWN_TYPE_COLOR = 'rgb(var(--text-tertiary))'
 
 interface NextDeliveryInfo {
   date: string
@@ -48,25 +52,27 @@ interface StatTileProps {
   variant?: 'number' | 'text'
   /** Amber sub-line, for a warning that only exists sometimes. */
   subUrgent?: boolean
+  /** Draws the number in the readiness colour — one tile, not four. */
+  highlight?: boolean
 }
 
-function StatTile({ label, value, sub, to, onClick, variant = 'number', subUrgent }: StatTileProps) {
+function StatTile({ label, value, sub, to, onClick, variant = 'number', subUrgent, highlight }: StatTileProps) {
   return (
     <Link
       to={to}
       onClick={onClick}
-      className="flex flex-col bg-surface-container-low rounded-2xl p-4 hover:bg-surface-container transition-colors"
+      className="flex flex-col bg-surface-container-low border border-outline-variant rounded-[14px] p-4 hover:bg-surface-container transition-colors"
     >
       <p className="text-xs text-outline uppercase tracking-wider mb-1">{label}</p>
       <p
-        className={`font-sans font-semibold text-on-surface ${
+        className={`font-sans font-semibold ${highlight ? 'text-highlight' : 'text-on-surface'} ${
           variant === 'number' ? 'text-2xl' : 'text-lg leading-snug'
         }`}
       >
         {value}
       </p>
       {sub && (
-        <p className={`text-xs mt-0.5 ${subUrgent ? 'text-[#c98500]' : 'text-outline'}`}>{sub}</p>
+        <p className={`text-xs mt-0.5 ${subUrgent ? 'text-warn' : 'text-outline'}`}>{sub}</p>
       )}
     </Link>
   )
@@ -80,6 +86,7 @@ export default function DashboardPage() {
   const setRegionFilter = useWineStore(state => state.setRegionFilter)
   const setTierFilter = useWineStore(state => state.setTierFilter)
   const setWineTypeFilter = useWineStore(state => state.setWineTypeFilter)
+  const setLocationFilter = useWineStore(state => state.setLocationFilter)
   const clearFilters = useWineStore(state => state.clearFilters)
 
   // Every dashboard tap-through starts from a clean slate so the cellar
@@ -114,6 +121,14 @@ export default function DashboardPage() {
     clearFilters()
     setWineTypeFilter(type)
   }
+  const presetAtHome = () => {
+    clearFilters()
+    setLocationFilter('home')
+  }
+  const presetInStorage = () => {
+    clearFilters()
+    setLocationFilter('storage')
+  }
 
   const [capacity, setCapacity] = useState(80)
   const [delivery, setDelivery] = useState<NextDeliveryInfo | null>(null)
@@ -143,18 +158,37 @@ export default function DashboardPage() {
     }
   }, [wines, scheduleUpdateTrigger])
 
-  const donutSegments = stats.byType.map(slice => ({
+  const typeSegments = stats.byType.map(slice => ({
     label: slice.label,
     value: slice.bottles,
-    color: TYPE_COLORS[slice.label] ?? '#9c8f78',
+    color: TYPE_COLORS[slice.label] ?? UNKNOWN_TYPE_COLOR,
     to: '/cellar',
     onClick: () => presetType(slice.label),
   }))
 
+  // Where the bottles are. A plain division of a whole, so it is drawn
+  // as one — not as a fraction of the home capacity, which turned a
+  // fact into a score against a configured ceiling.
+  const locationSegments = [
+    {
+      label: 'At home',
+      value: stats.bottlesAtHome,
+      color: 'rgb(var(--highlight))',
+      to: '/cellar',
+      onClick: presetAtHome,
+    },
+    {
+      label: 'Professional storage',
+      value: stats.bottlesInStorage,
+      color: 'rgb(var(--text-tertiary))',
+      to: '/cellar',
+      onClick: presetInStorage,
+    },
+  ]
+
   const closing = stats.windowWatch
   const closingHorizon = new Date().getFullYear() + CLOSING_SOON_YEARS
   const urgentShown = closing.drinkFirst.filter(w => w.urgent).length
-  const anyUrgent = urgentShown > 0
 
   // Prefer the at-risk cut when the list could not fit them all, and
   // fall back to the whole ready set. Null when the list already shows
@@ -170,8 +204,8 @@ export default function DashboardPage() {
   if (stats.totalWines === 0) {
     return (
       <div className="px-6 max-w-5xl mx-auto py-8">
-        <h2 className="font-headline text-4xl md:text-7xl mb-8 text-on-surface">Cellar Overview</h2>
-        <div className="bg-surface-container-low rounded-2xl p-8 text-center">
+        <h2 className="font-headline text-[26px] md:text-5xl font-semibold mt-3.5 mb-4 text-on-surface">Cellar Overview</h2>
+        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] text-center">
           <WineIcon size={40} className="text-outline mx-auto mb-4" aria-hidden="true" />
           <p className="text-on-surface mb-2 font-medium">Your cellar is empty</p>
           <p className="text-outline text-sm mb-6">
@@ -193,7 +227,7 @@ export default function DashboardPage() {
 
   return (
     <div className="px-6 max-w-5xl mx-auto py-8">
-      <h2 className="font-headline text-4xl md:text-7xl mb-8 text-on-surface">Cellar Overview</h2>
+      <h2 className="font-headline text-[26px] md:text-5xl font-semibold mt-3.5 mb-4 text-on-surface">Cellar Overview</h2>
 
       {/* Two rows, two questions. The first pairs the size of the cellar
           with what is about to join it; the second splits that cellar
@@ -232,6 +266,7 @@ export default function DashboardPage() {
               : `of ${stats.totalWines} wines`
           }
           subUrgent={closing.closingSoonWines > 0}
+          highlight
           to="/cellar"
           onClick={presetReady}
         />
@@ -244,33 +279,53 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* The one genuine ceiling in the app: rack space at home. The
-          annual target sat here too, as bottles drunk out of a goal —
-          but that figure is an input to the delivery planner, not a
-          score, and a meter made a planning assumption look like a
-          grade you could fail. */}
-      <div className="bg-surface-container-low rounded-2xl p-5 mb-6">
-        <Meter
-          label="Home cellar"
-          value={stats.bottlesAtHome}
-          max={capacity}
-          unit="bottles"
-          caption={`${stats.bottlesInStorage} bottles in professional storage`}
-        />
-      </div>
-
-      {/* Composition */}
+      {/* Where the bottles are. This was a meter filling towards the
+          configured home capacity, which read as a score out of a
+          ceiling; home and storage are simply two parts of one total,
+          so they are drawn that way. */}
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
-          <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By type</h3>
-          <DonutChart
-            segments={donutSegments}
-            centerValue={String(stats.totalBottles)}
-            centerLabel="bottles"
+        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+          <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Where it lives</h3>
+          <StackedBar
+            segments={locationSegments}
+            unit="bottles"
+            ariaLabel={`${stats.bottlesAtHome} bottles at home, ${stats.bottlesInStorage} in professional storage`}
           />
+          {stats.bottlesAtHome > capacity && (
+            <p className="mt-3 text-xs text-warn">
+              {stats.bottlesAtHome - capacity} over the {capacity}-bottle home capacity
+            </p>
+          )}
         </div>
 
-        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
+        {/* A donut cost a third of the card's width to say this, clipped
+            its own labels, and — with a generic categorical palette —
+            painted Red blue and White green. */}
+        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+          <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By type</h3>
+          <StackedBar
+            segments={typeSegments}
+            unit="bottles"
+            ariaLabel={`${stats.totalBottles} bottles by wine type`}
+          />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
+          <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By tier</h3>
+          <BarList
+            rows={stats.byTier.map(t => ({
+              label: t.label,
+              value: t.wines,
+              to: '/cellar',
+              onClick: () => presetTier(t.tier),
+            }))}
+          />
+          <p className="text-xs text-outline mt-3">wines per tier</p>
+        </div>
+
+        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Top regions</h3>
           <BarList
             rows={stats.topRegions.map(r =>
@@ -289,53 +344,45 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
-          <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">By tier</h3>
-          <BarList
-            rows={stats.byTier.map(t => ({
-              label: t.label,
-              value: t.wines,
-              to: '/cellar',
-              onClick: () => presetTier(t.tier),
-            }))}
-          />
-          <p className="text-xs text-outline mt-3">wines per tier</p>
-        </div>
-
-        {/* The counts this card used to lead with — ready, waiting,
-            closing — are the KPI row's job now, so all this card does is
-            name wines: the ones nearest the end of their window, which
-            is the question a cellar owner actually asks. Only those
-            inside the two-year horizon carry the amber flag, so the
-            flag means something when it appears. */}
-        <div className="bg-surface-container-low rounded-2xl p-5 min-w-0">
+      {/* The counts this card used to lead with — ready, waiting,
+          closing — are the KPI row's job now, so all this card does is
+          name wines: the ones nearest the end of their window, which
+          is the question a cellar owner actually asks. Only those
+          inside the two-year horizon carry the amber flag, so the
+          flag means something when it appears. */}
+      <div className="mb-6">
+        <div className="bg-surface-container-low border border-outline-variant rounded-[14px] p-[18px] min-w-0">
           <h3 className="font-headline text-xl font-bold mb-4 text-on-surface">Drink first</h3>
 
           {closing.drinkFirst.length > 0 ? (
             <>
-              <ul className="space-y-2.5">
+              <ul className="space-y-3">
                 {closing.drinkFirst.map(w => (
-                  <li key={w.id} className="flex items-center gap-2 text-sm">
-                    {/* The gutter is only reserved when some row in the
-                        list fills it; otherwise every name sits indented
-                        against a column that never appears. */}
-                    {anyUrgent &&
-                      (w.urgent ? (
-                        <TriangleAlert size={14} className="text-[#c98500] shrink-0" aria-hidden="true" />
-                      ) : (
-                        <span className="w-[14px] shrink-0" aria-hidden="true" />
-                      ))}
-                    {/* min-w-0: a flex child will not shrink below its
-                        content width without it, so truncate alone lets a
-                        long name widen the whole page */}
-                    <span className="text-on-surface-variant truncate min-w-0">
+                  <li key={w.id} className="flex items-start gap-2.5 text-sm">
+                    {/* A dot in the wine's own colour, so the list and
+                        the by-type bar above are visibly the same data */}
+                    <span
+                      aria-hidden="true"
+                      className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: TYPE_COLORS[w.wineType] ?? UNKNOWN_TYPE_COLOR }}
+                    />
+                    {/* Wraps rather than truncates: a name cut off
+                        mid-word is not a name. min-w-0 keeps a long one
+                        from widening the page instead. */}
+                    <span className="text-on-surface-variant min-w-0 line-clamp-2">
                       {wineDisplayName(w.producer, w.name)} {w.vintage}
                     </span>
                     <span
-                      className={`ml-auto whitespace-nowrap ${w.urgent ? 'text-[#c98500]' : 'text-outline'}`}
+                      className={`ml-auto shrink-0 whitespace-nowrap ${w.urgent ? 'text-warn' : 'text-outline'}`}
                     >
-                      until {w.windowEnd}
+                      {w.urgent && (
+                        <TriangleAlert
+                          size={12}
+                          className="inline mr-1 -mt-0.5"
+                          aria-label="closing soon"
+                        />
+                      )}
+                      ready until {w.windowEnd}
                     </span>
                   </li>
                 ))}
@@ -361,17 +408,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick links */}
-      <div className="flex flex-wrap gap-3">
+      {/* The two places to go next, ranked: deliveries is the one with
+          a date attached, so it takes the filled button. */}
+      <div className="flex flex-col gap-3">
         <Link
           to="/deliveries"
-          className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-full px-4 py-2.5 transition-colors"
+          className="flex items-center justify-center gap-2 h-12 rounded-xl bg-highlight text-on-highlight text-sm font-semibold hover:opacity-90 transition-opacity"
         >
           <Truck size={16} aria-hidden="true" /> Manage deliveries
         </Link>
         <Link
           to="/schedule"
-          className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-full px-4 py-2.5 transition-colors"
+          className="flex items-center justify-center gap-2 h-12 rounded-xl border border-highlight/50 text-highlight text-sm font-semibold hover:bg-highlight/10 transition-colors"
         >
           <CalendarDays size={16} aria-hidden="true" /> Drinking schedule
         </Link>
