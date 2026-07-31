@@ -113,7 +113,7 @@ export default function WineDetailPanel({
         className="fixed inset-0 bg-black/40 z-40"
         data-testid="panel-backdrop"
       />
-      <aside className="fixed inset-y-0 right-0 w-full md:w-[480px] bg-surface z-50 shadow-2xl flex flex-col transform transition-transform duration-500 glass-panel border-l border-outline-variant/30 overflow-y-auto">
+      <aside className="fixed inset-y-0 right-0 w-full md:w-[480px] bg-surface z-50 shadow-2xl flex flex-col transform transition-transform duration-500 glass-panel border-l border-outline-variant/60 overflow-y-auto">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -139,7 +139,7 @@ export default function WineDetailPanel({
                 alt={wineDisplayName(wine.producer, wine.name)}
                 loading="lazy"
                 decoding="async"
-                className="w-[230px] h-auto object-contain rounded-xl border border-outline-variant/10 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+                className="w-[230px] h-auto object-contain rounded-xl border border-outline-variant drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
                 src={wine.image_url}
               />
             </div>
@@ -179,7 +179,7 @@ export default function WineDetailPanel({
                 .map(([critic, score]) => (
                   <span
                     key={critic}
-                    className="flex items-baseline gap-1.5 bg-surface-container-low border border-outline-variant/20 px-3 py-1 rounded-full"
+                    className="flex items-baseline gap-1.5 bg-surface-container-low border border-outline-variant px-3 py-1 rounded-full"
                     title={`${critic.toUpperCase()} ${score}`}
                   >
                     <span className="text-[10px] text-outline tracking-widest uppercase">
@@ -194,7 +194,7 @@ export default function WineDetailPanel({
           {/* Critic Notes */}
           {wine.notes && (
             <div className="space-y-4">
-              <h3 className="font-headline text-xl font-bold border-b border-outline-variant/20 pb-2">
+              <h3 className="font-headline text-xl font-bold border-b border-outline-variant/60 pb-2">
                 Critic Note
               </h3>
               <p className="font-body text-sm leading-relaxed text-secondary opacity-80">
@@ -205,7 +205,7 @@ export default function WineDetailPanel({
 
           {/* Key details, read top to bottom as: when to drink it and
               when it arrives, how to serve it, then what it cost. */}
-          <div className="grid grid-cols-2 gap-y-4 pt-4 border-t border-outline-variant/10">
+          <div className="grid grid-cols-2 gap-y-4 pt-4 border-t border-outline-variant/60">
             <div>
               <p className="text-[10px] text-outline uppercase tracking-wider">Optimal Window</p>
               <p className="text-sm font-medium">
@@ -277,7 +277,7 @@ export default function WineDetailPanel({
                 {wine.varietal.split(':').map((grape, idx) => (
                   <span
                     key={idx}
-                    className="bg-surface-container-high px-3 py-1 text-xs rounded-full text-on-surface-variant border border-outline-variant/20"
+                    className="bg-surface-container-high px-3 py-1 text-xs rounded-full text-on-surface-variant border border-outline-variant"
                   >
                     {grape.trim()}
                   </span>
@@ -294,7 +294,7 @@ export default function WineDetailPanel({
                 {wine.flavor_profile.split(':').map((flavor, idx) => (
                   <span
                     key={idx}
-                    className="bg-surface-container-high px-3 py-1 text-xs rounded-full text-on-surface-variant border border-outline-variant/20"
+                    className="bg-surface-container-high px-3 py-1 text-xs rounded-full text-on-surface-variant border border-outline-variant"
                   >
                     {flavor.trim()}
                   </span>
@@ -305,7 +305,7 @@ export default function WineDetailPanel({
 
           {/* Inventory. Tier used to sit here too, but it belongs with
               the wine's identity at the top, not with bottle counts. */}
-          <div className="flex items-center gap-2 pt-4 border-t border-outline-variant/10">
+          <div className="flex items-center gap-2 pt-4 border-t border-outline-variant/60">
             <div className="ml-auto flex items-center gap-3">
               <LocationBadge wine={wine} />
               <span className="text-[10px] text-outline uppercase tracking-wider">
@@ -354,7 +354,7 @@ export default function WineDetailPanel({
 
             {wine.quantity_in_storage > 0 && (
               <div className="flex items-stretch gap-2">
-                <div className="flex items-center rounded-full border border-outline-variant/30">
+                <div className="flex items-center rounded-full border border-outline-variant">
                   <button
                     onClick={() => setMoveQuantity(q => Math.max(1, q - 1))}
                     disabled={isLoading || moveQuantity <= 1}
@@ -389,7 +389,7 @@ export default function WineDetailPanel({
               <button
                 onClick={() => onEdit(wine)}
                 disabled={isLoading}
-                className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
+                className="flex-1 border border-outline-variant text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
               >
                 Edit
               </button>

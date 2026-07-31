@@ -5,6 +5,7 @@ import MessageModal from '../components/MessageModal'
 import { wineDisplayName } from '../services/wine.service'
 import { useToastStore } from '../store/toastStore'
 import { ChevronDown, Lock } from 'lucide-react'
+import PageHeading from '../components/PageHeading'
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
@@ -74,8 +75,8 @@ export default function DeliverySchedulePage() {
   const availableCapacity = cellarCapacity - currentWinesAtHome
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="font-headline text-4xl font-bold mb-6 text-on-surface">Delivery Schedule</h1>
+    <div className="px-6 max-w-6xl mx-auto py-8">
+      <PageHeading title="Delivery Schedule" />
 
       {/* Compact capacity strip: bottles at home / capacity, space left */}
       <div
@@ -110,16 +111,16 @@ export default function DeliverySchedulePage() {
 
       {/* Delivery Schedule */}
       <div className="space-y-4">
-        <h2 className="text-xl font-bold text-on-surface mb-4">Upcoming Deliveries</h2>
+        <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Upcoming Deliveries</h3>
 
         {scheduleError && (
-          <div className="bg-surface-container-low p-6 rounded-2xl text-center">
+          <div className="panel p-6 text-center">
             <p className="text-error">Failed to generate delivery schedule: {scheduleError}</p>
           </div>
         )}
 
         {!scheduleError && deliverySchedule.length === 0 ? (
-          <div className="bg-surface-container-low p-6 rounded-2xl text-center">
+          <div className="panel p-6 text-center">
             <p className="text-outline">No deliveries scheduled</p>
           </div>
         ) : (
@@ -129,7 +130,7 @@ export default function DeliverySchedulePage() {
             const totalWines = delivery.wines.length
 
             return (
-              <div key={delivery.date} className="bg-surface-container rounded-2xl border border-outline-variant/40 overflow-hidden">
+              <div key={delivery.date} className="panel overflow-hidden">
                 <button
                   onClick={() => toggleCollapse(delivery.date)}
                   className="w-full p-4 flex justify-between items-center hover:bg-surface-container-high transition-colors text-left"
@@ -189,7 +190,7 @@ export default function DeliverySchedulePage() {
                         const canModify = delivery.status !== 'completed'
 
                         return (
-                          <div key={wine.id} className="bg-surface p-3 rounded-xl border border-outline-variant/40 text-sm">
+                          <div key={wine.id} className="bg-surface-container-lowest p-3 rounded-[10px] border border-outline-variant text-sm">
                             <div className="flex justify-between items-start gap-2">
                               <div className="min-w-0">
                                 <p className="font-semibold text-on-surface">

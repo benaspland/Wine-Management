@@ -27,10 +27,10 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
     // phone it buried this dialog completely — the delete confirmation
     // was unreachable on the device but fine on a wider screen.
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className={`bg-surface rounded-2xl shadow-2xl w-full ${sizeClass} max-h-[90vh] overflow-y-auto`}>
+      <div className={`bg-surface-container-low border border-outline-variant rounded-[14px] shadow-2xl w-full ${sizeClass} max-h-[90vh] overflow-y-auto`}>
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-outline-variant/10 sticky top-0 bg-surface z-10">
-          <h2 className="font-headline text-2xl font-bold text-on-surface">{title}</h2>
+        <div className="flex justify-between items-center p-6 border-b border-outline-variant/60 sticky top-0 bg-surface z-10">
+          <h2 className="font-headline text-xl font-bold text-on-surface">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Close"

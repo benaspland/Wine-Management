@@ -4,6 +4,7 @@ import * as db from '../services/database'
 import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/import.service'
 import MessageModal from '../components/MessageModal'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
+import PageHeading from '../components/PageHeading'
 import { X, Check } from 'lucide-react'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
@@ -305,7 +306,7 @@ export default function SettingsPage() {
 
   return (
     <div className="px-6 max-w-2xl mx-auto py-8">
-      <h2 className="font-headline text-5xl md:text-7xl mb-4 text-on-surface">Settings</h2>
+      <PageHeading title="Settings" />
 
       <ConfirmDeleteDialog
         isOpen={confirmingReset}
@@ -329,7 +330,7 @@ export default function SettingsPage() {
       <div className="space-y-8">
         {/* Appearance */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-2">Appearance</h3>
+          <h3 className="font-headline text-xl font-bold mb-2">Appearance</h3>
           <p className="text-outline text-sm mb-6">Every screen follows the skin you pick here</p>
 
           <div className="space-y-2">
@@ -371,7 +372,7 @@ export default function SettingsPage() {
 
         {/* Schedule & Cellar Configuration */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-2">Schedule & Cellar Configuration</h3>
+          <h3 className="font-headline text-xl font-bold mb-2">Schedule & Cellar Configuration</h3>
           <p className="text-outline text-sm mb-6">Configure cellar capacity, delivery, and consumption settings</p>
 
           <div className="space-y-4">
@@ -384,7 +385,7 @@ export default function SettingsPage() {
                 disabled={isLoading}
                 min="1"
                 max="500"
-                className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded border border-outline-variant/20 focus:outline-none focus:border-primary disabled:opacity-50"
+                className="field"
               />
               <p className="text-xs text-outline mt-1">Maximum total bottles your home cellar can hold</p>
             </div>
@@ -398,7 +399,7 @@ export default function SettingsPage() {
                 disabled={isLoading}
                 min="1"
                 max="100"
-                className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded border border-outline-variant/20 focus:outline-none focus:border-primary disabled:opacity-50"
+                className="field"
               />
               <p className="text-xs text-outline mt-1">Minimum bottles required for a delivery to be created</p>
             </div>
@@ -412,7 +413,7 @@ export default function SettingsPage() {
                 disabled={isLoading}
                 min="1"
                 max="200"
-                className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded border border-outline-variant/20 focus:outline-none focus:border-primary disabled:opacity-50"
+                className="field"
               />
               <p className="text-xs text-outline mt-1">Target number of bottles to consume per year</p>
             </div>
@@ -429,7 +430,7 @@ export default function SettingsPage() {
 
         {/* Import Data */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-2">Import Wines</h3>
+          <h3 className="font-headline text-xl font-bold mb-2">Import Wines</h3>
           <p className="text-outline text-sm mb-6">
             Upload a CSV file with your wine collection. Expected format:
           </p>
@@ -547,7 +548,7 @@ export default function SettingsPage() {
 
         {/* Export Data */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-2">Export Wines</h3>
+          <h3 className="font-headline text-xl font-bold mb-2">Export Wines</h3>
           <p className="text-outline text-sm mb-6">Download your entire wine collection as CSV for backup or external use</p>
 
           <button
@@ -561,7 +562,7 @@ export default function SettingsPage() {
 
         {/* Backup & Restore */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-2">Backup & Restore</h3>
+          <h3 className="font-headline text-xl font-bold mb-2">Backup & Restore</h3>
           <p className="text-outline text-sm mb-6">
             Full snapshot of everything — wines, delivery windows, consumption history and settings —
             as a JSON file. Take a backup before app upgrades; restore replaces all current data.
@@ -597,24 +598,24 @@ export default function SettingsPage() {
 
         {/* Data Summary */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-4">Collection Summary</h3>
+          <h3 className="font-headline text-xl font-bold mb-4">Collection Summary</h3>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-surface-container-low p-4 rounded">
+            <div className="panel p-4">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">Total Wines</p>
               <p className="font-headline text-3xl font-bold text-primary">{wines.length}</p>
             </div>
-            <div className="bg-surface-container-low p-4 rounded">
+            <div className="panel p-4">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">Total Bottles</p>
               <p className="font-headline text-3xl font-bold text-primary">{totalBottles}</p>
             </div>
-            <div className="bg-surface-container-low p-4 rounded">
+            <div className="panel p-4">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">At Home</p>
               <p className="font-headline text-3xl font-bold text-primary">
                 {wines.filter(w => w.quantity_at_home > 0).reduce((sum, w) => sum + w.quantity_at_home, 0)}
               </p>
             </div>
-            <div className="bg-surface-container-low p-4 rounded">
+            <div className="panel p-4">
               <p className="text-outline text-xs uppercase tracking-wider mb-1">In Storage</p>
               <p className="font-headline text-3xl font-bold text-primary">
                 {wines.filter(w => w.quantity_in_storage > 0).reduce((sum, w) => sum + w.quantity_in_storage, 0)}
@@ -625,7 +626,7 @@ export default function SettingsPage() {
 
         {/* Danger zone */}
         <div className="card border border-error/30">
-          <h3 className="font-headline text-2xl font-bold mb-2 text-error">Reset Collection Data</h3>
+          <h3 className="font-headline text-xl font-bold mb-2 text-error">Reset Collection Data</h3>
           <p className="text-outline text-sm mb-6">
             Deletes every wine, delivery window and consumption record so you can start over from a
             fresh import. Your cellar capacity, delivery and consumption settings are kept.
@@ -643,7 +644,7 @@ export default function SettingsPage() {
 
         {/* About */}
         <div className="card">
-          <h3 className="font-headline text-2xl font-bold mb-4">About</h3>
+          <h3 className="font-headline text-xl font-bold mb-4">About</h3>
           <div className="text-sm text-outline space-y-2">
             <p>
               <strong>The Cellar</strong> - Wine Portfolio Management System

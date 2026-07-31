@@ -72,7 +72,7 @@ export default function ConsumptionSheet({
             value={consumedDate}
             max={today}
             onChange={e => setConsumedDate(e.target.value)}
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary"
+            className="field"
           />
         </div>
 
@@ -86,7 +86,7 @@ export default function ConsumptionSheet({
             onChange={e => setNotes(e.target.value)}
             rows={4}
             placeholder="How was it? Who was it with?"
-            className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary resize-none"
+            className="field resize-none"
           />
         </div>
 
@@ -101,7 +101,7 @@ export default function ConsumptionSheet({
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 border border-outline-variant/30 text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
+            className="flex-1 border border-outline-variant text-outline-variant hover:text-outline py-3 text-xs tracking-widest uppercase font-bold rounded-full disabled:opacity-50 transition-colors"
           >
             Cancel
           </button>

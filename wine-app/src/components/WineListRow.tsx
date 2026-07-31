@@ -51,7 +51,7 @@ export default function WineListRow({
   return (
     <div
       onClick={() => onSelect(wine)}
-      className="flex items-start gap-3 px-4 py-3 bg-surface-container-low hover:bg-surface-container rounded-2xl cursor-pointer transition-colors"
+      className="panel flex items-start gap-3 px-4 py-3 hover:bg-surface-container cursor-pointer transition-colors"
     >
       <span
         className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${TIER_DOT[wine.tier]}`}

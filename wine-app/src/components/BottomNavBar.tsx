@@ -26,7 +26,7 @@ export default function BottomNavBar() {
   ).length
 
   return (
-    <nav className="md:hidden fixed bottom-0 w-full z-50 bg-surface-container-lowest/80 backdrop-blur-xl border-t border-outline-variant/40">
+    <nav className="md:hidden fixed bottom-0 w-full z-50 bg-surface-container-lowest/80 backdrop-blur-xl border-t border-outline-variant/60">
       {/* pb accounts for the gesture bar on notched phones (viewport-fit=cover) */}
       <div className="flex justify-around items-center pt-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {TABS.map(({ to, label, Icon }) => {

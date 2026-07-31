@@ -24,7 +24,7 @@ export default function ToastStack() {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto max-w-md w-full md:w-auto md:min-w-[20rem] bg-surface-container-high shadow-2xl rounded-2xl px-4 py-3 border-l-4 ${
+            className={`pointer-events-auto max-w-md w-full md:w-auto md:min-w-[20rem] bg-surface-container-high border border-outline-variant shadow-2xl rounded-[14px] px-4 py-3 border-l-4 ${
               toast.type === 'error' ? 'border-l-error' : 'border-l-primary-container'
             }`}
           >

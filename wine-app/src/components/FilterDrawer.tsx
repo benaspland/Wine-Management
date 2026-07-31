@@ -8,7 +8,7 @@ interface FilterDrawerProps {
 }
 
 const selectClass =
-  'w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline-variant/20 focus:outline-none focus:border-primary text-sm'
+  'field'
 const labelClass = 'block text-xs text-outline mb-1 uppercase tracking-wider'
 
 /**
@@ -57,8 +57,8 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
         aria-hidden="true"
         className="fixed inset-0 bg-black/40 z-40"
       />
-      <div className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-surface-container-low border-r border-outline-variant/30 z-50 flex flex-col rounded-r-3xl">
-        <div className="flex justify-between items-center p-6 border-b border-outline-variant/10">
+      <div className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-surface-container-low border-r border-outline-variant/60 z-50 flex flex-col rounded-r-3xl">
+        <div className="flex justify-between items-center p-6 border-b border-outline-variant/60">
           <h2 className="font-headline text-xl font-bold text-on-surface">Filter & Sort</h2>
           <button onClick={onClose} aria-label="Close filters" className="text-outline hover:text-on-surface">
             <X size={22} />
@@ -165,7 +165,7 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
             </select>
           </div>
 
-          <div className="pt-2 border-t border-outline-variant/10">
+          <div className="pt-2 border-t border-outline-variant/60">
             <label className={labelClass}>Sort By</label>
             <select
               value={sortBy}
@@ -180,13 +180,13 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
           </div>
         </div>
 
-        <div className="p-6 border-t border-outline-variant/10 space-y-3">
+        <div className="p-6 border-t border-outline-variant/60 space-y-3">
           <p className="text-xs text-outline text-center">
             Showing {filteredWines.length} of {wines.length} wines
           </p>
           <button
             onClick={clearFilters}
-            className="w-full border border-outline-variant/30 text-outline-variant hover:text-outline py-2.5 text-xs tracking-widest uppercase font-bold rounded-full transition-colors"
+            className="w-full border border-outline-variant text-outline-variant hover:text-outline py-2.5 text-xs tracking-widest uppercase font-bold rounded-full transition-colors"
           >
             Clear Filters
           </button>

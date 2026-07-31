@@ -13,6 +13,7 @@ import { CircleCheck, Package, Wine as WineIcon, RefreshCw } from 'lucide-react'
 import ConsumptionSheet from '../components/ConsumptionSheet'
 import HoldButton from '../components/HoldButton'
 import type { ConsumptionLogEntry } from '../types/index'
+import PageHeading from '../components/PageHeading'
 
 interface ScheduleEntry {
   month: string
@@ -280,7 +281,7 @@ export default function DrinkingSchedulePage() {
       {years.length > 1 && (
         <nav
           aria-label="Jump to year"
-          className="fixed left-1 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1 bg-[#131313]/70 backdrop-blur-xl rounded-full px-1 py-2 border border-outline-variant/15"
+          className="fixed left-1 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1 bg-surface-container-lowest/80 backdrop-blur-xl rounded-full px-1 py-2 border border-outline-variant"
         >
           {years.map(year => (
             <button
@@ -299,11 +300,10 @@ export default function DrinkingSchedulePage() {
       )}
 
       {/* Header: single line, matching the delivery page */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <h1 className="font-headline text-3xl md:text-4xl font-bold text-on-surface whitespace-nowrap">
-          Drinking Schedule
-        </h1>
-        <button
+      <PageHeading
+        title="Drinking Schedule"
+        action={
+          <button
           onClick={generateDrinkingSchedule}
           disabled={isRegenerating}
           title="Regenerate schedule"
@@ -311,9 +311,10 @@ export default function DrinkingSchedulePage() {
           className="btn-primary shrink-0 !px-4 disabled:opacity-50 flex items-center gap-2"
         >
           <RefreshCw size={16} className={isRegenerating ? 'animate-spin' : ''} aria-hidden="true" />
-          <span className="hidden sm:inline">{isRegenerating ? 'Working...' : 'Regenerate'}</span>
-        </button>
-      </div>
+            <span className="hidden sm:inline">{isRegenerating ? 'Working...' : 'Regenerate'}</span>
+          </button>
+        }
+      />
 
       {/* Timeline */}
       {schedule.length === 0 ? (
@@ -360,8 +361,8 @@ export default function DrinkingSchedulePage() {
                     return (
                       <div
                         key={`${entry.year}-${entry.month}-${wine.id}-${idx}`}
-                        className={`flex items-center gap-3 p-4 rounded-2xl transition-all ${
-                          isConsumed ? 'bg-[#0D0D0D] opacity-75' : 'bg-surface-container-low'
+                        className={`flex items-center gap-3 p-4 rounded-[14px] transition-all ${
+                          isConsumed ? 'bg-surface-container-lowest opacity-75' : 'panel'
                         }`}
                       >
                         <div className="flex-1 min-w-0">
