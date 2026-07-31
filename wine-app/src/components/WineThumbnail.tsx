@@ -58,7 +58,10 @@ interface WineThumbnailProps {
 export default function WineThumbnail({ wine, size = 'sm', className = '' }: WineThumbnailProps) {
   const token = TYPE_TINT[wine.wine_type ?? 'Red'] ?? '--wine-red'
   const { box, crop } = SIZES[size]
-  const frame = `${box} shrink-0 overflow-hidden border border-outline-variant ${className}`
+  // No border and no fill of its own: a framed box with a lighter
+  // backing read as a label mounted in a mat. Sitting on the card's own
+  // colour, what you see is the label.
+  const frame = `${box} shrink-0 overflow-hidden ${className}`
 
   if (wine.image_url && crop) {
     return (
@@ -67,29 +70,26 @@ export default function WineThumbnail({ wine, size = 'sm', className = '' }: Win
         alt={wineDisplayName(wine.producer, wine.name)}
         loading="lazy"
         decoding="async"
-        className={`${frame} object-cover bg-surface-container-highest`}
+        className={`${frame} object-cover`}
       />
     )
   }
 
   if (wine.image_url) {
     return (
-      /* Whole label, letterboxed against a blurred copy of itself. A
-         portrait photo in this slot leaves real space above and below,
-         and a flat panel there reads as a hole; the blurred backdrop
-         fills it with something derived from the wine itself. */
-      <div className={`${frame} relative bg-surface-container-highest`}>
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-cover bg-center scale-125 blur-lg opacity-40"
-          style={{ backgroundImage: `url("${wine.image_url}")` }}
-        />
+      /* The whole label, sitting on the card rather than inside
+         anything. A blurred copy of the photo used to fill the space a
+         portrait label leaves above and below, which made the slot a
+         visible grey panel; leaving that space as the card's own colour
+         means the only thing on screen is the label. The shadow is what
+         keeps it from reading as pasted flat. */
+      <div className={`${frame} flex items-center justify-center`}>
         <img
           src={wine.image_url}
           alt={wineDisplayName(wine.producer, wine.name)}
           loading="lazy"
           decoding="async"
-          className="relative h-full w-full object-contain"
+          className="max-h-full max-w-full object-contain rounded-[6px] drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]"
         />
       </div>
     )
