@@ -10,6 +10,7 @@ import DeliverySchedulePage from './pages/DeliverySchedulePage'
 import SettingsPage from './pages/SettingsPage'
 import { initializeDatabase } from './services/database'
 import { useWineStore } from './store/wineStore'
+import { useAppUpdate } from './hooks/useAppUpdate'
 import './styles/globals.css'
 
 function App() {
@@ -17,6 +18,8 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const loadWines = useWineStore(state => state.loadWines)
   const initRef = useRef(false)
+
+  useAppUpdate()
 
   useEffect(() => {
     // Prevent double initialization in React Strict Mode (development)

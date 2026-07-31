@@ -10,7 +10,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate': autoUpdate installs the new worker
+      // silently and the running page keeps its already-cached assets,
+      // so a deploy only appears on the launch after next. The app now
+      // says when a build is waiting and reloads into it on a tap.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
         name: 'The Cellar - Wine Management',
