@@ -26,8 +26,6 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
         ? 'text-warn'
         : 'text-outline'
 
-  const grape = wine.varietal?.split(':')[0].trim()
-
   const handleConsume = () => {
     if (wine.quantity_at_home === 0) return
     void onConsume(wine.id)
@@ -80,8 +78,11 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               </p>
             </div>
 
-            {/* Ordered by how much they matter: quality, then readiness,
-                then grape. */}
+            {/* Quality, then readiness. The first grape of the blend
+                used to sit here too, as bare text between two chips —
+                a chip that had lost its background, saying the one
+                thing about a wine you can usually infer from its name
+                and its region. The panel lists the full blend. */}
             <div className="flex flex-wrap items-center gap-1.5">
               <TierBadge tier={wine.tier} />
               <span
@@ -89,15 +90,6 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               >
                 {drinkingStatus}
               </span>
-              {grape && (
-                // No width cap: it was there to stop the varietal being
-                // the widest chip on a shared line, but once the row
-                // wraps the grape has the line to itself and the cap
-                // only cuts it off mid-word.
-                <span className="text-[10px] font-medium tracking-wider uppercase text-outline truncate min-w-0">
-                  {grape}
-                </span>
-              )}
             </div>
 
             {/* Where the bottles are, and in what. This had a divider
