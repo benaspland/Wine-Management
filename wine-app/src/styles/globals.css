@@ -1,5 +1,7 @@
 /* Tailwind itself is loaded once via src/index.css (v4 syntax); this
-   file carries only the app's plain-CSS layer. */
+   file carries only the app's plain-CSS layer. Colours here go through
+   the same skin tokens as the Tailwind palette — a literal would be a
+   hole the skin switcher cannot reach. */
 
 * {
   -webkit-font-smoothing: antialiased;
@@ -7,18 +9,19 @@
 }
 
 body {
-  background-color: #131313;
-  color: #E5E2E1;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--text-primary));
   font-family: 'Inter Variable', 'Inter', sans-serif;
   min-height: 100vh;
 }
 
 html {
   scroll-behavior: smooth;
+  background-color: rgb(var(--bg));
 }
 
 .glass-panel {
-  background: rgba(19, 19, 19, 0.7);
+  background: rgb(var(--surface-alt) / 0.7);
   backdrop-filter: blur(20px);
 }
 
@@ -33,19 +36,18 @@ html {
 
 .btn-primary {
   border-radius: 9999px;
-  background-color: #ffbf00;
-  color: #402d00;
+  background-color: rgb(var(--highlight));
+  color: rgb(var(--highlight-on));
   font-weight: bold;
   padding: 0.75rem 1.5rem;
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   transition: background-color 0.2s, transform 0.2s;
-  box-shadow: 0 10px 20px rgba(255, 191, 0, 0.2);
 }
 
 .btn-primary:hover {
-  background-color: #ffe2ab;
+  background-color: rgb(var(--accent-hover));
 }
 
 .btn-primary:active {
@@ -54,13 +56,13 @@ html {
 
 .btn-secondary {
   border-radius: 9999px;
-  border: 1px solid rgba(80, 69, 50, 0.3);
-  color: #9c8f78;
+  border: 1px solid rgb(var(--border) / 0.5);
+  color: rgb(var(--text-tertiary));
   transition: color 0.2s, transform 0.2s;
 }
 
 .btn-secondary:hover {
-  color: #d4c5ab;
+  color: rgb(var(--text-secondary));
 }
 
 .btn-secondary:active {
@@ -68,12 +70,13 @@ html {
 }
 
 .card {
-  background-color: #1c1b1b;
+  background-color: rgb(var(--surface));
+  border: 1px solid rgb(var(--border));
   padding: 1.5rem;
-  border-radius: 1.25rem;
+  border-radius: 14px;
   transition: background-color 0.3s;
 }
 
 .card:hover {
-  background-color: #201f1f;
+  background-color: rgb(var(--surface-2));
 }

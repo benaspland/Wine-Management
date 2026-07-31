@@ -1,0 +1,109 @@
+/**
+ * Skin tokens.
+ *
+ * Every colour in the Tailwind palette resolves to one of these
+ * variables (see tailwind.config.js), so setting data-skin on <html>
+ * repaints the entire app rather than a single screen. The default set
+ * lives on :root as well as its own selector, so the first paint is
+ * correct before any JavaScript runs.
+ *
+ * Values are space-separated RGB channels rather than hex: Tailwind
+ * emits rgb(var(--token) / <alpha>), which is what keeps opacity
+ * modifiers like /20 and /50 working on a variable colour.
+ */
+
+:root {
+  /* Wine-type colours describe the wine, not the brand, so they are the
+     same in every skin — a Riesling is the same straw throughout. */
+  --wine-red: 110 47 34;
+  --wine-white: 216 192 129;
+  --wine-rose: 192 117 100;
+  --wine-sparkling: 154 184 176;
+  --wine-fortified: 92 58 94;
+
+  /* Status colours, likewise skin-independent: a warning must read as a
+     warning whichever accent is in play. */
+  --warn: 201 133 0;
+  --danger: 230 103 103;
+  --error: 255 180 171;
+  --success: 74 222 128;
+  --caution: 251 191 36;
+  --red-300: 252 165 165;
+  --red-400: 248 113 113;
+  --red-500: 239 68 68;
+}
+
+/* Slate & Brass — the default */
+:root,
+[data-skin='slate-brass'] {
+  --bg: 24 26 29;
+  --surface: 34 37 42;
+  --surface-2: 40 44 50;
+  --surface-3: 48 52 59;
+  --surface-alt: 19 21 24;
+  --border: 70 74 82;
+  --text-primary: 250 250 250;
+  --text-secondary: 154 156 160;
+  --text-tertiary: 139 141 146;
+  --accent: 194 161 90;
+  --accent-hover: 214 185 120;
+  --accent-on: 26 28 32;
+  /* Ready-to-drink and the primary CTA. Equal to the accent everywhere
+     except Charcoal & Verdant, where a green accent cannot carry
+     "ready" on its own. */
+  --highlight: 194 161 90;
+  --highlight-on: 26 28 32;
+}
+
+[data-skin='ink-copper'] {
+  --bg: 22 24 26;
+  --surface: 32 29 27;
+  --surface-2: 39 35 32;
+  --surface-3: 47 42 38;
+  --surface-alt: 16 17 18;
+  --border: 74 66 61;
+  --text-primary: 250 250 250;
+  --text-secondary: 163 154 146;
+  --text-tertiary: 142 133 126;
+  --accent: 181 113 74;
+  --accent-hover: 201 138 99;
+  --accent-on: 23 16 12;
+  --highlight: 181 113 74;
+  --highlight-on: 23 16 12;
+}
+
+[data-skin='charcoal-verdant'] {
+  --bg: 22 25 24;
+  --surface: 30 36 34;
+  --surface-2: 36 43 40;
+  --surface-3: 44 52 47;
+  --surface-alt: 16 19 18;
+  --border: 61 69 63;
+  --text-primary: 250 250 250;
+  --text-secondary: 154 163 156;
+  --text-tertiary: 139 147 140;
+  --accent: 122 154 111;
+  --accent-hover: 146 176 134;
+  --accent-on: 18 23 15;
+  /* Green is the ambient brand accent; gold is reserved for readiness
+     and the primary action, which is what the eye should find first. */
+  --highlight: 201 160 78;
+  --highlight-on: 26 20 8;
+}
+
+[data-skin='burgundy-gold'] {
+  --bg: 28 22 20;
+  --surface: 36 29 26;
+  --surface-2: 43 35 32;
+  --surface-3: 52 42 38;
+  --surface-alt: 21 15 14;
+  --border: 63 53 46;
+  --text-primary: 250 250 250;
+  --text-secondary: 168 154 146;
+  --text-tertiary: 148 136 128;
+  --accent: 201 160 78;
+  --accent-hover: 219 185 114;
+  --accent-on: 30 23 16;
+  --highlight: 201 160 78;
+  --highlight-on: 30 23 16;
+}

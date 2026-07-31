@@ -22,7 +22,7 @@ interface BarListProps {
 
 const ROW_GRID = 'grid grid-cols-[minmax(72px,30%)_1fr_auto] items-center gap-3 text-sm'
 
-export default function BarList({ rows, color = '#ffbf00' }: BarListProps) {
+export default function BarList({ rows, color = 'rgb(var(--accent))' }: BarListProps) {
   const max = Math.max(1, ...rows.map(r => r.value))
 
   return (

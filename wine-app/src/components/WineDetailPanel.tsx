@@ -113,12 +113,12 @@ export default function WineDetailPanel({
         className="fixed inset-0 bg-black/40 z-40"
         data-testid="panel-backdrop"
       />
-      <aside className="fixed inset-y-0 right-0 w-full md:w-[480px] bg-surface z-50 shadow-2xl flex flex-col transform transition-transform duration-500 glass-panel border-l border-[#504532]/10 overflow-y-auto">
+      <aside className="fixed inset-y-0 right-0 w-full md:w-[480px] bg-surface z-50 shadow-2xl flex flex-col transform transition-transform duration-500 glass-panel border-l border-outline-variant/30 overflow-y-auto">
         {/* Close button */}
         <button
           onClick={onClose}
           aria-label="Close panel"
-          className="absolute top-4 right-6 text-[#9C8F78] hover:text-on-surface z-10"
+          className="absolute top-4 right-6 text-outline hover:text-on-surface z-10"
         >
           <X size={28} />
         </button>

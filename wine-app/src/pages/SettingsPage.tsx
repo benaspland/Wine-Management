@@ -4,9 +4,10 @@ import * as db from '../services/database'
 import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/import.service'
 import MessageModal from '../components/MessageModal'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
-import { X } from 'lucide-react'
+import { X, Check } from 'lucide-react'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
+import { SKINS, applySkin, storedSkin } from '../services/skin.service'
 
 /** What each CSV column expects, shown on the import card. */
 const COLUMN_HELP: Record<string, string> = {
@@ -47,6 +48,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [confirmingReset, setConfirmingReset] = useState(false)
+  const [skin, setSkin] = useState(storedSkin)
   const [importReport, setImportReport] = useState<{
     summary: string
     errors: string[]
@@ -70,6 +72,12 @@ export default function SettingsPage() {
       setMinDeliveryBottles(config.min_delivery_bottles || 24)
     })
   }, [])
+
+  /** Applies immediately — a skin you have to save is a skin you cannot try. */
+  const handleSkinChange = (id: string) => {
+    applySkin(id)
+    setSkin(id)
+  }
 
   const handleCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCellarCapacity(parseInt(e.target.value) || 80)
@@ -319,6 +327,48 @@ export default function SettingsPage() {
       )}
 
       <div className="space-y-8">
+        {/* Appearance */}
+        <div className="card">
+          <h3 className="font-headline text-2xl font-bold mb-2">Appearance</h3>
+          <p className="text-outline text-sm mb-6">Every screen follows the skin you pick here</p>
+
+          <div className="space-y-2">
+            {SKINS.map(option => {
+              const selected = option.id === skin
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => handleSkinChange(option.id)}
+                  aria-pressed={selected}
+                  className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                    selected
+                      ? 'border-highlight bg-highlight/10'
+                      : 'border-outline-variant hover:border-outline'
+                  }`}
+                >
+                  {/* The swatch is deliberately literal hex, not tokens:
+                      it has to show what a skin looks like while a
+                      different one is applied. */}
+                  <span className="flex shrink-0" aria-hidden="true">
+                    {option.swatch.map((colour, i) => (
+                      <span
+                        key={colour}
+                        className={`h-6 w-6 rounded-full border border-black/30 ${i > 0 ? '-ml-2' : ''}`}
+                        style={{ backgroundColor: colour }}
+                      />
+                    ))}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-on-surface">{option.name}</span>
+                    <span className="block text-xs text-outline">{option.description}</span>
+                  </span>
+                  {selected && <Check size={18} className="shrink-0 text-highlight" aria-hidden="true" />}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Schedule & Cellar Configuration */}
         <div className="card">
           <h3 className="font-headline text-2xl font-bold mb-2">Schedule & Cellar Configuration</h3>

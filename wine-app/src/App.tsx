@@ -75,7 +75,10 @@ function App() {
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <div className="min-h-screen bg-background text-on-surface dark">
         <TopAppBar />
-        <main className="pt-16 pb-24 md:pb-0">
+        {/* No top bar on a phone, so no room reserved for one — but
+            installed to the home screen there is no browser chrome
+            either, and the status bar would sit on top of the heading. */}
+        <main className="pt-[env(safe-area-inset-top)] md:pt-16 pb-24 md:pb-0">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/cellar" element={<CollectionPage />} />
