@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Wine, ConsumptionLogEntry } from '../types/index'
-import { TIER_LABELS } from '../types/index'
 import WineInfo from './WineInfo'
+import TierBadge from './TierBadge'
+import WineThumbnail from './WineThumbnail'
 import LocationBadge from './LocationBadge'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
@@ -31,7 +32,6 @@ export default function WineDetailPanel({
   scheduledDeliveryDate,
   consumptionLog,
 }: WineDetailPanelProps) {
-  const tierLabel = TIER_LABELS[wine.tier]
   const criticRatings = criticRatingsOf(wine.critic_ratings)
   const totalBottles = wine.quantity_in_storage + wine.quantity_at_home
 
@@ -133,17 +133,13 @@ export default function WineDetailPanel({
               below, and with no photo there is now simply no hero: a
               grey slab with a glass in it filled the slot without saying
               anything, and cost a screenful of scroll to do so. */}
-          {wine.image_url && (
-            <div className="flex justify-center">
-              <img
-                alt={wineDisplayName(wine.producer, wine.name)}
-                loading="lazy"
-                decoding="async"
-                className="w-[230px] h-auto object-contain rounded-xl border border-outline-variant drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
-                src={wine.image_url}
-              />
-            </div>
-          )}
+          <div className="flex justify-center">
+            <WineThumbnail
+              wine={wine}
+              size="lg"
+              className="drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+            />
+          </div>
 
           {/* Header Info */}
           <div className="space-y-3">
@@ -171,9 +167,7 @@ export default function WineDetailPanel({
                 inventory count at the foot of the panel. Scores sit
                 alongside it: both answer "how good is this?" */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="bg-primary-container text-on-primary-fixed-variant px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-full">
-                {tierLabel}
-              </span>
+              <TierBadge tier={wine.tier} size="md" />
               {Object.entries(criticRatings)
                 .slice(0, 3)
                 .map(([critic, score]) => (

@@ -1,11 +1,11 @@
 import type { Wine } from '../types/index'
-import { TIER_LABELS } from '../types/index'
 import { WineService } from '../services/wine.service'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import { wineDisplayName } from '../services/wine.service'
 import { Wine as WineIcon } from 'lucide-react'
 import HoldButton from './HoldButton'
+import TierBadge from './TierBadge'
 
 interface WineCardProps {
   wine: Wine
@@ -24,13 +24,6 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
       : drinkingStatus === 'Past Peak' || drinkingStatus === 'Last Year'
         ? 'text-warn'
         : 'text-outline'
-
-  const tierLabel = TIER_LABELS[wine.tier]
-  const tierStyle =
-    wine.tier === 5 ? 'bg-primary-container text-on-primary-fixed-variant' :
-    wine.tier === 4 ? 'bg-on-surface text-surface' :
-    wine.tier === 3 ? 'border border-primary/40 text-primary' :
-    'bg-surface-container-high text-on-surface-variant'
 
   const grape = wine.varietal?.split(':')[0].trim()
 
@@ -129,11 +122,7 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               then grape. The varietal used to be the widest and loudest
               chip of the three. */}
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`${tierStyle} px-3 py-1 text-[10px] font-black tracking-widest uppercase whitespace-nowrap rounded-full`}
-            >
-              {tierLabel}
-            </span>
+            <TierBadge tier={wine.tier} />
             <span
               className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase whitespace-nowrap rounded-full bg-surface-container-high ${drinkingColor}`}
             >

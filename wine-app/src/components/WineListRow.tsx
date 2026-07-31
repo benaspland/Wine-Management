@@ -1,7 +1,9 @@
 import type { Wine } from '../types/index'
+import { TIER_LABELS } from '../types/index'
 import { wineDisplayName, wineTileName } from '../services/wine.service'
 import { Wine as WineIcon, House, Warehouse } from 'lucide-react'
 import HoldButton from './HoldButton'
+import WineThumbnail from './WineThumbnail'
 
 interface WineListRowProps {
   wine: Wine
@@ -12,12 +14,19 @@ interface WineListRowProps {
   isLoading?: boolean
 }
 
+/**
+ * The same ordinal scale the tier badge uses, at dot scale. A row this
+ * narrow has no width for a pill once the thumbnail and the drink
+ * button have taken theirs, but the encoding has to agree with the card
+ * and the panel — so it is the same five steps of one accent, not the
+ * old mix where Premium was solid white and Fine was a gold outline.
+ */
 const TIER_DOT: Record<number, string> = {
   5: 'bg-primary-container',
-  4: 'bg-on-surface',
-  3: 'bg-primary/60',
-  2: 'bg-outline',
-  1: 'bg-outline-variant',
+  4: 'bg-primary-container/70',
+  3: 'bg-primary-container/45',
+  2: 'bg-primary-container/25',
+  1: 'bg-white/15',
 }
 
 /**
@@ -53,15 +62,16 @@ export default function WineListRow({
       onClick={() => onSelect(wine)}
       className="panel flex items-start gap-3 px-4 py-3 hover:bg-surface-container cursor-pointer transition-colors"
     >
-      <span
-        className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${TIER_DOT[wine.tier]}`}
-        title={`Tier ${wine.tier}`}
-        aria-hidden="true"
-      />
+      <WineThumbnail wine={wine} />
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-on-surface leading-snug line-clamp-2">
-          {wineTileName(wine.producer, wine.name, wine.region)}
+        <p className="text-sm font-semibold text-on-surface leading-snug line-clamp-2 flex items-start gap-2">
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${TIER_DOT[wine.tier]}`}
+            title={TIER_LABELS[wine.tier]}
+            aria-hidden="true"
+          />
+          <span className="min-w-0">{wineTileName(wine.producer, wine.name, wine.region)}</span>
         </p>
         <div className="flex items-center gap-2 mt-0.5 text-xs text-outline">
           <span className="truncate">
