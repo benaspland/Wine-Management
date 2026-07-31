@@ -22,6 +22,13 @@ const TYPE_TINT: Record<string, string> = {
 
 const SIZES = {
   sm: 'h-11 w-11 rounded-[10px]',
+  /**
+   * Stretches to whatever the text beside it needs, with a floor. A
+   * fixed height would set the card's height too, so a wine with no
+   * cuvee and no classification got a card sized for text it does not
+   * have, and a void beside the thumbnail.
+   */
+  md: 'self-stretch min-h-[92px] w-[76px] rounded-[10px]',
   lg: 'h-40 w-32 rounded-[14px]',
 } as const
 
