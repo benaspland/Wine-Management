@@ -40,7 +40,7 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
 
   return (
     <div onClick={() => onSelect(wine)} className="group cursor-pointer h-full">
-      <div className="panel overflow-hidden h-full flex flex-col p-4 gap-3 transition-colors duration-300 hover:bg-surface-container">
+      <div className="panel relative overflow-hidden h-full flex flex-col p-4 gap-3 transition-colors duration-300 hover:bg-surface-container">
         {/* Thumbnail beside the text, not a band above it.
 
             A full-bleed photo header only appeared for wines that had a
@@ -98,16 +98,28 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
             {/* Where the bottles are, and in what. This had a divider
                 and a band to itself, which spent 40px of every card on
                 two facts the list row carries inline. */}
-            <div className="mt-auto flex items-center gap-2 text-[10px] text-outline">
+            {/* Everything about the physical bottles on one line: how
+                many, where, and what size. The size used to sit at the
+                far right of its own row, as far from the counts as the
+                card allowed, despite being the same kind of fact. */}
+            <div className="mt-auto flex items-center gap-2.5 text-[10px] text-outline">
               <LocationBadge wine={wine} />
-              <span className="ml-auto font-bold tracking-widest uppercase">{wine.format}</span>
+              <span className="font-bold tracking-widest uppercase">{wine.format}</span>
             </div>
           </div>
 
-          {/* Icon only, matching the list and the schedule: the same
-              mark means the same thing everywhere. Shown only when
-              there is something to drink. */}
-          {wine.quantity_at_home > 0 && (
+        </div>
+        {/* In the corner, and out of the flow. Sitting beside the name
+            it took 40px off the text column, which is what pushed
+            "Domaine Latour-Giraud" onto two lines and split its two
+            chips across two rows — the button was the reason that card
+            was the tallest on the screen. */}
+        {wine.quantity_at_home > 0 && (
+          // Positioned by a wrapper: HoldButton sets its own `relative`
+          // for the hold sweep, and that wins over an `absolute` passed
+          // in — the button quietly stayed in the flow, landing bottom
+          // left and adding its own height to every card.
+          <span className="absolute bottom-3 right-3">
             <HoldButton
               onTap={handleConsume}
               onHold={handleConsumeDetailed}
@@ -115,12 +127,12 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               disabled={isLoading}
               aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
               title="Tap to mark consumed, hold to set the date and add a note"
-              className="h-10 w-10 shrink-0 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
+              className="h-9 w-9 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
             >
-              <WineIcon size={16} aria-hidden="true" />
+              <WineIcon size={15} aria-hidden="true" />
             </HoldButton>
-          )}
-        </div>
+          </span>
+        )}
       </div>
     </div>
   )

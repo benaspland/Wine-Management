@@ -252,6 +252,15 @@ export default function WineDetailPanel({
                 </p>
               </div>
             )}
+            {/* The grid and list say this with a bottle drawn to size,
+                which is right for a glance and useless for certainty.
+                This is where the word lives. */}
+            {wine.format && (
+              <div>
+                <p className="text-[10px] text-outline uppercase tracking-wider">Bottle Size</p>
+                <p className="text-sm font-medium">{wine.format}</p>
+              </div>
+            )}
             {wine.merchant && (
               <div className="col-span-2">
                 <p className="text-[10px] text-outline uppercase tracking-wider">Merchant</p>
