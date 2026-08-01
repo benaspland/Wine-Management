@@ -133,9 +133,13 @@ export default function DrinkingSchedulePage() {
         consumedCounts[log.wine_id] = (consumedCounts[log.wine_id] ?? 0) + 1
       }
 
-      // Generate drinking schedule using ScheduleService with ALL wines
-      const yearsNeeded = Math.ceil((wines.length / 30) * 1.5) + 5
-      const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, yearsNeeded, config.annual_consumption_target || DELIVERY_CONFIG.annualTarget, consumedCounts)
+      // Generate drinking schedule using ScheduleService with ALL wines.
+      // No horizon is passed: the planner runs until every bottle has a
+      // slot. The old guess — years ≈ wines ÷ 30 — counted wines rather
+      // than bottles and ignored the consumption rate entirely, so
+      // halving the rate doubled the real span while the plan stayed the
+      // same length and quietly dropped everything past the end.
+      const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, undefined, config.annual_consumption_target || DELIVERY_CONFIG.annualTarget, consumedCounts)
 
       if (drinkingSchedule.length === 0) {
         setSchedule([])
@@ -257,6 +261,62 @@ export default function DrinkingSchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule])
 
+  /**
+   * How much rail there is to put labels on: the viewport, less the
+   * fixed inset at each end (top-24 / bottom-24 = 96px apiece).
+   */
+  const [railHeight, setRailHeight] = useState(() =>
+    typeof window === 'undefined' ? 720 : window.innerHeight - 192
+  )
+  useEffect(() => {
+    const measure = () => setRailHeight(window.innerHeight - 192)
+    window.addEventListener('resize', measure)
+    window.addEventListener('orientationchange', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('orientationchange', measure)
+    }
+  }, [])
+
+  /**
+   * The years the rail actually shows.
+   *
+   * The whole point of the rail is that one screen holds the entire
+   * drinking period, so it can never scroll — which means that past a
+   * certain span the labels have to thin out rather than pile up. Every
+   * second year first, then every third, and so on, at whatever stride
+   * keeps them legible on this screen.
+   *
+   * Two labels are non-negotiable: the last year, so the far end of the
+   * plan is always named, and the year you are in — the marker has to
+   * sit on the year you are actually reading, not near it. The marked
+   * year takes its nearest neighbour's place rather than squeezing in
+   * beside it, so the spacing stays even.
+   */
+  const railYears = (() => {
+    const maxLabels = Math.max(2, Math.floor(railHeight / 16))
+    if (years.length <= maxLabels) return years
+
+    const stride = Math.ceil(years.length / maxLabels)
+    const picked: number[] = []
+    for (let i = 0; i < years.length; i += stride) picked.push(years[i])
+
+    const lastYear = years[years.length - 1]
+    if (picked[picked.length - 1] !== lastYear) picked[picked.length - 1] = lastYear
+
+    if (markedYear !== undefined && !picked.includes(markedYear)) {
+      let nearest = 0
+      for (let i = 1; i < picked.length; i++) {
+        if (Math.abs(picked[i] - markedYear) < Math.abs(picked[nearest] - markedYear)) {
+          nearest = i
+        }
+      }
+      picked[nearest] = markedYear
+      picked.sort((a, b) => a - b)
+    }
+    return picked
+  })()
+
   const jumpToYear = (year: number) => {
     yearRefs.current.get(year)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -307,10 +367,10 @@ export default function DrinkingSchedulePage() {
 
           The rail is fixed and spans the viewport, and the years are
           spaced evenly down it — so the entire span of the collection,
-          '26 to '37, is always in front of you and only the marker for
-          where you are moves. A pill of stacked labels said the same
-          thing in twice the width and scrolled its own jump targets out
-          of reach.
+          however many decades that now runs to, is always in front of
+          you and only the marker for where you are moves. A pill of
+          stacked labels said the same thing in twice the width and
+          scrolled its own jump targets out of reach.
 
           Labels sit *on* the line in the page's own colour, cutting it
           rather than standing beside it, which keeps the rail to 24px
@@ -324,7 +384,7 @@ export default function DrinkingSchedulePage() {
             aria-hidden="true"
             className="absolute inset-y-0 left-1/2 -translate-x-[1px] w-[2px] bg-outline-variant"
           />
-          {years.map(year => {
+          {railYears.map(year => {
             const active = markedYear === year
             return (
               <button
