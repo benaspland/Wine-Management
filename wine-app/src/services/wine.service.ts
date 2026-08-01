@@ -56,6 +56,17 @@ export function criticRatingsOf(
   }
 }
 
+/**
+ * The five states of getDrinkingWindowLabel. "Wait" carries its year,
+ * so the type stays open at that one point.
+ */
+export type DrinkingStatus =
+  | `Wait (${number})`
+  | 'Ready to Drink'
+  | 'Peak'
+  | 'Last Year'
+  | 'Past Peak'
+
 export class WineService {
   // Check if wine can be consumed (within window)
   static canConsume(wine: Wine): boolean {
@@ -63,20 +74,20 @@ export class WineService {
     return now >= wine.drinking_window_start && now <= wine.drinking_window_end
   }
 
-  // Get drinking window label
-  static getDrinkingWindowLabel(wine: Wine): string {
-    const now = new Date().getFullYear()
-
-    if (now < wine.drinking_window_start) {
-      return `Wait (${wine.drinking_window_start})`
-    } else if (now >= wine.drinking_window_start && now <= wine.drinking_window_end) {
-      return 'Ready to Drink'
-    } else if (now > wine.drinking_window_end - 2 && now < wine.drinking_window_end) {
-      return 'Peak'
-    } else if (now === wine.drinking_window_end) {
-      return 'Last Year'
-    } else {
-      return 'Past Peak'
-    }
+  /**
+   * Where a wine is in its drinking window.
+   *
+   * Ordered most specific first. It used to test "in the window" second,
+   * which is true of a wine at its peak and of one in its final year —
+   * so those two branches sat below a condition that had already caught
+   * them, and the app could only ever say Wait, Ready to Drink or Past
+   * Peak. Three of the five states were unreachable.
+   */
+  static getDrinkingWindowLabel(wine: Wine, now = new Date().getFullYear()): DrinkingStatus {
+    if (now < wine.drinking_window_start) return `Wait (${wine.drinking_window_start})`
+    if (now > wine.drinking_window_end) return 'Past Peak'
+    if (now === wine.drinking_window_end) return 'Last Year'
+    if (now >= wine.drinking_window_end - 1) return 'Peak'
+    return 'Ready to Drink'
   }
 }

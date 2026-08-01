@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { wineDisplayName, wineTileName, criticRatingsOf } from '../wine.service'
+import { wineDisplayName, wineTileName, criticRatingsOf, WineService } from '../wine.service'
+import type { Wine } from '../../types/index'
 
 describe('wineDisplayName', () => {
   it('drops the name when the producer already ends with it', () => {
@@ -87,5 +88,53 @@ describe('criticRatingsOf', () => {
     expect(criticRatingsOf('not json')).toEqual({})
     expect(criticRatingsOf('null')).toEqual({})
     expect(criticRatingsOf('42')).toEqual({})
+  })
+})
+
+/**
+ * The drinking-window states.
+ *
+ * The guard that matters: this used to test "inside the window" before
+ * "at its peak" and "in its final year", both of which are also inside
+ * the window — so those branches sat under a condition that had already
+ * caught them and could never run. Three of five states were dead, and
+ * the badge colours built on them were decoration for cases that never
+ * appeared.
+ */
+describe('getDrinkingWindowLabel', () => {
+  const at = (start: number, end: number) =>
+    ({ drinking_window_start: start, drinking_window_end: end }) as Wine
+
+  it('waits before the window opens, naming the year', () => {
+    expect(WineService.getDrinkingWindowLabel(at(2028, 2040), 2026)).toBe('Wait (2028)')
+  })
+
+  it('is ready through the body of the window', () => {
+    expect(WineService.getDrinkingWindowLabel(at(2020, 2040), 2026)).toBe('Ready to Drink')
+    expect(WineService.getDrinkingWindowLabel(at(2026, 2040), 2026)).toBe('Ready to Drink')
+  })
+
+  it('reaches Peak and Last Year, which it previously never could', () => {
+    expect(WineService.getDrinkingWindowLabel(at(2020, 2027), 2026)).toBe('Peak')
+    expect(WineService.getDrinkingWindowLabel(at(2020, 2026), 2026)).toBe('Last Year')
+  })
+
+  it('is past peak once the window has closed', () => {
+    expect(WineService.getDrinkingWindowLabel(at(2015, 2025), 2026)).toBe('Past Peak')
+  })
+
+  it('walks the whole ramp for one wine, year by year', () => {
+    const wine = at(2024, 2028)
+    const walk = [2023, 2024, 2026, 2027, 2028, 2029].map(year =>
+      WineService.getDrinkingWindowLabel(wine, year)
+    )
+    expect(walk).toEqual([
+      'Wait (2024)',
+      'Ready to Drink',
+      'Ready to Drink',
+      'Peak',
+      'Last Year',
+      'Past Peak',
+    ])
   })
 })

@@ -6,6 +6,7 @@ import { wineDisplayName } from '../services/wine.service'
 import { Wine as WineIcon } from 'lucide-react'
 import HoldButton from './HoldButton'
 import TierBadge from './TierBadge'
+import DrinkingStatusBadge from './DrinkingStatusBadge'
 import WineThumbnail from './WineThumbnail'
 
 interface WineCardProps {
@@ -19,12 +20,6 @@ interface WineCardProps {
 
 export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed, isLoading }: WineCardProps) {
   const drinkingStatus = WineService.getDrinkingWindowLabel(wine)
-  const drinkingColor =
-    drinkingStatus === 'Ready to Drink' || drinkingStatus === 'Peak'
-      ? 'text-primary'
-      : drinkingStatus === 'Past Peak' || drinkingStatus === 'Last Year'
-        ? 'text-warn'
-        : 'text-outline'
 
   const handleConsume = () => {
     if (wine.quantity_at_home === 0) return
@@ -85,11 +80,14 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
                 and its region. The panel lists the full blend. */}
             <div className="flex flex-wrap items-center gap-1.5">
               <TierBadge tier={wine.tier} />
-              <span
-                className={`px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase whitespace-nowrap rounded-full bg-surface-container-high ${drinkingColor}`}
-              >
-                {drinkingStatus}
-              </span>
+              {/* Pushed to the card's right edge so every status chip
+                  lands on the same vertical line and the column can be
+                  scanned without reading it. Beside the tier chip they
+                  started wherever "EVERYDAY" or "ICON" happened to end,
+                  which is no column at all. The cost is a gap that
+                  varies with the two labels' lengths; a scannable edge
+                  is worth more than an even one. */}
+              <DrinkingStatusBadge status={drinkingStatus} className="ml-auto" />
             </div>
 
             {/* Where the bottles are, and in what. This had a divider
