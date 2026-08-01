@@ -122,9 +122,19 @@ export default function DrinkingSchedulePage() {
         return
       }
 
+      // The whole log, before the schedule exists. The planner needs to
+      // know what has been drunk in order to plan what is left, so it
+      // cannot be fetched year by year off the back of a schedule that
+      // has not been built yet.
+      const allLogs = await db.getAllConsumptionLog()
+      const consumedCounts: Record<string, number> = {}
+      for (const log of allLogs) {
+        consumedCounts[log.wine_id] = (consumedCounts[log.wine_id] ?? 0) + 1
+      }
+
       // Generate drinking schedule using ScheduleService with ALL wines
       const yearsNeeded = Math.ceil((wines.length / 30) * 1.5) + 5
-      const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, yearsNeeded, config.annual_consumption_target || DELIVERY_CONFIG.annualTarget)
+      const drinkingSchedule = ScheduleService.generateDrinkingSchedule(wines, deliverySchedule, undefined, yearsNeeded, config.annual_consumption_target || DELIVERY_CONFIG.annualTarget, consumedCounts)
 
       if (drinkingSchedule.length === 0) {
         setSchedule([])
@@ -134,20 +144,17 @@ export default function DrinkingSchedulePage() {
       // Group schedule entries by year/month for timeline display
       const grouped: Record<string, ScheduleEntry['wines']> = {}
 
-      // Batch load consumption logs across all scheduled years, queued per
-      // wine in date order so each log marks exactly one scheduled entry —
-      // a wine scheduled twice needs two drinks for two ticks. Queues are
-      // keyed by wine alone (not wine-year) so drinking a bottle early
-      // still ticks off a slot the engine had planned for a later year.
-      const scheduledYears = [...new Set(drinkingSchedule.map(e => e.suggestedYear))].sort()
+      // Queue the same logs per wine in date order, so each marks exactly
+      // one scheduled entry — a wine scheduled twice needs two drinks for
+      // two ticks. Queues are keyed by wine alone (not wine-year) so
+      // drinking a bottle early still ticks off a slot the engine had
+      // planned for a later year. Previously these were re-fetched year by
+      // year from the finished schedule, which silently dropped any drink
+      // in a year the schedule no longer covered.
       const logQueues = new Map<string, string[]>() // wineId -> consumed dates asc
-      for (const year of scheduledYears) {
-        const logs = await db.getConsumptionLogByYear(year)
-        logs.sort((a, b) => a.consumed_date.localeCompare(b.consumed_date))
-        for (const log of logs) {
-          if (!logQueues.has(log.wine_id)) logQueues.set(log.wine_id, [])
-          logQueues.get(log.wine_id)!.push(log.consumed_date)
-        }
+      for (const log of [...allLogs].sort((a, b) => a.consumed_date.localeCompare(b.consumed_date))) {
+        if (!logQueues.has(log.wine_id)) logQueues.set(log.wine_id, [])
+        logQueues.get(log.wine_id)!.push(log.consumed_date)
       }
 
       // Entries arrive sorted by year/month, so earlier scheduled slots

@@ -944,4 +944,56 @@ describe('ScheduleService', () => {
       expect(aShownLater).toBe(true)
     })
   })
+
+  /**
+   * Bottles already drunk still need a slot.
+   *
+   * The plan is built from bottles owned, and drinking one removes it
+   * from that count — so the bottle was being subtracted twice: once
+   * from stock, and again when its consumption log claimed one of the
+   * remaining slots. Every drink shrank the forward plan by a bottle,
+   * and a wine whose last bottle was drunk vanished from the schedule
+   * altogether, taking the record of drinking it with it.
+   */
+  describe('generateDrinkingSchedule with bottles already drunk', () => {
+    const atHome = (id: string, quantity: number) =>
+      makeWine({ id, quantity_in_storage: 0, quantity_at_home: quantity, drinking_window_start: 2020 })
+
+    const slotsFor = (id: string, entries: { wineId: string }[]) =>
+      entries.filter(e => e.wineId === id).length
+
+    it('keeps a slot per remaining bottle, not one fewer', () => {
+      // Six bought, one drunk: five left, and five slots to plan them in
+      const schedule = ScheduleService.generateDrinkingSchedule(
+        [atHome('w1', 5)], undefined, 2026, 6, 30, { w1: 1 }
+      )
+      expect(slotsFor('w1', schedule)).toBe(6)
+    })
+
+    it('still schedules a wine whose last bottle has been drunk', () => {
+      // Nothing left, but it was drunk — the log needs a slot to mark,
+      // or the wine disappears and takes the record with it
+      const schedule = ScheduleService.generateDrinkingSchedule(
+        [atHome('w1', 0)], undefined, 2026, 6, 30, { w1: 1 }
+      )
+      expect(slotsFor('w1', schedule)).toBe(1)
+    })
+
+    it('leaves a wine with nothing left and nothing drunk off the schedule', () => {
+      const schedule = ScheduleService.generateDrinkingSchedule(
+        [atHome('w1', 0)], undefined, 2026, 6, 30, {}
+      )
+      expect(slotsFor('w1', schedule)).toBe(0)
+    })
+
+    it('plans the same as before when nothing has been drunk', () => {
+      const withArg = ScheduleService.generateDrinkingSchedule(
+        [atHome('w1', 4)], undefined, 2026, 6, 30, {}
+      )
+      const without = ScheduleService.generateDrinkingSchedule(
+        [atHome('w1', 4)], undefined, 2026, 6, 30
+      )
+      expect(slotsFor('w1', withArg)).toBe(slotsFor('w1', without))
+    })
+  })
 })
