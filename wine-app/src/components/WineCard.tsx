@@ -87,22 +87,21 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               <DrinkingStatusBadge status={drinkingStatus} className="ml-auto" />
             </div>
 
-            {/* Everything about the physical bottles on one line: how
-                many, where, and what size — and, when there are bottles
-                at home, the count itself is how you drink one. There is
-                no separate button: it was a third object on a card that
-                already had two chips and a photo, it only appeared on
-                the cards with bottles at home so those rows stood 20px
-                taller than the rest, and it was the brightest thing on
-                the screen for something done a few times a month. */}
+            {/* Size, then where the bottles are — storage beside it,
+                home pushed to the far end so the control sits directly
+                under the drinking status, the label that says whether
+                to use it. No separate drink button: the home count is
+                the control, since the number of bottles at home is
+                exactly what "drink one" acts on. */}
             <div className="mt-auto flex items-center gap-2.5 text-[10px] text-outline">
+              <span className="font-bold tracking-widest uppercase">{wine.format}</span>
               <LocationBadge
                 wine={wine}
+                spread
                 onConsume={handleConsume}
                 onConsumeDetailed={handleConsumeDetailed}
                 disabled={isLoading}
               />
-              <span className="font-bold tracking-widest uppercase">{wine.format}</span>
             </div>
           </div>
 

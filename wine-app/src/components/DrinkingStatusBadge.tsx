@@ -10,7 +10,7 @@ import type { DrinkingStatus } from '../services/wine.service'
  * ramp that never touches it, so "Ready to Drink" can never be mistaken
  * for a quality mark the way it was when both were the same gold.
  *
- * Ready is bright neutral rather than green: it is the commonest state
+ * Drink is bright neutral rather than green: it is the commonest state
  * in a cellar and wants to read as "live", not as a congratulation.
  * Green is kept for Peak, which is the one moment actually worth
  * celebrating — and, being rare, never fights the green accent of the
@@ -18,7 +18,7 @@ import type { DrinkingStatus } from '../services/wine.service'
  */
 
 const STATUS_STYLE: Array<{ match: (s: string) => boolean; className: string }> = [
-  { match: s => s.startsWith('Wait'), className: 'border-outline-variant text-outline' },
+  { match: s => s.startsWith('Hold'), className: 'border-outline-variant text-outline' },
   { match: s => s.startsWith('Drink'), className: 'border-on-surface/35 text-on-surface' },
   { match: s => s.startsWith('Peak'), className: 'border-success/50 text-success' },
   { match: s => s === 'Last Year', className: 'border-warn/60 text-warn' },

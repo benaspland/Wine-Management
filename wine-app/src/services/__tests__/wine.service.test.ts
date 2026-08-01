@@ -105,8 +105,8 @@ describe('getDrinkingWindowLabel', () => {
   const at = (start: number, end: number) =>
     ({ drinking_window_start: start, drinking_window_end: end }) as Wine
 
-  it('waits before the window opens, naming the year', () => {
-    expect(WineService.getDrinkingWindowLabel(at(2028, 2040), 2026)).toBe('Wait (2028)')
+  it('holds before the window opens, naming the year', () => {
+    expect(WineService.getDrinkingWindowLabel(at(2028, 2040), 2026)).toBe('Hold (2028)')
   })
 
   it('names the year to drink by, through the body of the window', () => {
@@ -129,7 +129,7 @@ describe('getDrinkingWindowLabel', () => {
       WineService.getDrinkingWindowLabel(wine, year)
     )
     expect(walk).toEqual([
-      'Wait (2024)',
+      'Hold (2024)',
       'Drink (2028)',
       'Drink (2028)',
       'Peak (2028)',
