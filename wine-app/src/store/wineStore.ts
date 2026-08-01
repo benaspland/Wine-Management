@@ -77,6 +77,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       get().applyFilters()
     } catch (error) {
       set({ error: (error as Error).message })
+      throw error
     } finally {
       set({ loading: false })
     }
@@ -90,6 +91,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       get().triggerScheduleUpdate()
     } catch (error) {
       set({ error: (error as Error).message })
+      throw error
     } finally {
       set({ loading: false })
     }
@@ -128,6 +130,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       get().triggerScheduleUpdate()
     } catch (error) {
       set({ error: (error as Error).message })
+      throw error
     } finally {
       set({ loading: false })
     }
@@ -176,6 +179,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       }
     } catch (error) {
       set({ error: (error as Error).message })
+      throw error
     }
   },
 
@@ -189,6 +193,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       }
     } catch (error) {
       set({ error: (error as Error).message })
+      throw error
     } finally {
       set({ loading: false })
     }
@@ -361,6 +366,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       await workflows.updateCellarConfig(updates)
     } catch (error) {
       set({ error: (error as Error).message })
+      throw error
     }
   },
 }))

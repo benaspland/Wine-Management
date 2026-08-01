@@ -122,3 +122,48 @@ export function drinkingWindowYears(
 ): string {
   return `${wine.drinking_window_start}\u2013${wine.drinking_window_end}`
 }
+
+/**
+ * Critic scores as typed and as shown: "JS 97 : RP 96".
+ *
+ * The same shape the CSV column uses, so a score entered by hand and one
+ * imported are the same thing — and the form can round-trip a wine that
+ * arrived either way.
+ */
+export function formatCriticRatings(
+  ratings: string | Record<string, number> | undefined
+): string {
+  return Object.entries(criticRatingsOf(ratings))
+    .map(([critic, score]) => `${critic.toUpperCase()} ${score}`)
+    .join(' : ')
+}
+
+/** Parses that format back, ignoring anything that is not "NAME 97". */
+export function parseCriticRatings(text: string): Record<string, number> {
+  const result: Record<string, number> = {}
+  for (const part of text.split(':')) {
+    // Allow qualifiers like "RP 94+" - keep the numeric score
+    const match = part.trim().match(/^(\w+)\s+(\d+)\+?$/)
+    if (match) result[match[1].toLowerCase()] = parseInt(match[2])
+  }
+  return result
+}
+
+const SHORT_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+/**
+ * "Sep 2032" — the month a delivery lands, without the day.
+ *
+ * A delivery window is a month, not a date, so a day in it was precision
+ * the schedule does not have. Written from a fixed table rather than
+ * toLocaleDateString: en-GB abbreviates September to "Sept", which is
+ * four letters where every other month is three.
+ */
+export function formatDeliveryMonth(date: string | Date): string {
+  const value = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(value.getTime())) return ''
+  return `${SHORT_MONTHS[value.getMonth()]} ${value.getFullYear()}`
+}

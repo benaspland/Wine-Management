@@ -5,6 +5,7 @@ import { buildDeliveryScheduleEntries } from '../services/deliveryPlanning.servi
 import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 import WineInfo from '../components/WineInfo'
+import LocationBadge from '../components/LocationBadge'
 import MessageModal from '../components/MessageModal'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, drinkingWindowSummary, drinkingWindowYears } from '../services/wine.service'
@@ -452,15 +453,23 @@ export default function DrinkingSchedulePage() {
                               the cellar's chip, so the two screens cannot
                               drift apart. */}
                           {wineData && !isConsumed && (
-                            <p
-                              className={`text-xs mt-0.5 ${
-                                isAtHome ? 'text-primary-container' : 'text-outline'
-                              }`}
-                            >
-                              {isAtHome
-                                ? drinkingWindowSummary(wineData)
-                                : `In storage \u00b7 ${drinkingWindowYears(wineData)}`}
-                            </p>
+                            <div className="mt-0.5 flex items-center gap-3">
+                              <p
+                                className={`text-xs ${
+                                  isAtHome ? 'text-primary-container' : 'text-outline'
+                                }`}
+                              >
+                                {isAtHome
+                                  ? drinkingWindowSummary(wineData)
+                                  : `In storage \u00b7 ${drinkingWindowYears(wineData)}`}
+                              </p>
+                              {/* How many are left, where the schedule
+                                  proposes opening one: whether to follow
+                                  the suggestion depends on whether it is
+                                  the last bottle. Counts only — drinking
+                                  is the tile on the right. */}
+                              <LocationBadge wine={wineData} />
+                            </div>
                           )}
                         </div>
 
