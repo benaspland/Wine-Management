@@ -9,6 +9,7 @@ import { X, Check } from 'lucide-react'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
 import { SKINS, applySkin, storedSkin } from '../services/skin.service'
+import { toInt } from '../services/numberField.service'
 
 /** What each CSV column expects, shown on the import card. */
 const COLUMN_HELP: Record<string, string> = {
@@ -44,9 +45,18 @@ function csvEscape(value: unknown): string {
 
 export default function SettingsPage() {
   const wines = useWineStore(state => state.wines)
-  const [cellarCapacity, setCellarCapacity] = useState(80)
-  const [minDeliveryBottles, setMinDeliveryBottles] = useState(24)
-  const [annualConsumptionTarget, setAnnualConsumptionTarget] = useState(30)
+  /**
+   * Held as typed, not as numbers.
+   *
+   * These were parsed on every keystroke with `parseInt(value) || default`,
+   * so backspacing the last digit made the field empty, NaN, and then the
+   * default — you could not clear "12" without it turning into 30 behind
+   * your hand. Text is what an input holds; the numbers are read once, on
+   * save.
+   */
+  const [cellarCapacity, setCellarCapacity] = useState('80')
+  const [minDeliveryBottles, setMinDeliveryBottles] = useState('24')
+  const [annualConsumptionTarget, setAnnualConsumptionTarget] = useState('30')
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [confirmingReset, setConfirmingReset] = useState(false)
@@ -69,9 +79,9 @@ export default function SettingsPage() {
   // Load cellar config on mount
   useEffect(() => {
     db.getCellarConfig().then(config => {
-      setCellarCapacity(config.max_home_capacity)
-      setAnnualConsumptionTarget(config.annual_consumption_target || 30)
-      setMinDeliveryBottles(config.min_delivery_bottles || 24)
+      setCellarCapacity(String(config.max_home_capacity))
+      setAnnualConsumptionTarget(String(config.annual_consumption_target || 30))
+      setMinDeliveryBottles(String(config.min_delivery_bottles || 24))
     })
   }, [])
 
@@ -82,24 +92,35 @@ export default function SettingsPage() {
   }
 
   const handleCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCellarCapacity(parseInt(e.target.value) || 80)
+    setCellarCapacity(e.target.value)
   }
 
   const handleMinDeliveryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMinDeliveryBottles(parseInt(e.target.value) || 24)
+    setMinDeliveryBottles(e.target.value)
   }
 
   const handleAnnualConsumptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAnnualConsumptionTarget(parseInt(e.target.value) || 30)
+    setAnnualConsumptionTarget(e.target.value)
   }
 
   const handleSaveConfig = async () => {
+    // The one place text becomes numbers. Blank says so plainly rather
+    // than quietly reverting to a default the moment you clear the field.
+    const capacity = toInt(cellarCapacity)
+    const minDelivery = toInt(minDeliveryBottles)
+    const consumption = toInt(annualConsumptionTarget)
+
+    if (capacity === undefined || minDelivery === undefined || consumption === undefined) {
+      setMessage({ type: 'error', text: 'Every setting needs a number' })
+      return
+    }
+
     // Validate cellar capacity against current wines at home
     const winesAtHome = wines
       .filter(w => w.quantity_at_home > 0)
       .reduce((sum, w) => sum + w.quantity_at_home, 0)
 
-    if (cellarCapacity < winesAtHome) {
+    if (capacity < winesAtHome) {
       setMessage({
         type: 'error',
         text: `Cellar capacity cannot be less than ${winesAtHome} bottles currently at home`
@@ -107,17 +128,22 @@ export default function SettingsPage() {
       return
     }
 
-    if (minDeliveryBottles <= 0) {
+    if (minDelivery <= 0) {
       setMessage({ type: 'error', text: 'Minimum delivery bottles must be greater than 0' })
+      return
+    }
+
+    if (consumption <= 0) {
+      setMessage({ type: 'error', text: 'Annual consumption target must be greater than 0' })
       return
     }
 
     setIsLoading(true)
     try {
       await db.updateCellarConfig({
-        max_home_capacity: cellarCapacity,
-        annual_consumption_target: annualConsumptionTarget,
-        min_delivery_bottles: minDeliveryBottles,
+        max_home_capacity: capacity,
+        annual_consumption_target: consumption,
+        min_delivery_bottles: minDelivery,
       })
       // Regenerate schedules with new parameters
       triggerScheduleUpdate()
