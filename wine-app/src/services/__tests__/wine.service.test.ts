@@ -109,13 +109,13 @@ describe('getDrinkingWindowLabel', () => {
     expect(WineService.getDrinkingWindowLabel(at(2028, 2040), 2026)).toBe('Wait (2028)')
   })
 
-  it('is ready through the body of the window', () => {
-    expect(WineService.getDrinkingWindowLabel(at(2020, 2040), 2026)).toBe('Ready to Drink')
-    expect(WineService.getDrinkingWindowLabel(at(2026, 2040), 2026)).toBe('Ready to Drink')
+  it('names the year to drink by, through the body of the window', () => {
+    expect(WineService.getDrinkingWindowLabel(at(2020, 2040), 2026)).toBe('Drink (2040)')
+    expect(WineService.getDrinkingWindowLabel(at(2026, 2040), 2026)).toBe('Drink (2040)')
   })
 
   it('reaches Peak and Last Year, which it previously never could', () => {
-    expect(WineService.getDrinkingWindowLabel(at(2020, 2027), 2026)).toBe('Peak')
+    expect(WineService.getDrinkingWindowLabel(at(2020, 2027), 2026)).toBe('Peak (2027)')
     expect(WineService.getDrinkingWindowLabel(at(2020, 2026), 2026)).toBe('Last Year')
   })
 
@@ -130,9 +130,9 @@ describe('getDrinkingWindowLabel', () => {
     )
     expect(walk).toEqual([
       'Wait (2024)',
-      'Ready to Drink',
-      'Ready to Drink',
-      'Peak',
+      'Drink (2028)',
+      'Drink (2028)',
+      'Peak (2028)',
       'Last Year',
       'Past Peak',
     ])

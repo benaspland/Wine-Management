@@ -62,8 +62,8 @@ export function criticRatingsOf(
  */
 export type DrinkingStatus =
   | `Wait (${number})`
-  | 'Ready to Drink'
-  | 'Peak'
+  | `Drink (${number})`
+  | `Peak (${number})`
   | 'Last Year'
   | 'Past Peak'
 
@@ -77,7 +77,12 @@ export class WineService {
   /**
    * Where a wine is in its drinking window.
    *
-   * Ordered most specific first. It used to test "in the window" second,
+   * Each state carries the year it turns on: "Wait (2028)" is when it
+ * opens, "Drink (2040)" and "Peak (2027)" are when it shuts. That is
+ * more use than "Ready to Drink", and short enough to sit beside a tier
+ * chip without wrapping the row — which the long form did.
+ *
+ * Ordered most specific first. It used to test "in the window" second,
    * which is true of a wine at its peak and of one in its final year —
    * so those two branches sat below a condition that had already caught
    * them, and the app could only ever say Wait, Ready to Drink or Past
@@ -87,7 +92,7 @@ export class WineService {
     if (now < wine.drinking_window_start) return `Wait (${wine.drinking_window_start})`
     if (now > wine.drinking_window_end) return 'Past Peak'
     if (now === wine.drinking_window_end) return 'Last Year'
-    if (now >= wine.drinking_window_end - 1) return 'Peak'
-    return 'Ready to Drink'
+    if (now >= wine.drinking_window_end - 1) return `Peak (${wine.drinking_window_end})`
+    return `Drink (${wine.drinking_window_end})`
   }
 }

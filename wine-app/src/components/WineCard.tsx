@@ -33,7 +33,7 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
 
   return (
     <div onClick={() => onSelect(wine)} className="group cursor-pointer h-full">
-      <div className="panel relative overflow-hidden h-full flex flex-col p-4 gap-3 transition-colors duration-300 hover:bg-surface-container">
+      <div className="panel overflow-hidden h-full flex flex-col p-4 gap-3 transition-colors duration-300 hover:bg-surface-container">
         {/* Thumbnail beside the text, not a band above it.
 
             A full-bleed photo header only appeared for wines that had a
@@ -100,34 +100,33 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
             <div className="mt-auto flex items-center gap-2.5 text-[10px] text-outline">
               <LocationBadge wine={wine} />
               <span className="font-bold tracking-widest uppercase">{wine.format}</span>
+
+              {/* Inline with the counts, and left at its natural height.
+                  Pinned to the card's corner it floated over whatever
+                  happened to be at the bottom right — on a short card
+                  that was the drinking-status chip, and the button sat
+                  on top of the word. Overhanging it into the padding
+                  with negative margins avoided the height but put the
+                  collision back within a pixel or two; a row that is as
+                  tall as the thing in it cannot collide with anything,
+                  and only the cards with bottles at home pay for it. */}
+              {wine.quantity_at_home > 0 && (
+                <HoldButton
+                  onTap={handleConsume}
+                  onHold={handleConsumeDetailed}
+                  progressColor="rgba(255, 255, 255, 0.4)"
+                  disabled={isLoading}
+                  aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
+                  title="Tap to mark consumed, hold to set the date and add a note"
+                  className="ml-auto h-9 w-9 shrink-0 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
+                >
+                  <WineIcon size={15} aria-hidden="true" />
+                </HoldButton>
+              )}
             </div>
           </div>
 
         </div>
-        {/* In the corner, and out of the flow. Sitting beside the name
-            it took 40px off the text column, which is what pushed
-            "Domaine Latour-Giraud" onto two lines and split its two
-            chips across two rows — the button was the reason that card
-            was the tallest on the screen. */}
-        {wine.quantity_at_home > 0 && (
-          // Positioned by a wrapper: HoldButton sets its own `relative`
-          // for the hold sweep, and that wins over an `absolute` passed
-          // in — the button quietly stayed in the flow, landing bottom
-          // left and adding its own height to every card.
-          <span className="absolute bottom-3 right-3">
-            <HoldButton
-              onTap={handleConsume}
-              onHold={handleConsumeDetailed}
-              progressColor="rgba(255, 255, 255, 0.4)"
-              disabled={isLoading}
-              aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
-              title="Tap to mark consumed, hold to set the date and add a note"
-              className="h-9 w-9 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
-            >
-              <WineIcon size={15} aria-hidden="true" />
-            </HoldButton>
-          </span>
-        )}
       </div>
     </div>
   )

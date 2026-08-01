@@ -19,8 +19,8 @@ import type { DrinkingStatus } from '../services/wine.service'
 
 const STATUS_STYLE: Array<{ match: (s: string) => boolean; className: string }> = [
   { match: s => s.startsWith('Wait'), className: 'border-outline-variant text-outline' },
-  { match: s => s === 'Ready to Drink', className: 'border-on-surface/35 text-on-surface' },
-  { match: s => s === 'Peak', className: 'border-success/50 text-success' },
+  { match: s => s.startsWith('Drink'), className: 'border-on-surface/35 text-on-surface' },
+  { match: s => s.startsWith('Peak'), className: 'border-success/50 text-success' },
   { match: s => s === 'Last Year', className: 'border-warn/60 text-warn' },
   { match: s => s === 'Past Peak', className: 'border-danger/60 text-danger' },
 ]
