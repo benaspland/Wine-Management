@@ -6,25 +6,11 @@ import WineImagePicker from './WineImagePicker'
 import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
 import { isEstateWine } from '../services/wineName.service'
 import { formatCriticRatings, parseCriticRatings } from '../services/wine.service'
+import { toInt, toNumber } from '../services/numberField.service'
 
 /** The app-wide field style, shared with the filter drawer and the
     settings form rather than redefined here. */
 const INPUT = 'field'
-
-/** Blank means "not recorded", so it becomes undefined rather than 0. */
-function toNumber(value: string): number | undefined {
-  const trimmed = value.trim()
-  if (!trimmed) return undefined
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-}
-
-function toInt(value: string): number | undefined {
-  const trimmed = value.trim()
-  if (!trimmed) return undefined
-  const parsed = Number.parseInt(trimmed, 10)
-  return Number.isFinite(parsed) ? parsed : undefined
-}
 
 /** A titled group of related fields. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
