@@ -13,6 +13,9 @@ import {
   WineService,
   drinkingWindowSummary,
   drinkingWindowYears,
+  formatCriticRatings,
+  parseCriticRatings,
+  formatDeliveryMonth,
 } from '../wine.service'
 import type { Wine } from '../../types/index'
 
@@ -170,5 +173,64 @@ describe('drinkingWindowSummary', () => {
 
   it('gives just the years for a wine that cannot be acted on', () => {
     expect(drinkingWindowYears(at(2030, 2040))).toBe('2030–2040')
+  })
+})
+
+/**
+ * Critic scores round-trip through the form. The field was in the form's
+ * state from the start but had no input, so a score could only ever
+ * arrive by CSV — and the format has to match the one the importer
+ * reads, or a wine edited by hand would stop matching one imported.
+ */
+describe('critic ratings round-trip', () => {
+  it('renders the same shape the CSV column uses', () => {
+    expect(formatCriticRatings({ js: 97, rp: 96 })).toBe('JS 97 : RP 96')
+  })
+
+  it('reads a score stored as JSON by the importer', () => {
+    expect(formatCriticRatings('{"js":97,"rp":96}')).toBe('JS 97 : RP 96')
+  })
+
+  it('parses what it renders', () => {
+    expect(parseCriticRatings('JS 97 : RP 96')).toEqual({ js: 97, rp: 96 })
+  })
+
+  it('keeps the score from a qualified rating like RP 94+', () => {
+    expect(parseCriticRatings('RP 94+')).toEqual({ rp: 94 })
+  })
+
+  it('ignores anything that is not a score, rather than storing rubbish', () => {
+    expect(parseCriticRatings('lovely stuff : JS 97')).toEqual({ js: 97 })
+    expect(parseCriticRatings('')).toEqual({})
+  })
+
+  it('gives an empty string for a wine with no scores', () => {
+    expect(formatCriticRatings(undefined)).toBe('')
+  })
+})
+
+/**
+ * A delivery window is a month, so its date is shown as one. Written
+ * from a fixed table because en-GB abbreviates September to "Sept" —
+ * four letters where every other month is three.
+ */
+describe('formatDeliveryMonth', () => {
+  it('gives month and year, without the day', () => {
+    expect(formatDeliveryMonth('2032-03-01')).toBe('Mar 2032')
+  })
+
+  it('says Sep, not Sept', () => {
+    expect(formatDeliveryMonth('2032-09-01')).toBe('Sep 2032')
+  })
+
+  it('renders every month in three letters', () => {
+    const lengths = Array.from({ length: 12 }, (_, m) =>
+      formatDeliveryMonth(new Date(2032, m, 1)).split(' ')[0].length
+    )
+    expect(new Set(lengths)).toEqual(new Set([3]))
+  })
+
+  it('returns nothing for an unparseable date rather than "Invalid Date"', () => {
+    expect(formatDeliveryMonth('not a date')).toBe('')
   })
 })

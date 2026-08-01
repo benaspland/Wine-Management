@@ -83,6 +83,8 @@ export default function CollectionPage() {
   }
 
   const handleAddWine = async (wineData: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => {
+    // Let a rejection reach the form, which keeps itself open and says
+    // why rather than closing on a wine that was never saved.
     await addWine(wineData)
     setShowForm(false)
     showToast(`${wineDisplayName(wineData.producer, wineData.name)} added to the collection`)
@@ -149,7 +151,15 @@ export default function CollectionPage() {
   }
 
   const handleMoveToHome = async (wineId: string, quantity: number) => {
-    await moveWineToHome(wineId, quantity)
+    // The success toast used to fire whatever happened: the store caught
+    // the rejection and resolved, so a move refused for exceeding the
+    // home capacity reported "6 bottles moved home" and moved none.
+    try {
+      await moveWineToHome(wineId, quantity)
+    } catch (error) {
+      showToast((error as Error).message, { type: 'error' })
+      return
+    }
     showToast(`${quantity} ${quantity === 1 ? 'bottle' : 'bottles'} moved home`)
     await refreshSelectedWine(wineId)
   }

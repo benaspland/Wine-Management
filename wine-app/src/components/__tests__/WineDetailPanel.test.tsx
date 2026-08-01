@@ -167,22 +167,22 @@ describe('WineDetailPanel - delete confirmation', () => {
 })
 
 describe('WineDetailPanel - availability-dependent actions', () => {
-  it('shows Extract Bottle only when bottles are at home', () => {
+  it('shows Drink a Bottle only when bottles are at home', () => {
     renderPanel(makeWine({ quantity_at_home: 0, quantity_in_storage: 5 }))
-    expect(screen.queryByText('Extract Bottle')).toBeNull()
+    expect(screen.queryByText('Drink a Bottle')).toBeNull()
     expect(screen.queryByText('Move to Home')).not.toBeNull()
   })
 
   it('shows Move to Home only when bottles are in storage', () => {
     renderPanel(makeWine({ quantity_at_home: 3, quantity_in_storage: 0 }))
-    expect(screen.queryByText('Extract Bottle')).not.toBeNull()
+    expect(screen.queryByText('Drink a Bottle')).not.toBeNull()
     expect(screen.queryByText('Move to Home')).toBeNull()
   })
 
   it('closes the panel after consuming the last bottle at home', async () => {
     const handlers = renderPanel(makeWine({ quantity_at_home: 1 }))
 
-    fireEvent.click(screen.getByText('Extract Bottle'))
+    fireEvent.click(screen.getByText('Drink a Bottle'))
 
     await waitFor(() => expect(handlers.onConsume).toHaveBeenCalledWith('wine-1'))
     expect(handlers.onClose).toHaveBeenCalled()
@@ -191,7 +191,7 @@ describe('WineDetailPanel - availability-dependent actions', () => {
   it('keeps the panel open when more bottles remain after consuming', async () => {
     const handlers = renderPanel(makeWine({ quantity_at_home: 2 }))
 
-    fireEvent.click(screen.getByText('Extract Bottle'))
+    fireEvent.click(screen.getByText('Drink a Bottle'))
 
     await waitFor(() => expect(handlers.onConsume).toHaveBeenCalledWith('wine-1'))
     expect(handlers.onClose).not.toHaveBeenCalled()

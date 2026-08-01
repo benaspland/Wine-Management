@@ -5,8 +5,8 @@ import TierBadge from './TierBadge'
 import WineThumbnail from './WineThumbnail'
 import LocationBadge from './LocationBadge'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
-import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
-import { X, Minus, Plus } from 'lucide-react'
+import { wineDisplayName, criticRatingsOf, formatDeliveryMonth } from '../services/wine.service'
+import { X, Minus, Plus, Wine as WineIcon } from 'lucide-react'
 import { useBackDismiss } from '../hooks/useBackDismiss'
 
 interface WineDetailPanelProps {
@@ -212,11 +212,7 @@ export default function WineDetailPanel({
                   {new Date(scheduledDeliveryDate) <= new Date() ? 'Delivered' : 'Scheduled Delivery'}
                 </p>
                 <p className="text-sm font-medium">
-                  {new Date(scheduledDeliveryDate).toLocaleDateString('en-GB', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
+                  {formatDeliveryMonth(scheduledDeliveryDate)}
                 </p>
               </div>
             )}
@@ -345,13 +341,18 @@ export default function WineDetailPanel({
 
           {/* Actions */}
           <div className="pt-6 pb-12 flex flex-col gap-3">
+            {/* "Drink", as everywhere else. It was "Extract Bottle" on a
+                full-width slab — a word the app uses nowhere else, for
+                the same action the cards and the schedule both call
+                drinking, and the loudest thing on the panel. */}
             {wine.quantity_at_home > 0 && (
               <button
                 onClick={handleConsume}
                 disabled={isLoading}
-                className="btn-primary w-full disabled:opacity-50"
+                className="self-start flex items-center gap-2 rounded-full bg-primary-container px-4 py-2.5 text-sm font-semibold text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
               >
-                Extract Bottle
+                <WineIcon size={16} aria-hidden="true" />
+                Drink a Bottle
               </button>
             )}
 

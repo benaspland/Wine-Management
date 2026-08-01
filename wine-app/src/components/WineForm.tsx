@@ -5,6 +5,7 @@ import Modal from './Modal'
 import WineImagePicker from './WineImagePicker'
 import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
 import { isEstateWine } from '../services/wineName.service'
+import { formatCriticRatings, parseCriticRatings } from '../services/wine.service'
 
 /** The app-wide field style, shared with the filter drawer and the
     settings form rather than redefined here. */
@@ -86,7 +87,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           purchase_date: initialWine.purchase_date ?? '',
           merchant: initialWine.merchant ?? '',
           notes: initialWine.notes ?? '',
-          critic_ratings: initialWine.critic_ratings ?? {},
+          critic_ratings: formatCriticRatings(initialWine.critic_ratings),
           flavor_profile: initialWine.flavor_profile ?? '',
           image_url: initialWine.image_url ?? '',
         }
@@ -112,7 +113,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           purchase_date: '',
           merchant: '',
           notes: '',
-          critic_ratings: {},
+          critic_ratings: '',
           flavor_profile: '',
           image_url: '',
         }
@@ -173,6 +174,9 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     try {
       await onSubmit({
         ...wineFields,
+        // Back to the shape the record holds, so a score typed here and
+        // one imported from a CSV are stored identically
+        critic_ratings: parseCriticRatings(wineFields.critic_ratings),
         purchase_price: purchase_price > 0 ? purchase_price : undefined,
         // Blank optional text is "unrecorded", not an empty value
         purchase_date: purchase_date.trim() || undefined,
@@ -343,6 +347,19 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
         </Section>
 
         <Section title="Tasting">
+          {/* Carried in the form's state since it was written, but with
+              no input to put anything in it — an imported score survived
+              an edit, and a wine added by hand could never have one. */}
+          <Field label="Critic Scores" hint="Separate scores with colons">
+            <input
+              type="text"
+              name="critic_ratings"
+              value={formData.critic_ratings}
+              onChange={handleChange}
+              placeholder="e.g., JS 97 : RP 96"
+              className={INPUT}
+            />
+          </Field>
           <Field label="Flavour Profile" hint="Separate notes with colons">
             <input type="text" name="flavor_profile" value={formData.flavor_profile} onChange={handleChange} placeholder="e.g., Blackberry : Cassis : Graphite" className={INPUT} />
           </Field>
