@@ -82,14 +82,21 @@ export default function WineThumbnail({ wine, size = 'sm', className = '' }: Win
          portrait label leaves above and below, which made the slot a
          visible grey panel; leaving that space as the card's own colour
          means the only thing on screen is the label. The shadow is what
-         keeps it from reading as pasted flat. */
-      <div className={`${frame} flex items-center justify-center`}>
+         keeps it from reading as pasted flat.
+
+         The image is positioned rather than laid out, so that its own
+         proportions cannot set the slot's height. In the flow, a tall
+         narrow label made its card 32px taller than the text needed and
+         the bottom row fell away from the rest — so the spacing of the
+         last line depended on the shape of a photograph. Now the text
+         decides the height and the label fits itself into it. */
+      <div className={`${frame} relative`}>
         <img
           src={wine.image_url}
           alt={wineDisplayName(wine.producer, wine.name)}
           loading="lazy"
           decoding="async"
-          className="max-h-full max-w-full object-contain rounded-[6px] drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]"
+          className="absolute inset-0 h-full w-full object-contain rounded-[6px] drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]"
         />
       </div>
     )
