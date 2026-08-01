@@ -6,7 +6,14 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { wineDisplayName, wineTileName, criticRatingsOf, WineService } from '../wine.service'
+import {
+  wineDisplayName,
+  wineTileName,
+  criticRatingsOf,
+  WineService,
+  drinkingWindowSummary,
+  drinkingWindowYears,
+} from '../wine.service'
 import type { Wine } from '../../types/index'
 
 describe('wineDisplayName', () => {
@@ -136,5 +143,32 @@ describe('getDrinkingWindowLabel', () => {
       'Last Year',
       'Past Peak',
     ])
+  })
+})
+
+/**
+ * The schedule's window subtitle. Its verb has to come from the same
+ * state machine as the cellar's chip — two screens describing one fact
+ * in two vocabularies is what this shares the machinery to prevent.
+ */
+describe('drinkingWindowSummary', () => {
+  const at = (start: number, end: number) =>
+    ({ drinking_window_start: start, drinking_window_end: end }) as Wine
+
+  it('leads with the same verb the badge shows, then the whole window', () => {
+    expect(drinkingWindowSummary(at(2024, 2029), 2026)).toBe('Drink · 2024–2029')
+    expect(drinkingWindowSummary(at(2028, 2040), 2026)).toBe('Hold · 2028–2040')
+    expect(drinkingWindowSummary(at(2020, 2027), 2026)).toBe('Peak · 2020–2027')
+    expect(drinkingWindowSummary(at(2020, 2026), 2026)).toBe('Last Year · 2020–2026')
+    expect(drinkingWindowSummary(at(2015, 2024), 2026)).toBe('Past Peak · 2015–2024')
+  })
+
+  it('drops the badge year, since the full window follows it', () => {
+    // "Drink (2029) · 2024-2029" would say 2029 twice
+    expect(drinkingWindowSummary(at(2024, 2029), 2026)).not.toContain('(')
+  })
+
+  it('gives just the years for a wine that cannot be acted on', () => {
+    expect(drinkingWindowYears(at(2030, 2040))).toBe('2030–2040')
   })
 })

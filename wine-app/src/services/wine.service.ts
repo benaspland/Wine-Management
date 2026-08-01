@@ -96,3 +96,29 @@ export class WineService {
     return `Drink (${wine.drinking_window_end})`
   }
 }
+
+/**
+ * The drinking window as a phrase: "Drink · 2024-2029".
+ *
+ * The verb comes from getDrinkingWindowLabel, so the schedule and the
+ * cellar cannot drift into two vocabularies for the same fact — the
+ * chip says DRINK (2029) and this says Drink · 2024-2029, but they are
+ * the same state machine. The window is spelled out in full here
+ * because this is where you decide whether to open a bottle tonight,
+ * and "by 2029" answers less than "2024 to 2029" does.
+ */
+export function drinkingWindowSummary(
+  wine: Pick<Wine, 'drinking_window_start' | 'drinking_window_end'>,
+  now = new Date().getFullYear()
+): string {
+  const state = WineService.getDrinkingWindowLabel(wine as Wine, now)
+  const verb = state.replace(/\s*\(\d+\)$/, '')
+  return `${verb} \u00b7 ${wine.drinking_window_start}\u2013${wine.drinking_window_end}`
+}
+
+/** Just the years, for a wine you cannot act on yet. */
+export function drinkingWindowYears(
+  wine: Pick<Wine, 'drinking_window_start' | 'drinking_window_end'>
+): string {
+  return `${wine.drinking_window_start}\u2013${wine.drinking_window_end}`
+}

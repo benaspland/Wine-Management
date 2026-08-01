@@ -7,7 +7,7 @@ import * as workflows from '../services/workflows.service'
 import WineInfo from '../components/WineInfo'
 import MessageModal from '../components/MessageModal'
 import { useToastStore } from '../store/toastStore'
-import { wineDisplayName } from '../services/wine.service'
+import { wineDisplayName, drinkingWindowSummary, drinkingWindowYears } from '../services/wine.service'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 import { CircleCheck, Package, Wine as WineIcon, RefreshCw } from 'lucide-react'
 import ConsumptionSheet from '../components/ConsumptionSheet'
@@ -46,6 +46,8 @@ export default function DrinkingSchedulePage() {
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([])
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [activeYear, setActiveYear] = useState<number | null>(null)
+  /** Which tile is showing its "logged" tick, briefly, after a tap. */
+  const [flashId, setFlashId] = useState<string | null>(null)
   const yearRefs = useRef(new Map<number, HTMLElement>())
   // Hold-to-log: a bottle being logged with a chosen date and note
   const [logging, setLogging] = useState<{ wineId: string; label: string } | null>(null)
@@ -83,6 +85,11 @@ export default function DrinkingSchedulePage() {
   /** Short tap: log it now, with today's date. */
   const handleMarkConsumed = async (wineId: string, producerName: string, wineName: string) => {
     setIsConsuming(true)
+    // Acknowledge the tap immediately: the schedule takes a moment to
+    // regenerate, and an icon with no label that does nothing visible
+    // reads as a tap that missed.
+    setFlashId(wineId)
+    setTimeout(() => setFlashId(current => (current === wineId ? null : current)), 1200)
     try {
       const today = new Date().toISOString().split('T')[0]
       await logConsumption(wineId, wineDisplayName(producerName, wineName), today)
@@ -205,6 +212,24 @@ export default function DrinkingSchedulePage() {
   }, [scheduleUpdateTrigger])
 
   const years = [...new Set(schedule.map(entry => entry.year))]
+  const thisYear = new Date().getFullYear()
+
+  /**
+   * Which year the rail marks, before anything has been scrolled.
+   *
+   * The observer below only fires for a separator inside a band 20-40%
+   * down the viewport, and on load the first one sits above that band —
+   * so nothing fired and no year was ever marked until you scrolled
+   * past the second. Derived rather than seeded through an effect:
+   * there is nothing to synchronise, only a default to fall back on
+   * until the observer has something to say.
+   */
+  const markedYear =
+    activeYear !== null && years.includes(activeYear)
+      ? activeYear
+      : years.includes(thisYear)
+        ? thisYear
+        : years[0]
 
   // Highlight the year currently in view as the user scrolls
   useEffect(() => {
@@ -226,13 +251,6 @@ export default function DrinkingSchedulePage() {
 
   const jumpToYear = (year: number) => {
     yearRefs.current.get(year)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  const getTierColor = (tier: number): string => {
-    if (tier === 5) return 'text-primary-container'
-    if (tier === 4) return 'text-primary'
-    if (tier === 3) return 'text-secondary'
-    return 'text-outline-variant'
   }
 
   return (
@@ -277,25 +295,54 @@ export default function DrinkingSchedulePage() {
         />
       )}
 
-      {/* Year jump rail: tap a year to scroll straight to it */}
+      {/* The whole drinking period on one screen.
+
+          The rail is fixed and spans the viewport, and the years are
+          spaced evenly down it — so the entire span of the collection,
+          '26 to '37, is always in front of you and only the marker for
+          where you are moves. A pill of stacked labels said the same
+          thing in twice the width and scrolled its own jump targets out
+          of reach.
+
+          Labels sit *on* the line in the page's own colour, cutting it
+          rather than standing beside it, which keeps the rail to 24px
+          and off the cards. */}
       {years.length > 1 && (
         <nav
           aria-label="Jump to year"
-          className="fixed left-1 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1 bg-surface-container-lowest/80 backdrop-blur-xl rounded-full px-1 py-2 border border-outline-variant"
+          className="fixed left-1 top-24 bottom-24 z-40 w-6 flex flex-col items-center justify-between"
         >
-          {years.map(year => (
-            <button
-              key={year}
-              onClick={() => jumpToYear(year)}
-              className={`text-[10px] font-bold tracking-wide px-1.5 py-1 rounded-full transition-colors ${
-                activeYear === year
-                  ? 'bg-primary-container text-on-primary'
-                  : 'text-outline hover:text-on-surface'
-              }`}
-            >
-              &rsquo;{String(year).slice(-2)}
-            </button>
-          ))}
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 left-1/2 -translate-x-[1px] w-[2px] bg-outline-variant"
+          />
+          {years.map(year => {
+            const active = markedYear === year
+            return (
+              <button
+                key={year}
+                onClick={() => jumpToYear(year)}
+                aria-current={active ? 'true' : undefined}
+                className="relative bg-background px-1 py-0.5 leading-none transition-colors"
+              >
+                {active && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-0 -m-1 rounded-full bg-primary-container/30 blur-[5px]"
+                  />
+                )}
+                <span
+                  className={`relative ${
+                    active
+                      ? 'text-[11px] font-bold text-primary-container'
+                      : 'text-[9px] font-medium text-outline'
+                  }`}
+                >
+                  &rsquo;{String(year).slice(-2)}
+                </span>
+              </button>
+            )
+          })}
         </nav>
       )}
 
@@ -361,25 +408,53 @@ export default function DrinkingSchedulePage() {
                     return (
                       <div
                         key={`${entry.year}-${entry.month}-${wine.id}-${idx}`}
+                        /* Three states, not two. A wine already drunk and
+                           a wine still in storage were both simply dimmed,
+                           so "done" and "not yet" looked alike; only the
+                           icon told them apart. Storage now dims the whole
+                           row, consumed keeps its check, and a wine you
+                           can actually open tonight is the only one at
+                           full strength. */
                         className={`flex items-center gap-3 p-4 rounded-[14px] transition-all ${
-                          isConsumed ? 'bg-surface-container-lowest opacity-75' : 'panel'
+                          isConsumed
+                            ? 'panel opacity-60'
+                            : isAtHome
+                              ? 'panel'
+                              : 'panel bg-surface-container-lowest opacity-[0.55]'
                         }`}
                       >
                         <div className="flex-1 min-w-0">
-                          <span className={`text-[10px] font-bold tracking-widest uppercase ${getTierColor(wine.tier)}`}>
-                            {wine.status}
-                          </span>
+                          {/* No classification: dropped from the cellar
+                              cards as clutter, and it is no less clutter
+                              here. */}
                           <WineInfo
                             wine={wine}
                             producerSize="base"
                             nameSize="sm"
-                            classificationSize="xs"
-                            showClassification={true}
+                            showClassification={false}
                             layout="vertical"
                           />
                           <p className={`text-xs font-light mt-0.5 ${isConsumed ? 'text-outline-variant' : 'text-outline'}`}>
                             {wine.vintage} · {wine.region}
                           </p>
+                          {/* The window, spelled out. This is the screen
+                              where you decide whether to open something,
+                              and the month heading only says when the
+                              planner put it here — not how long you have.
+                              The verb comes from the same state machine as
+                              the cellar's chip, so the two screens cannot
+                              drift apart. */}
+                          {wineData && !isConsumed && (
+                            <p
+                              className={`text-xs mt-0.5 ${
+                                isAtHome ? 'text-primary-container' : 'text-outline'
+                              }`}
+                            >
+                              {isAtHome
+                                ? drinkingWindowSummary(wineData)
+                                : `In storage \u00b7 ${drinkingWindowYears(wineData)}`}
+                            </p>
+                          )}
                         </div>
 
                         {/* Status / action, right-aligned to keep rows short */}
@@ -392,12 +467,14 @@ export default function DrinkingSchedulePage() {
                             <span className="text-[9px] text-outline-variant">{consumedDate}</span>
                           </div>
                         ) : !isAtHome ? (
+                          /* Muted tile, no action: this bottle is not
+                              here yet. Tapping through to reschedule its
+                              delivery is worth doing and is parked. */
                           <div
-                            className="shrink-0 flex flex-col items-center gap-0.5 text-outline-variant"
+                            className="shrink-0 h-10 w-10 rounded-[10px] bg-surface-container-high flex items-center justify-center text-outline"
                             title="In storage — pending delivery"
                           >
                             <Package size={16} aria-hidden="true" />
-                            <span className="text-[9px]">storage</span>
                           </div>
                         ) : (
                           <HoldButton
@@ -406,9 +483,17 @@ export default function DrinkingSchedulePage() {
                             disabled={isConsuming}
                             title="Tap to mark consumed, hold to set the date and add a note"
                             aria-label={`Mark ${wineDisplayName(wine.producer, wine.name)} as consumed`}
-                            className="shrink-0 h-10 w-10 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
+                            className="shrink-0 h-10 w-10 rounded-[10px] bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
                           >
-                            <WineIcon size={16} aria-hidden="true" />
+                            {/* A tap on an icon with no label leaves you
+                                wondering whether it registered; the tile
+                                answers for a moment before the row
+                                becomes a consumed one. */}
+                            {flashId === wine.id ? (
+                              <CircleCheck size={18} aria-hidden="true" />
+                            ) : (
+                              <WineIcon size={16} aria-hidden="true" />
+                            )}
                           </HoldButton>
                         )}
                       </div>
