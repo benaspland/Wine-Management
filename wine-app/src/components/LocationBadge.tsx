@@ -20,6 +20,13 @@ import { wineDisplayName } from '../services/wine.service'
 
 interface LocationBadgeProps {
   wine: Wine
+  /**
+   * Take the whole row and push the two counts to its opposite ends
+   * rather than grouping them. On a card that lands the home count —
+   * which is also the control — directly under the drinking status,
+   * the label that says whether to use it.
+   */
+  spread?: boolean
   /** Tap: drink one now. Omit to render the count as plain text. */
   onConsume?: () => void
   /** Hold: choose the date and add a note. */
@@ -29,6 +36,7 @@ interface LocationBadgeProps {
 
 export default function LocationBadge({
   wine,
+  spread,
   onConsume,
   onConsumeDetailed,
   disabled,
@@ -36,8 +44,25 @@ export default function LocationBadge({
   const atHome = wine.quantity_at_home > 0
   const canConsume = atHome && onConsume && onConsumeDetailed
 
+  const storage = (
+    <span
+      className={`flex items-center gap-1 ${
+        wine.quantity_in_storage > 0 ? 'text-on-surface/80' : 'text-outline opacity-60'
+      }`}
+      title={`${wine.quantity_in_storage} in storage`}
+    >
+      <Warehouse size={14} aria-hidden="true" />
+      {wine.quantity_in_storage}
+    </span>
+  )
+
   return (
-    <div className="flex items-center gap-3 text-xs font-medium">
+    <div
+      className={`flex items-center text-xs font-medium ${
+        spread ? 'flex-1 justify-between' : 'gap-3'
+      }`}
+    >
+      {spread && storage}
       {canConsume ? (
         /* The target and the pill are deliberately different sizes.
            Padding on the button gives a 42px area a finger can hit;
@@ -81,15 +106,7 @@ export default function LocationBadge({
         </span>
       )}
 
-      <span
-        className={`flex items-center gap-1 ${
-          wine.quantity_in_storage > 0 ? 'text-on-surface/80' : 'text-outline opacity-60'
-        }`}
-        title={`${wine.quantity_in_storage} in storage`}
-      >
-        <Warehouse size={14} aria-hidden="true" />
-        {wine.quantity_in_storage}
-      </span>
+      {!spread && storage}
     </div>
   )
 }

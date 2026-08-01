@@ -57,11 +57,11 @@ export function criticRatingsOf(
 }
 
 /**
- * The five states of getDrinkingWindowLabel. "Wait" carries its year,
+ * The five states of getDrinkingWindowLabel. "Hold" carries its year,
  * so the type stays open at that one point.
  */
 export type DrinkingStatus =
-  | `Wait (${number})`
+  | `Hold (${number})`
   | `Drink (${number})`
   | `Peak (${number})`
   | 'Last Year'
@@ -77,7 +77,7 @@ export class WineService {
   /**
    * Where a wine is in its drinking window.
    *
-   * Each state carries the year it turns on: "Wait (2028)" is when it
+   * Each state carries the year it turns on: "Hold (2028)" is when it
  * opens, "Drink (2040)" and "Peak (2027)" are when it shuts. That is
  * more use than "Ready to Drink", and short enough to sit beside a tier
  * chip without wrapping the row — which the long form did.
@@ -85,11 +85,11 @@ export class WineService {
  * Ordered most specific first. It used to test "in the window" second,
    * which is true of a wine at its peak and of one in its final year —
    * so those two branches sat below a condition that had already caught
-   * them, and the app could only ever say Wait, Ready to Drink or Past
+   * them, and the app could only ever say Hold, Drink or Past
    * Peak. Three of the five states were unreachable.
    */
   static getDrinkingWindowLabel(wine: Wine, now = new Date().getFullYear()): DrinkingStatus {
-    if (now < wine.drinking_window_start) return `Wait (${wine.drinking_window_start})`
+    if (now < wine.drinking_window_start) return `Hold (${wine.drinking_window_start})`
     if (now > wine.drinking_window_end) return 'Past Peak'
     if (now === wine.drinking_window_end) return 'Last Year'
     if (now >= wine.drinking_window_end - 1) return `Peak (${wine.drinking_window_end})`
