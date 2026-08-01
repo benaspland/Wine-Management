@@ -996,4 +996,72 @@ describe('ScheduleService', () => {
       expect(slotsFor('w1', withArg)).toBe(slotsFor('w1', without))
     })
   })
+
+  /**
+   * The plan has to cover the whole cellar, not a guessed number of
+   * years. Drop the consumption rate and the same bottles take longer
+   * to drink — the plan must lengthen to match, or the bottles past the
+   * old horizon simply vanish from it.
+   */
+  describe('generateDrinkingSchedule horizon', () => {
+    const cellar = (count: number, bottlesEach: number) =>
+      Array.from({ length: count }, (_, i) =>
+        makeWine({
+          id: `w${i}`,
+          producer: `Producer ${i}`,
+          name: `Wine ${i}`,
+          tier: ((i % 3) + 1) as 1 | 2 | 3,
+          quantity_in_storage: 0,
+          quantity_at_home: bottlesEach,
+          drinking_window_start: 2020,
+          drinking_window_end: 2060,
+        })
+      )
+
+    it('plans every bottle owned, however long that takes', () => {
+      const wines = cellar(40, 6) // 240 bottles
+      const schedule = ScheduleService.generateDrinkingSchedule(
+        wines, undefined, 2026, 3, 12
+      )
+      expect(schedule.length).toBe(240)
+    })
+
+    it('runs longer at a lower consumption rate, not shorter', () => {
+      const wines = cellar(40, 6)
+      const span = (target: number) => {
+        const s = ScheduleService.generateDrinkingSchedule(wines, undefined, 2026, 3, target)
+        return Math.max(...s.map(e => e.suggestedYear)) - 2026 + 1
+      }
+      const fast = span(40)
+      const slow = span(12)
+      expect(slow).toBeGreaterThan(fast)
+      // Every bottle still placed at either rate
+      expect(slow).toBeGreaterThanOrEqual(Math.ceil(240 / 12) - 1)
+    })
+
+    it('waits for a window that opens well beyond any fixed horizon', () => {
+      const late = makeWine({
+        id: 'late',
+        quantity_in_storage: 0,
+        quantity_at_home: 2,
+        drinking_window_start: 2055,
+        drinking_window_end: 2070,
+      })
+      const schedule = ScheduleService.generateDrinkingSchedule(
+        [late], undefined, 2026, 3, 30
+      )
+      expect(schedule.filter(e => e.wineId === 'late').length).toBe(2)
+      expect(Math.min(...schedule.map(e => e.suggestedYear))).toBeGreaterThanOrEqual(2055)
+    })
+
+    it('stops instead of grinding on when nothing can ever be placed', () => {
+      // In storage with no delivery booked: unschedulable, and it must
+      // not hold the loop open to the hard cap.
+      const orphan = makeWine({ id: 'orphan', quantity_in_storage: 6, quantity_at_home: 0 })
+      const schedule = ScheduleService.generateDrinkingSchedule(
+        [orphan], undefined, 2026, 3, 30
+      )
+      expect(schedule.length).toBe(0)
+    })
+  })
 })

@@ -68,9 +68,15 @@ describe('DrinkingSchedulePage Integration Tests', () => {
       const wines = await db.getAllWines()
       const schedule = ScheduleService.generateDrinkingSchedule(wines, undefined, new Date().getFullYear(), 3)
 
-      // Wine should not be scheduled before drinking window
-      const scheduledWineIds = schedule.map(s => s.wineId)
-      expect(scheduledWineIds).not.toContain(wine.id)
+      // Not a single slot before the window opens. It used to be enough
+      // to assert the wine was absent altogether, but only because the
+      // plan stopped after three years and never reached 2030 — that
+      // tested the horizon, not the constraint. The plan now runs until
+      // every bottle is placed, so the wine does appear; what matters is
+      // that it never appears early.
+      const entries = schedule.filter(s => s.wineId === wine.id)
+      expect(entries.length).toBeGreaterThan(0)
+      expect(Math.min(...entries.map(e => e.suggestedYear))).toBeGreaterThanOrEqual(2030)
     })
 
     it('should distribute wines across years', async () => {

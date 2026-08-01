@@ -68,7 +68,14 @@ export class ScheduleService {
     allWines: Wine[],
     deliveryScheduleEntries?: DeliveryScheduleEntry[],
     startYear: number = new Date().getFullYear(),
-    yearsToSchedule: number = 3,
+    /**
+     * Floor, not ceiling. The plan runs until every bottle owned has a
+     * slot, however long that takes — a fixed horizon guessed from the
+     * wine count silently truncated the plan the moment the consumption
+     * rate dropped, so the deliveries ran to 2051 while the drinking
+     * stopped in 2038 and a third of the cellar was simply missing.
+     */
+    minYearsToSchedule: number = 3,
     annualConsumptionTarget: number = DELIVERY_CONFIG.annualTarget,
     /**
      * Bottles already drunk, per wine.
@@ -155,7 +162,25 @@ export class ScheduleService {
         w.quantity_in_storage + w.quantity_at_home + (consumedCounts[w.id] ?? 0)
     })
 
-    for (let year = startYear; year < startYear + yearsToSchedule; year++) {
+    /**
+     * A wine only ever gets a slot if it is at home, has a delivery
+     * booked, or has been drunk before. Anything else — no stock, or in
+     * storage with no delivery window — can never be placed, so it must
+     * not hold the loop open waiting for it.
+     */
+    const canEverBePlaced = (w: Wine) => {
+      const avail = wineAvailability[w.id]
+      return avail !== undefined && avail !== '9999-12' && wineBottleLimit[w.id] > 0
+    }
+    const availabilityYear = (id: string) => Number(wineAvailability[id]?.slice(0, 4) ?? 0)
+    const unplaced = () =>
+      allWines.filter(w => canEverBePlaced(w) && wineTotalScheduled[w.id] < wineBottleLimit[w.id])
+
+    // Backstop only. The real exits are "every bottle placed" and
+    // "nothing left that could ever become available".
+    const hardYearCap = startYear + 100
+
+    for (let year = startYear; year < hardYearCap; year++) {
       yearlyConsumption[year] = 0
 
       // Determine how many months remain in current year (for first partial year)
@@ -341,6 +366,22 @@ export class ScheduleService {
 
       yearlyConsumption[year] = yearsConsumption.length
       schedule.push(...yearsConsumption)
+
+      // Keep the plan running for at least the minimum, then stop on
+      // whichever comes first: every bottle placed, or a barren year with
+      // nothing still waiting on a future delivery or drinking window —
+      // at which point another century of years would add nothing.
+      if (year < startYear + minYearsToSchedule - 1) continue
+
+      const stillToPlace = unplaced()
+      if (stillToPlace.length === 0) break
+
+      if (yearsConsumption.length === 0) {
+        const waiting = stillToPlace.some(
+          w => w.drinking_window_start > year || availabilityYear(w.id) > year
+        )
+        if (!waiting) break
+      }
     }
 
     debugLog('[ScheduleService] Before final filter:', schedule.length, 'total drinking entries')
@@ -470,7 +511,14 @@ export class ScheduleService {
           const pool: Array<{ id: string; urgency: number; tier: number }> = []
           candidateWines.forEach(wine => {
             if (home[wine.id] <= 0) return
-            if (wine.drinking_window_start > year || wine.drinking_window_end < year) return
+            // Not yet open: genuinely undrinkable. Past its window: drunk
+            // late, which is what actually happens — refusing to drink it
+            // here left it parked at home for good, and once enough of
+            // those accumulated the cellar never freed the space for
+            // another delivery. At a lower consumption rate that stranded
+            // nearly half the bottles in storage, unreachable to both
+            // schedules.
+            if (wine.drinking_window_start > year) return
             // Hard caps (real constraints): magnums and Tier 4-5 limited to 1/year.
             // Normal wines have no per-year cap in the delivery sim — we plan to
             // meet the user's actual consumption target.
@@ -485,7 +533,9 @@ export class ScheduleService {
               if (lastDrunk[wine.id] && year - lastDrunk[wine.id] < idealGap && bottlesLeft > 2) return
             }
             const timeLeft = wine.drinking_window_end - year
-            let urgency = 1.0 / Math.max(1, timeLeft)
+            // Past its window it is the most urgent thing at home, not
+            // merely as urgent as a wine with a year left.
+            let urgency = timeLeft <= 0 ? 3.0 : 1.0 / timeLeft
             if (wine.tier === 1) urgency += 0.3
             else if (wine.tier === 2) urgency += 0.15
             pool.push({ id: wine.id, urgency, tier: wine.tier })
