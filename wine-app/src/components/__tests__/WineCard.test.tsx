@@ -73,7 +73,17 @@ describe('WineCard - location badge', () => {
   it('shows the home and storage counts separately', () => {
     renderCard(makeWine({ quantity_at_home: 2, quantity_in_storage: 10 }))
 
-    expect(screen.queryByTitle('2 at home')).not.toBeNull()
+    // The home count doubles as the consume control, so its description
+    // has to carry both the count and what tapping it does — turning it
+    // into a button must not cost the fact it was there to show.
+    expect(screen.queryByTitle(/^2 at home\b/)).not.toBeNull()
     expect(screen.queryByTitle('10 in storage')).not.toBeNull()
+  })
+
+  it('is a plain count, not a control, when nothing is at home', () => {
+    renderCard(makeWine({ quantity_at_home: 0, quantity_in_storage: 10 }))
+
+    expect(screen.queryByTitle('0 at home')).not.toBeNull()
+    expect(screen.queryByLabelText(/^Drink /)).toBeNull()
   })
 })
