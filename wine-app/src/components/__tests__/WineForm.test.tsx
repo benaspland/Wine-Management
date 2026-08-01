@@ -293,3 +293,77 @@ describe('WineForm - tier', () => {
     expect(Number.isInteger(submitted.tier)).toBe(true)
   })
 })
+
+/**
+ * Numbers are kept as typed and converted once, on save.
+ *
+ * Parsing on every keystroke meant an emptied field refilled itself with
+ * 0 on the very keystroke that cleared it, so the zero could not be
+ * deleted — and "13." collapsed to "13" before the decimal arrived.
+ */
+describe('WineForm - numeric fields', () => {
+  let onSubmit: Mock<(wine: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => Promise<void>>
+
+  beforeEach(() => {
+    onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(<WineForm isOpen={true} onClose={vi.fn()} onSubmit={onSubmit} />)
+  })
+
+  const field = (name: string) => document.querySelector(`[name="${name}"]`) as HTMLInputElement
+
+  it('lets a numeric field be emptied and stay empty', () => {
+    setField('alcohol_percent', '13')
+    expect(field('alcohol_percent').value).toBe('13')
+
+    setField('alcohol_percent', '')
+    expect(field('alcohol_percent').value).toBe('')
+  })
+
+  it('keeps a decimal exactly as typed', () => {
+    // Not asserting the half-typed "13." — a real <input type="number">
+    // sanitises that away itself, and happy-dom does not, so the
+    // assertion would describe the test environment rather than a browser
+    setField('alcohol_percent', '13.5')
+    expect(field('alcohol_percent').value).toBe('13.5')
+  })
+
+  it('stores a blank as unrecorded rather than zero', async () => {
+    setField('producer', 'Château Test')
+    setField('name', 'Cuvée Test')
+    setField('alcohol_percent', '')
+
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    // A wine with no ABV recorded must not claim to be 0%
+    expect(onSubmit.mock.calls[0][0].alcohol_percent).toBeUndefined()
+  })
+
+  it('converts what was typed into numbers on save', async () => {
+    setField('producer', 'Château Test')
+    setField('name', 'Cuvée Test')
+    setField('alcohol_percent', '13.5')
+    setField('vintage', '2018')
+
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    const submitted = onSubmit.mock.calls[0][0]
+    expect(submitted.alcohol_percent).toBe(13.5)
+    expect(submitted.vintage).toBe(2018)
+    expect(typeof submitted.vintage).toBe('number')
+  })
+
+  it('refuses a blank vintage rather than filing the wine under year zero', async () => {
+    const alerted = vi.fn()
+    vi.stubGlobal('alert', alerted)
+    setField('producer', 'Château Test')
+    setField('name', 'Cuvée Test')
+    setField('vintage', '')
+
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(alerted).toHaveBeenCalled())
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+})
