@@ -107,6 +107,10 @@ export const useWineStore = create<WineStore>((set, get) => ({
       get().triggerScheduleUpdate()
     } catch (error) {
       set({ error: (error as Error).message })
+      // Rethrow: the form closes when its submit resolves, so
+      // swallowing this here made a rejected edit look like a saved
+      // one — the panel shut, nothing changed, and nothing said why.
+      throw error
     } finally {
       set({ loading: false })
     }

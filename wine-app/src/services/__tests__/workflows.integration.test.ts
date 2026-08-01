@@ -976,4 +976,53 @@ describe('Workflows - Integration/Regression Tests', () => {
       expect(after?.quantity_at_home).toBe(2)
     })
   })
+
+  /**
+   * A rejected edit must not look like a saved one.
+   *
+   * The form closes when its submit resolves. The store caught this
+   * error into state nothing reads and resolved anyway, so choosing a
+   * tier the workflow rejected shut the panel, changed nothing, and
+   * said nothing. The rejection has to reach the caller.
+   */
+  describe('editWineDetails rejects a tier that is not a whole number', () => {
+    it('throws rather than silently keeping the old tier', async () => {
+      const wine = await db.createWine({
+        name: 'Margheria',
+        producer: 'Massolino',
+        vintage: 2019,
+        tier: 2,
+        region: 'Piedmont',
+        drinking_window_start: 2020,
+        drinking_window_end: 2040,
+        quantity_in_storage: 6,
+        quantity_at_home: 0,
+      })
+
+      await expect(
+        // What a <select> hands back before the form parses it
+        workflows.editWineDetails(wine.id, { tier: '5' as unknown as Wine['tier'] })
+      ).rejects.toThrow(/[Tt]ier/)
+
+      const unchanged = await db.getWineById(wine.id)
+      expect(unchanged?.tier).toBe(2)
+    })
+
+    it('accepts a whole number', async () => {
+      const wine = await db.createWine({
+        name: 'Margheria',
+        producer: 'Massolino',
+        vintage: 2019,
+        tier: 2,
+        region: 'Piedmont',
+        drinking_window_start: 2020,
+        drinking_window_end: 2040,
+        quantity_in_storage: 6,
+        quantity_at_home: 0,
+      })
+
+      await workflows.editWineDetails(wine.id, { tier: 5 })
+      expect((await db.getWineById(wine.id))?.tier).toBe(5)
+    })
+  })
 })
