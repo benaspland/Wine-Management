@@ -39,10 +39,17 @@ export default function LocationBadge({
   return (
     <div className="flex items-center gap-3 text-xs font-medium">
       {canConsume ? (
-        /* py-2.5 -my-2.5 buys a 36px touch target — the same as the
-           button it replaces — while taking no more room in the row
-           than the plain text it replaces, so a card with bottles at
-           home is exactly as tall as one without.
+        /* The target and the pill are deliberately different sizes.
+           Padding on the button gives a 42px area a finger can hit;
+           the negative margin takes back that padding *and* the pill's
+           own 3px, so the control occupies exactly the 16px the plain
+           text did and a card with bottles at home stays exactly as
+           tall as one without. Matching the two would leave the pill's
+           padding in the row and cost 6px a card.
+
+           The fill sits on the inner span, not the button, so what you
+           *see* is a 22px pill rather than the whole target painted
+           in — the target is generous, the mark is not.
 
            A soft fill rather than an outline, and no letter-spaced
            capitals: it has to read as a different kind of thing from
@@ -51,15 +58,15 @@ export default function LocationBadge({
         <HoldButton
           onTap={onConsume}
           onHold={onConsumeDetailed}
-          progressColor="rgba(255, 255, 255, 0.25)"
+          progressColor="rgba(255, 255, 255, 0.18)"
           disabled={disabled}
           aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
           // Still says how many are at home: making the count tappable
           // must not cost the fact it was showing in the first place.
           title={`${wine.quantity_at_home} at home — tap to mark one consumed, hold to set the date and add a note`}
-          className="-my-2.5 rounded-full bg-primary-container/15 px-2.5 py-2.5 text-primary-container hover:bg-primary-container/25 disabled:opacity-50 transition-colors"
+          className="-my-[13px] -mx-1 rounded-full px-1 py-2.5 disabled:opacity-50"
         >
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 rounded-full bg-primary-container/15 px-2 py-[3px] text-primary-container hover:bg-primary-container/25 transition-colors">
             <House size={14} aria-hidden="true" />
             {wine.quantity_at_home}
           </span>
