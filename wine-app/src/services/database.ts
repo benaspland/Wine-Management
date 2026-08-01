@@ -392,6 +392,20 @@ export async function getConsumptionLogByWineId(
     .sort((a, b) => b.consumed_date.localeCompare(a.consumed_date))
 }
 
+/**
+ * Every consumption ever recorded.
+ *
+ * The drinking schedule needs this before it knows which years it
+ * covers — it has to count what has been drunk in order to plan what is
+ * left, so it cannot ask year by year off the back of a schedule that
+ * does not exist yet.
+ */
+export async function getAllConsumptionLog(): Promise<ConsumptionLogEntry[]> {
+  return getTable('consumption_log').sort((a, b) =>
+    a.consumed_date.localeCompare(b.consumed_date)
+  )
+}
+
 export async function getConsumptionLogByYear(year: number): Promise<ConsumptionLogEntry[]> {
   return getTable('consumption_log')
     .filter((log) => new Date(log.consumed_date).getFullYear() === year)

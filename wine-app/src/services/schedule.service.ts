@@ -69,7 +69,18 @@ export class ScheduleService {
     deliveryScheduleEntries?: DeliveryScheduleEntry[],
     startYear: number = new Date().getFullYear(),
     yearsToSchedule: number = 3,
-    annualConsumptionTarget: number = DELIVERY_CONFIG.annualTarget
+    annualConsumptionTarget: number = DELIVERY_CONFIG.annualTarget,
+    /**
+     * Bottles already drunk, per wine.
+     *
+     * The plan is built from bottles owned, and drinking one removes it
+     * from that count — so without this the bottle was subtracted twice:
+     * once from stock, and again when its log claimed one of the
+     * remaining slots. Every drink quietly shrank the forward plan by a
+     * bottle, and a wine whose last bottle was drunk vanished from the
+     * schedule altogether, taking the record of drinking it with it.
+     */
+    consumedCounts: Record<string, number> = {}
   ): DrinkingScheduleEntry[] {
     const schedule: DrinkingScheduleEntry[] = []
 
@@ -85,6 +96,12 @@ export class ScheduleService {
     allWines.forEach(w => {
       // Wine is available immediately if at home
       if (w.quantity_at_home > 0) {
+        wineAvailability[w.id] = currentYearMonth
+      } else if (w.quantity_in_storage === 0 && (consumedCounts[w.id] ?? 0) > 0) {
+        // Nothing left, but bottles were drunk: it was plainly available
+        // once. Without a date here it fails the availability test and
+        // never gets a slot, so the log has nothing to mark and the wine
+        // disappears from the schedule entirely.
         wineAvailability[w.id] = currentYearMonth
       } else if (w.quantity_in_storage > 0) {
         // Otherwise, check delivery schedule
@@ -131,7 +148,11 @@ export class ScheduleService {
     const wineBottleLimit: Record<string, number> = {}
     allWines.forEach(w => {
       wineTotalScheduled[w.id] = 0
-      wineBottleLimit[w.id] = w.quantity_in_storage + w.quantity_at_home
+      // Bottles owned plus bottles already drunk: the drunk ones still
+      // need a slot for their log to mark, and counting only what is
+      // left costs the forward plan one slot per drink.
+      wineBottleLimit[w.id] =
+        w.quantity_in_storage + w.quantity_at_home + (consumedCounts[w.id] ?? 0)
     })
 
     for (let year = startYear; year < startYear + yearsToSchedule; year++) {
