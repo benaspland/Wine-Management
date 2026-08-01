@@ -120,7 +120,11 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    const intFields = ['vintage', 'quantity', 'drinking_window_start', 'drinking_window_end', 'serving_temp_min', 'serving_temp_max']
+    // tier belongs here even though it is a <select>: a select hands
+    // back a string, and the workflow rejects a tier that is not an
+    // integer — so choosing a new tier threw, and the error went
+    // nowhere. Every numeric field, however it is entered.
+    const intFields = ['vintage', 'quantity', 'tier', 'drinking_window_start', 'drinking_window_end', 'serving_temp_min', 'serving_temp_max']
 
     let parsed: string | number = value
     if (name === 'alcohol_percent' || name === 'purchase_price') {

@@ -262,3 +262,34 @@ describe('WineForm - edit mode quantity mapping', () => {
     vi.unstubAllGlobals()
   })
 })
+
+/**
+ * Tier is chosen from a <select>, which hands back a string — and it was
+ * the one numeric field missing from the form's parse list. The workflow
+ * rejects a tier that is not an integer, so choosing a new tier threw,
+ * the store swallowed the error, and the form closed as though it had
+ * saved. Nothing changed and nothing said why.
+ */
+describe('WineForm - tier', () => {
+  let onSubmit: Mock<(wine: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => Promise<void>>
+
+  beforeEach(() => {
+    onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(<WineForm isOpen={true} onClose={vi.fn()} onSubmit={onSubmit} />)
+  })
+
+  it('submits the tier as a number, not the string the select gives', async () => {
+    setField('producer', 'Château Test')
+    setField('name', 'Cuvée Test')
+    setField('tier', '5')
+
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    const submitted = onSubmit.mock.calls[0][0]
+    expect(submitted.tier).toBe(5)
+    expect(typeof submitted.tier).toBe('number')
+    // Number.isInteger('5') is false, which is what rejected the edit
+    expect(Number.isInteger(submitted.tier)).toBe(true)
+  })
+})
