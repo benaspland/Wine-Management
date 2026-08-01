@@ -11,6 +11,21 @@ import { formatCriticRatings, parseCriticRatings } from '../services/wine.servic
     settings form rather than redefined here. */
 const INPUT = 'field'
 
+/** Blank means "not recorded", so it becomes undefined rather than 0. */
+function toNumber(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function toInt(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number.parseInt(trimmed, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 /** A titled group of related fields. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -66,24 +81,24 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           // selects never receive null/undefined values
           producer: initialWine.producer ?? '',
           name: initialWine.name,
-          vintage: initialWine.vintage,
+          vintage: String(initialWine.vintage),
           country: initialWine.country ?? '',
           region: initialWine.region,
           classification: initialWine.classification ?? '',
           wine_type: initialWine.wine_type ?? ('Red' as WineType),
           varietal: initialWine.varietal ?? '',
-          tier: initialWine.tier,
+          tier: String(initialWine.tier),
           location: 'storage' as 'storage' | 'home',
-          quantity: (initialWine.quantity_in_storage || 0) + (initialWine.quantity_at_home || 0),
+          quantity: String((initialWine.quantity_in_storage || 0) + (initialWine.quantity_at_home || 0)),
           // Normalised so a legacy value like "75cl" preselects its
           // trade name instead of leaving the dropdown blank
           format: normalizeFormat(initialWine.format) ?? 'Bottle',
-          drinking_window_start: initialWine.drinking_window_start,
-          drinking_window_end: initialWine.drinking_window_end,
-          alcohol_percent: initialWine.alcohol_percent ?? 0,
-          serving_temp_min: initialWine.serving_temp_min ?? 15,
-          serving_temp_max: initialWine.serving_temp_max ?? 18,
-          purchase_price: initialWine.purchase_price ?? 0,
+          drinking_window_start: String(initialWine.drinking_window_start),
+          drinking_window_end: String(initialWine.drinking_window_end),
+          alcohol_percent: initialWine.alcohol_percent ? String(initialWine.alcohol_percent) : '',
+          serving_temp_min: String(initialWine.serving_temp_min ?? 15),
+          serving_temp_max: String(initialWine.serving_temp_max ?? 18),
+          purchase_price: initialWine.purchase_price ? String(initialWine.purchase_price) : '',
           purchase_date: initialWine.purchase_date ?? '',
           merchant: initialWine.merchant ?? '',
           notes: initialWine.notes ?? '',
@@ -94,22 +109,22 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       : {
           producer: '',
           name: '',
-          vintage: new Date().getFullYear(),
+          vintage: String(new Date().getFullYear()),
           country: '',
           region: '',
           classification: '',
           wine_type: 'Red' as WineType,
           varietal: '',
-          tier: 1 as Tier,
+          tier: '1',
           location: 'storage' as 'storage' | 'home',
-          quantity: 1,
+          quantity: '1',
           format: 'Bottle',
-          drinking_window_start: new Date().getFullYear(),
-          drinking_window_end: new Date().getFullYear() + 10,
-          alcohol_percent: 0,
-          serving_temp_min: 15,
-          serving_temp_max: 18,
-          purchase_price: 0,
+          drinking_window_start: String(new Date().getFullYear()),
+          drinking_window_end: String(new Date().getFullYear() + 10),
+          alcohol_percent: '',
+          serving_temp_min: '15',
+          serving_temp_max: '18',
+          purchase_price: '',
           purchase_date: '',
           merchant: '',
           notes: '',
@@ -121,21 +136,13 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    // tier belongs here even though it is a <select>: a select hands
-    // back a string, and the workflow rejects a tier that is not an
-    // integer — so choosing a new tier threw, and the error went
-    // nowhere. Every numeric field, however it is entered.
-    const intFields = ['vintage', 'quantity', 'tier', 'drinking_window_start', 'drinking_window_end', 'serving_temp_min', 'serving_temp_max']
-
-    let parsed: string | number = value
-    if (name === 'alcohol_percent' || name === 'purchase_price') {
-      parsed = value ? parseFloat(value) : 0
-    } else if (intFields.includes(name)) {
-      parsed = value ? parseInt(value) : 0
-    }
-
-    setFormData(prev => ({ ...prev, [name]: parsed }))
+    // Whatever was typed, verbatim. Coercing here meant an emptied field
+    // refilled itself with 0 on the keystroke that cleared it, so the
+    // zero could not be deleted — and "13." became "13" before the
+    // decimal could be typed. Numbers are made on save, in one place.
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
+
 
   // A château or a Clos is its own wine; anything else needs a cuvée to
   // tell it apart from its siblings. Shared with the importer so the
@@ -157,10 +164,45 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       return
     }
 
+    // The one place text becomes numbers.
+    const vintage = toInt(formData.vintage)
+    const quantity = toInt(formData.quantity)
+    const windowStart = toInt(formData.drinking_window_start)
+    const windowEnd = toInt(formData.drinking_window_end)
+
+    // Required numbers say so when blank rather than quietly becoming 0,
+    // which would file a wine under the year zero or empty its rack.
+    if (vintage === undefined || vintage < 1800) {
+      alert('A vintage is required, as a 4-digit year')
+      return
+    }
+    if (quantity === undefined || quantity < 0) {
+      alert('A number of bottles is required')
+      return
+    }
+    if (windowStart === undefined || windowEnd === undefined) {
+      alert('A drinking window is required, as two years')
+      return
+    }
+    if (windowStart > windowEnd) {
+      alert('The drinking window must start before it ends')
+      return
+    }
+
     // Translate the form's single quantity + location into the split
     // inventory fields the Wine record uses. When editing, bottles at
     // home stay at home and any quantity change is applied to storage.
-    const { location, quantity, purchase_price, purchase_date, merchant, ...wineFields } = formData
+    // quantity and location describe the form, not the record: they
+    // become quantity_in_storage / quantity_at_home below.
+    const {
+      location,
+      quantity: _quantity,
+      purchase_price,
+      purchase_date,
+      merchant,
+      ...wineFields
+    } = formData
+    void _quantity
     let quantity_in_storage: number
     let quantity_at_home: number
     if (initialWine) {
@@ -174,10 +216,19 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     try {
       await onSubmit({
         ...wineFields,
+        vintage,
+        tier: (toInt(formData.tier) ?? 1) as Tier,
+        drinking_window_start: windowStart,
+        drinking_window_end: windowEnd,
+        serving_temp_min: toInt(formData.serving_temp_min),
+        serving_temp_max: toInt(formData.serving_temp_max),
+        // Blank is "unrecorded", not zero: a wine with no ABV recorded
+        // should not claim to be 0%.
+        alcohol_percent: toNumber(formData.alcohol_percent),
         // Back to the shape the record holds, so a score typed here and
         // one imported from a CSV are stored identically
         critic_ratings: parseCriticRatings(wineFields.critic_ratings),
-        purchase_price: purchase_price > 0 ? purchase_price : undefined,
+        purchase_price: toNumber(purchase_price),
         // Blank optional text is "unrecorded", not an empty value
         purchase_date: purchase_date.trim() || undefined,
         merchant: merchant.trim() || undefined,
