@@ -2,9 +2,6 @@ import type { Wine } from '../types/index'
 import { WineService } from '../services/wine.service'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
-import { wineDisplayName } from '../services/wine.service'
-import { Wine as WineIcon } from 'lucide-react'
-import HoldButton from './HoldButton'
 import TierBadge from './TierBadge'
 import DrinkingStatusBadge from './DrinkingStatusBadge'
 import WineThumbnail from './WineThumbnail'
@@ -90,39 +87,22 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
               <DrinkingStatusBadge status={drinkingStatus} className="ml-auto" />
             </div>
 
-            {/* Where the bottles are, and in what. This had a divider
-                and a band to itself, which spent 40px of every card on
-                two facts the list row carries inline. */}
             {/* Everything about the physical bottles on one line: how
-                many, where, and what size. The size used to sit at the
-                far right of its own row, as far from the counts as the
-                card allowed, despite being the same kind of fact. */}
+                many, where, and what size — and, when there are bottles
+                at home, the count itself is how you drink one. There is
+                no separate button: it was a third object on a card that
+                already had two chips and a photo, it only appeared on
+                the cards with bottles at home so those rows stood 20px
+                taller than the rest, and it was the brightest thing on
+                the screen for something done a few times a month. */}
             <div className="mt-auto flex items-center gap-2.5 text-[10px] text-outline">
-              <LocationBadge wine={wine} />
+              <LocationBadge
+                wine={wine}
+                onConsume={handleConsume}
+                onConsumeDetailed={handleConsumeDetailed}
+                disabled={isLoading}
+              />
               <span className="font-bold tracking-widest uppercase">{wine.format}</span>
-
-              {/* Inline with the counts, and left at its natural height.
-                  Pinned to the card's corner it floated over whatever
-                  happened to be at the bottom right — on a short card
-                  that was the drinking-status chip, and the button sat
-                  on top of the word. Overhanging it into the padding
-                  with negative margins avoided the height but put the
-                  collision back within a pixel or two; a row that is as
-                  tall as the thing in it cannot collide with anything,
-                  and only the cards with bottles at home pay for it. */}
-              {wine.quantity_at_home > 0 && (
-                <HoldButton
-                  onTap={handleConsume}
-                  onHold={handleConsumeDetailed}
-                  progressColor="rgba(255, 255, 255, 0.4)"
-                  disabled={isLoading}
-                  aria-label={`Drink ${wineDisplayName(wine.producer, wine.name)}`}
-                  title="Tap to mark consumed, hold to set the date and add a note"
-                  className="ml-auto h-9 w-9 shrink-0 rounded-full bg-primary-container text-on-primary hover:bg-primary disabled:opacity-50 transition-colors"
-                >
-                  <WineIcon size={15} aria-hidden="true" />
-                </HoldButton>
-              )}
             </div>
           </div>
 
