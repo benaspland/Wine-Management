@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Wine, ConsumptionLogEntry } from '../types/index'
-import { useWineStore } from '../store/wineStore'
+import { useWineStore, SORT_LABELS } from '../store/wineStore'
 import { useToastStore } from '../store/toastStore'
 import { getScheduledDeliveryDateForWine } from '../services/deliveryPlanning.service'
 import { wineDisplayName } from '../services/wine.service'
@@ -14,7 +14,7 @@ import WineForm from '../components/WineForm'
 import FilterDrawer from '../components/FilterDrawer'
 import ActiveFilters from '../components/ActiveFilters'
 import PageHeading from '../components/PageHeading'
-import { Plus, Search, SlidersHorizontal, LayoutGrid, List } from 'lucide-react'
+import { Plus, Search, SlidersHorizontal, LayoutGrid, List, ArrowUp, ArrowDown } from 'lucide-react'
 
 const VIEW_MODE_KEY = 'wine-app-view-mode'
 
@@ -50,6 +50,9 @@ export default function CollectionPage() {
   // An already-logged bottle being annotated from the toast
   const [amending, setAmending] = useState<{ entry: ConsumptionLogEntry; label: string } | null>(null)
 
+  const sortBy = useWineStore(state => state.sortBy)
+  const sortDirection = useWineStore(state => state.sortDirection)
+  const toggleSortDirection = useWineStore(state => state.toggleSortDirection)
   const searchTerm = useWineStore(state => state.searchTerm)
   const setSearchTerm = useWineStore(state => state.setSearchTerm)
   const locationFilter = useWineStore(state => state.locationFilter)
@@ -241,10 +244,14 @@ export default function CollectionPage() {
                 aria-hidden="true"
               />
               {/* Short enough to survive the narrowest phone: the old
-                  placeholder was visibly clipped mid-word */}
+                  placeholder was visibly clipped mid-word, and "Search
+                  the cellar" started clipping again once the sort
+                  direction joined this row — it wants 159px and has 112
+                  on a 320px screen. The magnifier and the page it sits
+                  on say the rest. */}
               <input
                 type="search"
-                placeholder="Search the cellar"
+                placeholder="Search"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="h-10 w-full bg-surface-container-low text-on-surface pl-9 pr-3 rounded-full border border-outline-variant focus:outline-none focus:border-primary text-sm"
@@ -267,6 +274,24 @@ export default function CollectionPage() {
               )}
             </button>
 
+            {/* Which way round the list is, next to the control that
+                sets what it is sorted by — same concern, same place.
+                It names the end it puts first rather than saying
+                "ascending", which is precise and tells you nothing:
+                nobody thinks of a 2008 as less than a 2019. */}
+            <button
+              onClick={toggleSortDirection}
+              title={`Sorted by ${SORT_LABELS[sortBy].name.toLowerCase()}, ${SORT_LABELS[sortBy][sortDirection].long.toLowerCase()} — tap to reverse`}
+              aria-label={`Sorted by ${SORT_LABELS[sortBy].name.toLowerCase()}, ${SORT_LABELS[sortBy][sortDirection].long.toLowerCase()}. Tap to reverse`}
+              className="h-10 flex items-center gap-1.5 px-3 shrink-0 rounded-full border border-outline-variant bg-surface-container-low text-sm font-medium text-on-surface-variant transition-colors hover:border-primary"
+            >
+              {sortDirection === 'asc' ? (
+                <ArrowUp size={16} aria-hidden="true" />
+              ) : (
+                <ArrowDown size={16} aria-hidden="true" />
+              )}
+              {SORT_LABELS[sortBy][sortDirection].short}
+            </button>
           </div>
 
           <div className="flex items-center justify-between gap-3">

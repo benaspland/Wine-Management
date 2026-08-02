@@ -4,6 +4,76 @@ import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 import { CLOSING_SOON_YEARS } from '../services/dashboard.service'
 
+export type SortKey = 'vintage' | 'tier' | 'producer' | 'window' | 'purchased'
+export type SortDirection = 'asc' | 'desc'
+
+/**
+ * Which way round each sort starts.
+ *
+ * "Ascending" has to mean the same thing everywhere for a direction
+ * toggle to be honest, so every comparator below is written ascending
+ * on its own value and the direction flips it. But the useful end
+ * differs by key — newest vintage, highest tier and most recent
+ * purchase are what you want first, while A–Z and the soonest-closing
+ * window are not — so each key opens on its own default and the toggle
+ * takes it from there.
+ */
+const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
+  vintage: 'desc',
+  tier: 'desc',
+  purchased: 'desc',
+  producer: 'asc',
+  window: 'asc',
+}
+
+/**
+ * What each direction is called, per key.
+ *
+ * "Ascending" is precise and useless: nobody thinks of a 2008 as less
+ * than a 2019. Each key says which end it puts first in its own terms,
+ * and the drawer and the cellar's toggle read from the same table so
+ * they cannot describe the same order differently.
+ */
+export const SORT_LABELS: Record<
+  SortKey,
+  { name: string; asc: { long: string; short: string }; desc: { long: string; short: string } }
+> = {
+  vintage: {
+    name: 'Vintage',
+    asc: { long: 'Oldest first', short: 'Oldest' },
+    desc: { long: 'Newest first', short: 'Newest' },
+  },
+  tier: {
+    name: 'Tier',
+    asc: { long: 'Lowest first', short: 'Lowest' },
+    desc: { long: 'Highest first', short: 'Highest' },
+  },
+  producer: {
+    name: 'Producer',
+    asc: { long: 'A to Z', short: 'A–Z' },
+    desc: { long: 'Z to A', short: 'Z–A' },
+  },
+  window: {
+    name: 'Drinking window',
+    asc: { long: 'Closing first', short: 'Closing' },
+    desc: { long: 'Furthest first', short: 'Furthest' },
+  },
+  purchased: {
+    name: 'Purchase date',
+    asc: { long: 'Oldest first', short: 'Oldest' },
+    desc: { long: 'Newest first', short: 'Newest' },
+  },
+}
+
+/** Ascending comparators, one per sort key. Direction is applied after. */
+const COMPARATORS: Record<SortKey, (a: Wine, b: Wine) => number> = {
+  vintage: (a, b) => a.vintage - b.vintage,
+  tier: (a, b) => a.tier - b.tier,
+  producer: (a, b) => (a.producer || '').localeCompare(b.producer || ''),
+  window: (a, b) => a.drinking_window_end - b.drinking_window_end,
+  purchased: (a, b) => (a.purchase_date ?? '').localeCompare(b.purchase_date ?? ''),
+}
+
 interface WineStore {
   wines: Wine[]
   filteredWines: Wine[]
@@ -21,7 +91,8 @@ interface WineStore {
   wineTypeFilter: string | null
   formatFilter: string | null
   windowFilter: 'all' | 'ready' | 'closing' | 'waiting'
-  sortBy: 'vintage' | 'tier' | 'producer' | 'window'
+  sortBy: SortKey
+  sortDirection: SortDirection
 
   // Actions
   loadWines: () => Promise<void>
@@ -42,7 +113,8 @@ interface WineStore {
   setWineTypeFilter: (type: string | null) => void
   setFormatFilter: (format: string | null) => void
   setWindowFilter: (filter: 'all' | 'ready' | 'closing' | 'waiting') => void
-  setSortBy: (sort: 'vintage' | 'tier' | 'producer' | 'window') => void
+  setSortBy: (sort: SortKey) => void
+  toggleSortDirection: () => void
   applyFilters: () => void
   clearFilters: () => void
   triggerScheduleUpdate: () => void
@@ -68,6 +140,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
   formatFilter: null,
   windowFilter: 'all',
   sortBy: 'vintage',
+  sortDirection: DEFAULT_DIRECTION.vintage,
 
   loadWines: async () => {
     set({ loading: true, error: null })
@@ -244,7 +317,16 @@ export const useWineStore = create<WineStore>((set, get) => ({
   },
 
   setSortBy: (sort) => {
-    set({ sortBy: sort })
+    // Changing the key resets to that key's useful end, so picking
+    // "Vintage" still lands on the newest and "Producer" on A–Z. Keeping
+    // the old direction would mean choosing Producer and getting Z–A
+    // because you had last reversed the vintages.
+    set({ sortBy: sort, sortDirection: DEFAULT_DIRECTION[sort] })
+    get().applyFilters()
+  },
+
+  toggleSortDirection: () => {
+    set({ sortDirection: get().sortDirection === 'asc' ? 'desc' : 'asc' })
     get().applyFilters()
   },
 
@@ -274,6 +356,7 @@ export const useWineStore = create<WineStore>((set, get) => ({
       formatFilter,
       windowFilter,
       sortBy,
+      sortDirection,
     } = get()
 
     // Copy so the in-place sort below never mutates the canonical wines array
@@ -337,16 +420,22 @@ export const useWineStore = create<WineStore>((set, get) => ({
       }
     }
 
-    // Apply sorting
-    if (sortBy === 'window') {
-      // Most urgent first: window closing soonest at the top
-      filtered.sort((a, b) => a.drinking_window_end - b.drinking_window_end)
-    } else if (sortBy === 'tier') {
-      filtered.sort((a, b) => b.tier - a.tier)
-    } else if (sortBy === 'producer') {
-      filtered.sort((a, b) => (a.producer || '').localeCompare(b.producer || ''))
+    // Apply sorting: one ascending comparator per key, reversed for
+    // descending. A wine with no purchase date recorded has nothing to
+    // sort by, so it sits at the end whichever way round the list is —
+    // reversing shouldn't promote the wines you know least about to the
+    // top.
+    const compare = COMPARATORS[sortBy] ?? COMPARATORS.vintage
+    const flip = sortDirection === 'desc' ? -1 : 1
+    if (sortBy === 'purchased') {
+      filtered.sort((a, b) => {
+        if (!a.purchase_date && !b.purchase_date) return 0
+        if (!a.purchase_date) return 1
+        if (!b.purchase_date) return -1
+        return flip * compare(a, b)
+      })
     } else {
-      filtered.sort((a, b) => b.vintage - a.vintage)
+      filtered.sort((a, b) => flip * compare(a, b))
     }
 
     set({ filteredWines: filtered })

@@ -8,7 +8,7 @@ import {
   computeDashboardStats,
   nextDelivery,
 } from '../services/dashboard.service'
-import { wineDisplayName } from '../services/wine.service'
+import { wineDisplayName, formatDeliveryMonth } from '../services/wine.service'
 import PageHeading from '../components/PageHeading'
 import BarList from '../components/dashboard/BarList'
 import StackedBar from '../components/dashboard/StackedBar'
@@ -36,10 +36,6 @@ interface NextDeliveryInfo {
   date: string
   bottles: number
   wines: number
-}
-
-function formatDeliveryDate(date: string): string {
-  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 interface StatTileProps {
@@ -249,7 +245,7 @@ export default function DashboardPage() {
         />
         <StatTile
           label="Next delivery"
-          value={delivery ? formatDeliveryDate(delivery.date) : 'None'}
+          value={delivery ? formatDeliveryMonth(delivery.date) : 'None'}
           sub={delivery ? `${delivery.bottles} bottles · ${delivery.wines} wines` : 'nothing scheduled'}
           to="/deliveries"
           variant="text"

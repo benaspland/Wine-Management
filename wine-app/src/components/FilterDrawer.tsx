@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useWineStore } from '../store/wineStore'
-import { X } from 'lucide-react'
+import { useWineStore, SORT_LABELS, type SortKey } from '../store/wineStore'
+import { X, ArrowUpDown } from 'lucide-react'
 
 interface FilterDrawerProps {
   open: boolean
@@ -35,6 +35,8 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
   const setWindowFilter = useWineStore(state => state.setWindowFilter)
   const sortBy = useWineStore(state => state.sortBy)
   const setSortBy = useWineStore(state => state.setSortBy)
+  const sortDirection = useWineStore(state => state.sortDirection)
+  const toggleSortDirection = useWineStore(state => state.toggleSortDirection)
   const clearFilters = useWineStore(state => state.clearFilters)
 
   const options = useMemo(() => {
@@ -167,16 +169,27 @@ export default function FilterDrawer({ open, onClose }: FilterDrawerProps) {
 
           <div className="pt-2 border-t border-outline-variant/60">
             <label className={labelClass}>Sort By</label>
+            {/* No "(newest first)" here any more: the direction is a
+                control of its own now, and a label that names an order
+                the list isn't in is worse than no label. The toggle
+                below says which way round it currently is. */}
             <select
               value={sortBy}
-              onChange={e => setSortBy(e.target.value as 'vintage' | 'tier' | 'producer' | 'window')}
+              onChange={e => setSortBy(e.target.value as SortKey)}
               className={selectClass}
             >
-              <option value="vintage">Vintage (newest first)</option>
-              <option value="tier">Tier (highest first)</option>
-              <option value="producer">Producer (A–Z)</option>
-              <option value="window">Window urgency (closing first)</option>
+              {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+                <option key={key} value={key}>{SORT_LABELS[key].name}</option>
+              ))}
             </select>
+
+            <button
+              onClick={toggleSortDirection}
+              className="mt-3 w-full flex items-center justify-center gap-2 rounded-full border border-outline-variant py-2.5 text-xs font-bold uppercase tracking-widest text-outline-variant transition-colors hover:text-outline"
+            >
+              <ArrowUpDown size={14} aria-hidden="true" />
+              {SORT_LABELS[sortBy][sortDirection].long}
+            </button>
           </div>
         </div>
 
