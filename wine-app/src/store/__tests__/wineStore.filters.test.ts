@@ -74,3 +74,79 @@ describe('sortBy window', () => {
     expect(names).toEqual(['Urgent', 'Relaxed', 'Future'])
   })
 })
+
+/**
+ * Sorting has two halves now: what the list is ordered by, and which way
+ * round. Every comparator is written ascending on its own value and the
+ * direction flips it, so the toggle means the same thing for each key —
+ * but each key opens on its own useful end, since newest vintage and
+ * A–Z are not the same direction.
+ */
+describe('sort direction', () => {
+  const bought = (name: string, purchase_date?: string) =>
+    wine({ name, purchase_date })
+
+  it('opens each sort at its useful end', () => {
+    const store = useWineStore.getState()
+    store.setSortBy('vintage')
+    expect(useWineStore.getState().sortDirection).toBe('desc')
+    store.setSortBy('producer')
+    expect(useWineStore.getState().sortDirection).toBe('asc')
+    store.setSortBy('window')
+    expect(useWineStore.getState().sortDirection).toBe('asc')
+    store.setSortBy('purchased')
+    expect(useWineStore.getState().sortDirection).toBe('desc')
+  })
+
+  it('reverses the order without changing what it sorts by', () => {
+    useWineStore.getState().setSortBy('window')
+    expect(useWineStore.getState().filteredWines.map(w => w.name))
+      .toEqual(['Urgent', 'Relaxed', 'Future'])
+
+    useWineStore.getState().toggleSortDirection()
+    expect(useWineStore.getState().sortBy).toBe('window')
+    expect(useWineStore.getState().filteredWines.map(w => w.name))
+      .toEqual(['Future', 'Relaxed', 'Urgent'])
+  })
+
+  it('starts a newly chosen sort at its own default, not the last direction', () => {
+    // Reversing the vintages must not leave Producer running Z–A
+    useWineStore.getState().setSortBy('vintage')
+    useWineStore.getState().toggleSortDirection()
+    expect(useWineStore.getState().sortDirection).toBe('asc')
+
+    useWineStore.getState().setSortBy('producer')
+    expect(useWineStore.getState().sortDirection).toBe('asc')
+  })
+
+  it('sorts by purchase date, most recent first', () => {
+    useWineStore.setState({
+      wines: [
+        bought('Middle', '2024-06-01'),
+        bought('Newest', '2025-11-30'),
+        bought('Oldest', '2019-01-15'),
+      ],
+    })
+    useWineStore.getState().setSortBy('purchased')
+    expect(useWineStore.getState().filteredWines.map(w => w.name))
+      .toEqual(['Newest', 'Middle', 'Oldest'])
+
+    useWineStore.getState().toggleSortDirection()
+    expect(useWineStore.getState().filteredWines.map(w => w.name))
+      .toEqual(['Oldest', 'Middle', 'Newest'])
+  })
+
+  it('keeps wines with no purchase date last, whichever way round', () => {
+    useWineStore.setState({
+      wines: [bought('Undated'), bought('Dated', '2024-06-01'), bought('Older', '2020-02-02')],
+    })
+    useWineStore.getState().setSortBy('purchased')
+    expect(useWineStore.getState().filteredWines.map(w => w.name))
+      .toEqual(['Dated', 'Older', 'Undated'])
+
+    // Reversing must not promote the wines you know least about
+    useWineStore.getState().toggleSortDirection()
+    expect(useWineStore.getState().filteredWines.map(w => w.name))
+      .toEqual(['Older', 'Dated', 'Undated'])
+  })
+})
