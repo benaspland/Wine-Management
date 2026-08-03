@@ -593,6 +593,59 @@ describe('ScheduleService', () => {
       status: 'pending',
     })
 
+    /**
+     * A confirmed delivery used to disappear from the screen entirely.
+     * The scheduler cannot produce it — its bottles are at home, out of
+     * the storage counts it plans from — so it was dropped, and with it
+     * any record of what had arrived and when.
+     */
+    it('shows a completed window as a record of what arrived', () => {
+      const result = ScheduleService.buildDisplaySchedule(
+        [makeDelivery('c', '2027-03-01')],
+        [wineA, wineB, wineC],
+        [
+          { id: 'w-done', scheduled_date: '2026-08-04', status: 'completed', locked: false },
+        ],
+        new Map(),
+        [3, 9],
+        new Map([['w-done', [{ wine_id: 'a', quantity: 6 }, { wine_id: 'b', quantity: 3 }]]])
+      )
+
+      expect(result.map(e => e.date)).toEqual(['2026-08-04', '2027-03-01'])
+      expect(result[0].status).toBe('completed')
+      expect(result[0].wines.map(w => w.id).sort()).toEqual(['a', 'b'])
+      expect(result[0].wines.find(w => w.id === 'b')?.quantity).toBe(3)
+    })
+
+    it('keeps a completed window out of the planning it is appended to', () => {
+      // Its bottles are already at home: counted again here, the wine
+      // would be delivered twice.
+      const withCompleted = ScheduleService.buildDisplaySchedule(
+        [makeDelivery('c', '2027-03-01')],
+        [wineA, wineB, wineC],
+        [{ id: 'w-done', scheduled_date: '2026-08-04', status: 'completed', locked: false }],
+        new Map(),
+        [3, 9],
+        new Map([['w-done', [{ wine_id: 'a', quantity: 6 }]]])
+      )
+      const planned = withCompleted.filter(e => e.status !== 'completed')
+      expect(planned).toHaveLength(1)
+      expect(planned[0].wines.map(w => w.id)).toEqual(['c'])
+    })
+
+    it('shows a completed window even with no wines recorded against it', () => {
+      const result = ScheduleService.buildDisplaySchedule(
+        [],
+        [wineA],
+        [{ id: 'w-done', scheduled_date: '2026-08-04', status: 'completed', locked: false }],
+        new Map(),
+        [3, 9]
+      )
+      expect(result).toHaveLength(1)
+      expect(result[0].status).toBe('completed')
+      expect(result[0].wines).toEqual([])
+    })
+
     it('preserves unlocked schedule unchanged when no DB windows exist', () => {
       const deliveries: DeliveryScheduleEntry[] = [
         makeDelivery('a', '2026-03-01'),

@@ -823,7 +823,14 @@ export class ScheduleService {
     wines: Wine[],
     dbWindows: DisplayDbWindow[],
     lockedWindowWines: Map<string, Array<{ wine_id: string; quantity: number }>>,
-    deliveryMonths: [number, number] = [3, 9]
+    deliveryMonths: [number, number] = [3, 9],
+    /**
+     * What each completed window brought, so deliveries already in the
+     * house can still be shown as a record. Their bottles are counted in
+     * the live wine quantities, so they take no part in the planning
+     * above — they are only ever appended.
+     */
+    completedWindowWines: Map<string, Array<{ wine_id: string; quantity: number }>> = new Map()
   ): DeliveryDisplayEntry[] {
     const wineMap = new Map(wines.map(w => [w.id, w]))
 
@@ -870,8 +877,7 @@ export class ScheduleService {
 
     // 2. Ensure non-completed locked DB windows always appear, even if
     //    scheduler produced nothing for them (e.g. all their wines were
-    //    deferred). Completed windows are excluded — their wines are
-    //    already at home and reflected in the live wine quantities.
+    //    deferred).
     for (const dbWindow of dbWindows) {
       if (dbWindow.locked && dbWindow.status !== 'completed' && !grouped.has(dbWindow.scheduled_date)) {
         grouped.set(dbWindow.scheduled_date, {
@@ -882,6 +888,30 @@ export class ScheduleService {
           wines: [],
         })
       }
+    }
+
+    // 2b. Completed windows, as a record of what arrived.
+    //
+    //     The scheduler cannot produce these: the moment a delivery is
+    //     confirmed its bottles are at home, out of the storage counts
+    //     it plans from. They were previously left out of the display
+    //     entirely, so a confirmed delivery vanished — you had no way to
+    //     see what had been delivered, or when. They are appended after
+    //     the planning above, never merged into it, so nothing here can
+    //     affect what is still to come.
+    const completedEntries: DeliveryDisplayEntry[] = []
+    for (const dbWindow of dbWindows) {
+      if (dbWindow.status !== 'completed') continue
+      const rows = completedWindowWines.get(dbWindow.id) ?? []
+      completedEntries.push({
+        date: dbWindow.scheduled_date,
+        windowId: dbWindow.id,
+        status: 'completed',
+        locked: dbWindow.locked,
+        wines: rows
+          .map(r => toDisplayWine(r.wine_id, r.quantity))
+          .filter((w): w is DeliveryDisplayWine => w !== null),
+      })
     }
 
     // 3. Reconcile locked windows: replace scheduler output with DB curation,
@@ -984,9 +1014,11 @@ export class ScheduleService {
     }
 
     // 5. Sort and drop empty unlocked entries (keep empty locked ones so
-    //    the user can still see/manage them).
-    return Array.from(grouped.values())
-      .filter(e => e.wines.length > 0 || e.locked)
+    //    the user can still see/manage them). Completed entries join
+    //    here, so the whole list stays in date order — a delivery
+    //    already in the house sits above the ones still to come.
+    return [...grouped.values(), ...completedEntries]
+      .filter(e => e.wines.length > 0 || e.locked || e.status === 'completed')
       .sort((a, b) => a.date.localeCompare(b.date))
   }
 

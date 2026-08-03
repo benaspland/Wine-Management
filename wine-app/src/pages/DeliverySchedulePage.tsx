@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { useDeliverySchedule } from '../hooks/useDeliverySchedule'
 import MessageModal from '../components/MessageModal'
-import { wineDisplayName } from '../services/wine.service'
+import { wineDisplayName, formatDeliveryMonth } from '../services/wine.service'
 import { useToastStore } from '../store/toastStore'
 import { ChevronDown, Lock } from 'lucide-react'
 import PageHeading from '../components/PageHeading'
+import DeliveryStatusBadge, { type DeliveryState } from '../components/DeliveryStatusBadge'
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
@@ -16,18 +17,45 @@ export default function DeliverySchedulePage() {
   const showToast = useToastStore(state => state.show)
   const [isPromoting, setIsPromoting] = useState(false)
   const [isDelaying, setIsDelaying] = useState(false)
-  const [collapsedDeliveries, setCollapsedDeliveries] = useState<Set<string>>(new Set())
+  /**
+   * Dates the user has opened or shut *against* the default.
+   *
+   * Storing the exception rather than the state itself means the
+   * defaults keep applying as the schedule moves: confirm the next
+   * delivery and the one behind it opens on its own, without a stale
+   * "collapsed" entry holding it shut.
+   */
+  const [flipped, setFlipped] = useState<Set<string>>(new Set())
 
   const currentWinesAtHome = wines.reduce((sum, w) => sum + w.quantity_at_home, 0)
 
   const toggleCollapse = (date: string) => {
-    setCollapsedDeliveries(prev => {
+    setFlipped(prev => {
       const next = new Set(prev)
       if (next.has(date)) next.delete(date)
       else next.add(date)
       return next
     })
   }
+
+  /**
+   * The next delivery is the earliest one not yet confirmed.
+   *
+   * Derived from position, not from the date: a delivery whose date has
+   * passed but which you never confirmed is still the next thing to
+   * deal with, and calling it complete would say something that hasn't
+   * happened. The list is in date order, so everything after the first
+   * unconfirmed entry is simply Planned — which is why "next up" can
+   * never sit below a "planned" card.
+   */
+  const nextUpDate = deliverySchedule.find(d => d.status !== 'completed')?.date
+
+  const stateOf = (delivery: { date: string; status: string }): DeliveryState =>
+    delivery.status === 'completed' ? 'complete' : delivery.date === nextUpDate ? 'next' : 'planned'
+
+  /** Only the next delivery opens by default; the rest are a list of dates. */
+  const isExpanded = (delivery: { date: string; status: string }) =>
+    (stateOf(delivery) === 'next') !== flipped.has(delivery.date)
 
   // Successes are non-blocking toasts; errors stay as a modal that must
   // be acknowledged before continuing to curate.
@@ -88,30 +116,41 @@ export default function DeliverySchedulePage() {
         aria-label="Home cellar capacity"
         title={`${currentWinesAtHome} bottles at home of ${cellarCapacity} capacity`}
       >
-        <div
-          className="relative h-2.5 flex-1 rounded-full overflow-hidden"
-          style={{ backgroundColor: 'rgba(255, 191, 0, 0.14)' }}
-        >
+        {/* Accent on a muted track, like the dashboard's storage split.
+            A full cellar used to turn the whole bar red, which reads as
+            a fault rather than a fact — the cellar being full is the
+            plan working. The count beside it carries that news instead,
+            in a word rather than by alarming the chart. */}
+        <div className="relative h-2.5 flex-1 rounded-full overflow-hidden bg-surface-container-highest">
           <div
-            className="h-full rounded-full transition-all duration-500"
+            className="h-full rounded-full bg-primary-container transition-all duration-500"
             style={{
               width: `${cellarCapacity > 0 ? Math.min(100, (currentWinesAtHome / cellarCapacity) * 100) : 0}%`,
-              backgroundColor: availableCapacity <= cellarCapacity * 0.05 ? 'rgb(var(--danger))' : 'rgb(var(--accent))',
             }}
           />
         </div>
         <p className="text-sm whitespace-nowrap">
           <span className="font-semibold text-on-surface">{currentWinesAtHome}</span>
           <span className="text-outline"> / {cellarCapacity}</span>
-          <span className={`ml-2 ${availableCapacity > 0 ? 'text-outline' : 'text-error'}`}>
-            {availableCapacity} free
+          <span
+            className={`ml-2 ${
+              availableCapacity <= 0
+                ? 'text-error'
+                : availableCapacity <= cellarCapacity * 0.05
+                  ? 'text-warning'
+                  : 'text-outline'
+            }`}
+          >
+            {availableCapacity > 0 ? `${availableCapacity} free` : 'full'}
           </span>
         </p>
       </div>
 
       {/* Delivery Schedule */}
       <div className="space-y-4">
-        <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Upcoming Deliveries</h3>
+        {/* Not "Upcoming" any more: a delivery already in the house is
+            listed too, above the ones still to come. */}
+        <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Deliveries</h3>
 
         {scheduleError && (
           <div className="panel p-6 text-center">
@@ -125,114 +164,121 @@ export default function DeliverySchedulePage() {
           </div>
         ) : (
           deliverySchedule.map(delivery => {
-            const isCollapsed = collapsedDeliveries.has(delivery.date)
+            const state = stateOf(delivery)
+            const expanded = isExpanded(delivery)
             const totalBottles = delivery.wines.reduce((sum, w) => sum + w.quantity, 0)
             const totalWines = delivery.wines.length
 
             return (
-              <div key={delivery.date} className="panel overflow-hidden">
+              <div
+                key={delivery.date}
+                /* Three states, told by the edge and the weight of the
+                   card rather than by a dot of colour: done and faded,
+                   next and outlined in accent, or simply on the list. */
+                className={`panel overflow-hidden ${
+                  state === 'complete'
+                    ? 'opacity-[0.55]'
+                    : state === 'next'
+                      ? 'panel-accent'
+                      : ''
+                }`}
+              >
                 <button
                   onClick={() => toggleCollapse(delivery.date)}
-                  className="w-full p-4 flex justify-between items-center hover:bg-surface-container-high transition-colors text-left"
+                  aria-expanded={expanded}
+                  className="w-full p-4 flex justify-between items-center gap-3 hover:bg-surface-container-high transition-colors text-left"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <ChevronDown
                       size={16}
                       aria-hidden="true"
-                      className="text-outline transition-transform duration-200"
-                      style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                      className="shrink-0 text-outline transition-transform duration-200"
+                      style={{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}
                     />
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="text-lg font-bold text-on-surface">
-                        {new Date(delivery.date).toLocaleDateString('en-US', {
-                          month: 'long',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
+                        {formatDeliveryMonth(delivery.date)}
                       </h3>
                       <p className="text-xs text-outline mt-0.5">
                         {totalWines} {totalWines === 1 ? 'wine' : 'wines'} · {totalBottles} {totalBottles === 1 ? 'bottle' : 'bottles'}
+                        {delivery.locked && state !== 'complete' && (
+                          <span
+                            className="inline-flex items-center gap-1 ml-2 align-middle"
+                            title="You have customised this delivery (promoted or deferred wines), so regeneration keeps it as-is"
+                          >
+                            <Lock size={10} aria-hidden="true" />
+                            Curated
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {/* Read-only status, styled to not look tappable */}
-                    <span className="flex items-center gap-1.5 text-xs text-outline">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          delivery.status === 'completed' ? 'bg-success' :
-                          delivery.status === 'in_transit' ? 'bg-warning' :
-                          'bg-primary-container'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {delivery.status === 'completed' ? 'Delivered' :
-                        delivery.status === 'in_transit' ? 'In transit' : 'Planned'}
-                    </span>
-                    {delivery.locked && delivery.status !== 'completed' && (
-                      <span
-                        className="flex items-center gap-1 text-xs text-outline"
-                        title="You have customised this delivery (promoted or deferred wines), so regeneration keeps it as-is"
-                      >
-                        <Lock size={11} aria-hidden="true" />
-                        Curated
-                      </span>
-                    )}
-                  </div>
+                  <span className="shrink-0">
+                    <DeliveryStatusBadge state={state} />
+                  </span>
                 </button>
 
-                {!isCollapsed && (
+                {expanded && (
                   <div className="px-4 pb-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                      {delivery.wines.map(wine => {
-                        const firstUpcoming = deliverySchedule.find(d => d.status !== 'completed')
-                        const isFirstDelivery = delivery.date === firstUpcoming?.date
-                        const canModify = delivery.status !== 'completed'
-
-                        return (
-                          <div key={wine.id} className="bg-surface-container-lowest p-3 rounded-[10px] border border-outline-variant text-sm">
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="min-w-0">
-                                <p className="font-semibold text-on-surface">
-                                  {wineDisplayName(wine.producer, wine.name)}
-                                </p>
-                                <p className="text-outline text-xs">
-                                  {wine.vintage} • Qty: {wine.quantity} {wine.format || '750ml'}
-                                </p>
-                              </div>
-                              {canModify && (
-                                <div className="shrink-0">
-                                  {isFirstDelivery ? (
-                                    <button
-                                      onClick={() => handleDeferWine(wine.id, delivery.date, wineDisplayName(wine.producer, wine.name))}
-                                      disabled={isDelaying || delivery.wines.length <= 1}
-                                      className="px-3 py-1.5 bg-surface-container-high text-on-surface rounded-full text-xs font-medium hover:bg-outline/20 transition-colors disabled:opacity-50 whitespace-nowrap"
-                                      title="Defer this wine to a future delivery"
-                                    >
-                                      {isDelaying ? '...' : 'Defer'}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => handlePromoteWine(wine.id, wine.quantity, wineDisplayName(wine.producer, wine.name))}
-                                      disabled={isPromoting}
-                                      className="px-3 py-1.5 bg-primary text-on-primary rounded-full text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50 whitespace-nowrap"
-                                      title="Promote to next delivery"
-                                    >
-                                      {isPromoting ? '...' : 'Promote'}
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {delivery.wines.map(wine => (
+                        <div key={wine.id} className="panel panel-sunken p-3 text-sm">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0">
+                              {/* Two lines, breaking at spaces. A name
+                                  long enough to need a third is rare
+                                  enough that an ellipsis beats a card
+                                  that grows to fit it. */}
+                              <p className="font-semibold text-on-surface line-clamp-2">
+                                {wineDisplayName(wine.producer, wine.name)}
+                              </p>
+                              {/* "6 bottles · Bottle" said the same
+                                  thing twice; the count and the format
+                                  belong together. */}
+                              <p className="text-outline text-xs mt-0.5">
+                                {wine.vintage} · {wine.quantity} × {wine.format || 'Bottle'}
+                              </p>
                             </div>
+
+                            {/* One action per state, and none once it is
+                                done: a delivery already in the house has
+                                nothing left to bring forward or put off.
+                                Both are outlines — the only filled
+                                button on this screen is the one that
+                                commits a delivery. */}
+                            {state === 'next' && (
+                              <button
+                                onClick={() => handleDeferWine(wine.id, delivery.date, wineDisplayName(wine.producer, wine.name))}
+                                disabled={isDelaying || delivery.wines.length <= 1}
+                                className="shrink-0 px-3 py-1.5 rounded-full border border-outline-variant text-outline-variant text-xs font-medium hover:text-on-surface hover:border-outline transition-colors disabled:opacity-40 whitespace-nowrap"
+                                title="Defer this wine to a future delivery"
+                              >
+                                {isDelaying ? '...' : 'Defer'}
+                              </button>
+                            )}
+                            {state === 'planned' && (
+                              <button
+                                onClick={() => handlePromoteWine(wine.id, wine.quantity, wineDisplayName(wine.producer, wine.name))}
+                                disabled={isPromoting}
+                                className="shrink-0 px-3 py-1.5 rounded-full border border-primary-container/60 text-primary-container text-xs font-medium hover:border-primary-container transition-colors disabled:opacity-40 whitespace-nowrap"
+                                title="Promote to the next delivery"
+                              >
+                                {isPromoting ? '...' : 'Promote'}
+                              </button>
+                            )}
                           </div>
-                        )
-                      })}
+                        </div>
+                      ))}
                     </div>
 
-                    {delivery.status !== 'completed' && (
+                    {/* The one solid button on the screen, and only on
+                        the delivery that is actually next: confirming a
+                        2029 delivery today would put its wines in the
+                        house four years early. */}
+                    {state === 'next' && (
                       <button
                         onClick={() => handleConfirmDelivery(delivery.date)}
-                        className="w-full px-4 py-2.5 bg-primary text-on-primary rounded-full font-medium hover:opacity-90"
+                        className="btn-primary w-full mt-4"
                       >
                         Confirm Delivery
                       </button>
