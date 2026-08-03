@@ -205,9 +205,17 @@ export async function promoteWineToNextDelivery(
 
   const windowId = await ensureLockedWindow(firstDelivery)
 
+  // Add to what is already booked, don't replace it.
+  //
+  // A wine can legitimately sit in two windows at once — six magnums
+  // travel as two cases of three, so the scheduler splits them — and
+  // the quantity passed here is the bottles being brought forward, not
+  // the new total. Overwriting meant promoting the second three set the
+  // window back to the three already in it: nothing moved, no error was
+  // raised, and the toast said it had worked.
   const existing = await db.getDeliveryWindowWine(windowId, wineId)
   if (existing) {
-    await db.updateDeliveryWindowWine(windowId, wineId, quantity)
+    await db.updateDeliveryWindowWine(windowId, wineId, existing.quantity + quantity)
   } else {
     await db.addWineToDeliveryWindow(windowId, wineId, quantity)
   }

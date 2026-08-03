@@ -599,6 +599,41 @@ describe('ScheduleService', () => {
      * the storage counts it plans from — so it was dropped, and with it
      * any record of what had arrived and when.
      */
+    /**
+     * The scheduler builds a delivery in two passes — a case of each
+     * wine, then filler cases to use the remaining space — so a wine
+     * with two cases in the same delivery arrives here as two entries.
+     * It showed as the same wine listed twice, and locking the window
+     * kept only the first: the filler case was silently dropped.
+     */
+    it('merges a wine that has more than one case in the same delivery', () => {
+      const result = ScheduleService.buildDisplaySchedule(
+        [makeDelivery('a', '2026-03-01', 6), makeDelivery('a', '2026-03-01', 2), makeDelivery('b', '2026-03-01')],
+        [wineA, wineB],
+        [],
+        new Map(),
+        [3, 9]
+      )
+
+      expect(result).toHaveLength(1)
+      expect(result[0].wines).toHaveLength(2)
+      expect(result[0].wines.find(w => w.id === 'a')?.quantity).toBe(8)
+      expect(result[0].wines.find(w => w.id === 'b')?.quantity).toBe(6)
+    })
+
+    it('keeps the same wine separate across different deliveries', () => {
+      // Two cases of one wine in two windows is a split, not a duplicate
+      const result = ScheduleService.buildDisplaySchedule(
+        [makeDelivery('a', '2026-03-01', 3), makeDelivery('a', '2026-09-01', 3)],
+        [wineA],
+        [],
+        new Map(),
+        [3, 9]
+      )
+
+      expect(result.map(e => e.wines.map(w => `${w.id}:${w.quantity}`))).toEqual([['a:3'], ['a:3']])
+    })
+
     it('shows a completed window as a record of what arrived', () => {
       const result = ScheduleService.buildDisplaySchedule(
         [makeDelivery('c', '2027-03-01')],
