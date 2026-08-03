@@ -862,7 +862,18 @@ export class ScheduleService {
 
       const existing = grouped.get(d.scheduled_date)
       if (existing) {
-        existing.wines.push(displayWine)
+        // One row per wine per delivery. The scheduler builds a delivery
+        // in two passes — a case of each wine, then filler cases to use
+        // the remaining space — so a wine with more than one case in the
+        // same delivery arrived here as two entries. It showed as the
+        // same wine listed twice, and locking the window kept only the
+        // first: the filler case was simply dropped.
+        const already = existing.wines.find(w => w.id === displayWine.id)
+        if (already) {
+          already.quantity += displayWine.quantity
+        } else {
+          existing.wines.push(displayWine)
+        }
       } else {
         const dbWindow = dbByDate.get(d.scheduled_date)
         grouped.set(d.scheduled_date, {

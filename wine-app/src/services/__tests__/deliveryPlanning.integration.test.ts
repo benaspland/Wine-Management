@@ -131,10 +131,21 @@ describe('buildDeliverySchedule', () => {
 })
 
 describe('promoteWineToNextDelivery', () => {
+  /**
+   * The quantity passed in is the bottles being brought forward, not the
+   * new total — the button sends the quantity of the row it sits on, in
+   * a later delivery. So these assert against whatever the next delivery
+   * already held rather than a fixed number: the scheduler decides that,
+   * and pinning it would test the scheduler, not the promotion.
+   */
+  const bookedInFirst = (schedule: Awaited<ReturnType<typeof planner.buildDeliverySchedule>>, wineId: string) =>
+    schedule[0].wines.find(w => w.id === wineId)?.quantity ?? 0
+
   it('locks the first delivery and persists the promoted wine', async () => {
     const wines = await seedSmallCollection()
     const schedule = await planner.buildDeliverySchedule(wines)
     const target = wines[5]
+    const before = bookedInFirst(schedule, target.id)
 
     await planner.promoteWineToNextDelivery(schedule, target.id, 3)
 
@@ -145,26 +156,28 @@ describe('promoteWineToNextDelivery', () => {
 
     const windowWines = await db.getDeliveryWindowWines(locked[0].id)
     const promoted = windowWines.find(ww => ww.wine_id === target.id)
-    expect(promoted?.quantity).toBe(3)
+    expect(promoted?.quantity).toBe(before + 3)
   })
 
   it('keeps the promoted wine in the first delivery across rebuilds', async () => {
     const wines = await seedSmallCollection()
     const schedule = await planner.buildDeliverySchedule(wines)
     const target = wines[5]
+    const before = bookedInFirst(schedule, target.id)
 
     await planner.promoteWineToNextDelivery(schedule, target.id, 3)
 
     const rebuilt = await planner.buildDeliverySchedule(wines)
     expect(rebuilt[0].locked).toBe(true)
     const inFirst = rebuilt[0].wines.find(w => w.id === target.id)
-    expect(inFirst?.quantity).toBe(3)
+    expect(inFirst?.quantity).toBe(before + 3)
   })
 
-  it('updates the quantity when the wine is already in the delivery', async () => {
+  it('adds to the quantity when the wine is already in the delivery', async () => {
     const wines = await seedSmallCollection()
     const schedule = await planner.buildDeliverySchedule(wines)
     const target = wines[5]
+    const before = bookedInFirst(schedule, target.id)
 
     await planner.promoteWineToNextDelivery(schedule, target.id, 3)
     // The app refreshes the schedule after every action (useDeliverySchedule);
@@ -176,8 +189,44 @@ describe('promoteWineToNextDelivery', () => {
     const locked = windows.find(w => w.locked)
     const windowWines = await db.getDeliveryWindowWines(locked!.id)
     const promoted = windowWines.filter(ww => ww.wine_id === target.id)
+    // One row, not two, and every promoted bottle accounted for
     expect(promoted).toHaveLength(1)
-    expect(promoted[0].quantity).toBe(5)
+    expect(promoted[0].quantity).toBe(before + 3 + 5)
+  })
+
+  /**
+   * Six magnums arrive as two cases of three, so one wine routinely
+   * lands in two different windows. Promoting the second three did
+   * nothing at all — and said it had worked.
+   */
+  it('adds to what is already there when a wine is split across windows', async () => {
+    const wines = await seedCollection()
+    const magnums = await makeWine('Magnums', 6, { format: 'Magnum' })
+    const all = [...wines, magnums]
+
+    // Put the collection in the state the app gets into on its own: one
+    // case of magnums booked into the next delivery, the other case left
+    // for the scheduler to plan later. Magnums travel three to a case,
+    // so six of them routinely straddle two windows.
+    const initial = await planner.buildDeliverySchedule(all)
+    await planner.promoteWineToNextDelivery(initial, wines[0].id, 1)
+    const locked = (await db.getAllDeliveryWindows()).find(w => w.locked)!
+    await db.updateDeliveryWindowWine(locked.id, magnums.id, 3)
+
+    const split = await planner.buildDeliverySchedule(all)
+    expect(split[0].wines.find(w => w.id === magnums.id)?.quantity).toBe(3)
+    const later = split.slice(1).find(d => d.wines.some(w => w.id === magnums.id))
+    expect(later, 'the second case should be planned for a later window').toBeDefined()
+    const remaining = later!.wines.find(w => w.id === magnums.id)!.quantity
+    expect(remaining).toBe(3)
+
+    // Promote the second three, exactly as the button does
+    await planner.promoteWineToNextDelivery(split, magnums.id, remaining)
+
+    const after = await planner.buildDeliverySchedule(all)
+    // All six in the next delivery, and none left behind
+    expect(after[0].wines.find(w => w.id === magnums.id)?.quantity).toBe(6)
+    expect(after.slice(1).some(d => d.wines.some(w => w.id === magnums.id))).toBe(false)
   })
 
   it('rejects a promotion that would exceed projected home capacity', async () => {
