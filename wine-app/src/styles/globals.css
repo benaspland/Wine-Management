@@ -78,6 +78,21 @@ html {
   border-radius: 14px;
 }
 
+/* Panel edges that say what state the card is in.
+ *
+ * These have to live here rather than as Tailwind classes on the
+ * element: this file is unlayered and Tailwind's utilities sit in
+ * @layer utilities, so an unlayered `.panel` beats `border-…` and
+ * `bg-…` in the cascade whatever the specificity. Adding a colour
+ * utility alongside `panel` silently does nothing. */
+.panel-accent {
+  border-color: rgb(var(--accent) / 0.55);
+}
+
+.panel-sunken {
+  background-color: rgb(var(--surface-alt));
+}
+
 /* A panel with the standard padding baked in. */
 .card {
   background-color: rgb(var(--surface));

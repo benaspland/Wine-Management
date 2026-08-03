@@ -18,6 +18,7 @@ import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 interface LockedWindowState {
   dbWindows: Awaited<ReturnType<typeof db.getAllDeliveryWindows>>
   lockedWindowWines: Map<string, Array<{ wine_id: string; quantity: number }>>
+  completedWindowWines: Map<string, Array<{ wine_id: string; quantity: number }>>
   committedQuantities: Record<string, number>
   lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>>
 }
@@ -26,15 +27,25 @@ interface LockedWindowState {
  * Fetch DB windows and their curated wine lists (for locked windows)
  * before generating the schedule so committed quantities can be
  * excluded from the scheduler — it then plans around them naturally.
+ *
+ * Completed windows are read too, but kept apart: their bottles are
+ * already at home, so counting them as committed would reserve the same
+ * bottles twice. They are only wanted as a record of what arrived.
  */
 async function loadLockedWindowState(): Promise<LockedWindowState> {
   const dbWindows = await db.getAllDeliveryWindows()
   const lockedWindowWines = new Map<string, Array<{ wine_id: string; quantity: number }>>()
+  const completedWindowWines = new Map<string, Array<{ wine_id: string; quantity: number }>>()
   const committedQuantities: Record<string, number> = {}
   const lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>> = {}
 
   for (const w of dbWindows) {
-    if (w.locked && w.status !== 'completed') {
+    if (w.status === 'completed') {
+      const wws = await db.getDeliveryWindowWines(w.id)
+      if (wws.length > 0) {
+        completedWindowWines.set(w.id, wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity })))
+      }
+    } else if (w.locked) {
       const wws = await db.getDeliveryWindowWines(w.id)
       const wineList = wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
       lockedWindowWines.set(w.id, wineList)
@@ -45,7 +56,7 @@ async function loadLockedWindowState(): Promise<LockedWindowState> {
     }
   }
 
-  return { dbWindows, lockedWindowWines, committedQuantities, lockedDeliveries }
+  return { dbWindows, lockedWindowWines, completedWindowWines, committedQuantities, lockedDeliveries }
 }
 
 /**
@@ -73,7 +84,7 @@ export async function buildDeliveryScheduleEntries(wines: Wine[]) {
 export async function buildDeliverySchedule(wines: Wine[]): Promise<DeliveryDisplayEntry[]> {
   const config = await db.getCellarConfig()
   const totalAtHome = wines.reduce((sum, w) => sum + w.quantity_at_home, 0)
-  const { dbWindows, lockedWindowWines, committedQuantities, lockedDeliveries } =
+  const { dbWindows, lockedWindowWines, completedWindowWines, committedQuantities, lockedDeliveries } =
     await loadLockedWindowState()
 
   // Generate the in-memory delivery schedule for storage wines, excluding
@@ -98,7 +109,8 @@ export async function buildDeliverySchedule(wines: Wine[]): Promise<DeliveryDisp
     wines,
     dbWindows,
     lockedWindowWines,
-    DELIVERY_CONFIG.months as [number, number]
+    DELIVERY_CONFIG.months as [number, number],
+    completedWindowWines
   )
 }
 
@@ -259,6 +271,20 @@ export async function confirmDelivery(
   // Move wines from storage to home
   for (const wine of entry.wines) {
     await workflows.moveToHome(wine.id, wine.quantity)
+  }
+
+  // Write down what actually arrived, if nothing has yet.
+  //
+  // A curated window already has its wine rows; one the scheduler
+  // produced has none, and the moment its bottles move home the
+  // scheduler stops planning them — so without this the record of what
+  // was in the delivery is gone the second it is confirmed, and the
+  // completed window is an empty date.
+  const existingRows = await db.getDeliveryWindowWines(window.id)
+  if (existingRows.length === 0) {
+    for (const wine of entry.wines) {
+      await db.addWineToDeliveryWindow(window.id, wine.id, wine.quantity)
+    }
   }
 
   // Update window status and record actual delivery date
