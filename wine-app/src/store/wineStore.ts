@@ -99,7 +99,7 @@ interface WineStore {
   addWine: (wine: Omit<Wine, 'id' | 'created_at' | 'updated_at'>) => Promise<void>
   editWineDetails: (id: string, updates: Partial<Wine>) => Promise<void>
   addBottles: (wineId: string, quantity: number, destination: 'storage' | 'home') => Promise<void>
-  consumeWine: (wineId: string, consumedDate?: string, notes?: string) => Promise<ConsumptionLogEntry>
+  consumeWine: (wineId: string, consumedDate?: string, notes?: string, reason?: string) => Promise<ConsumptionLogEntry>
   undoConsume: (logEntryId: string) => Promise<void>
   moveWineToHome: (wineId: string, quantity: number) => Promise<void>
   deleteWine: (id: string) => Promise<void>
@@ -209,11 +209,11 @@ export const useWineStore = create<WineStore>((set, get) => ({
     }
   },
 
-  consumeWine: async (wineId, consumedDate, notes) => {
+  consumeWine: async (wineId, consumedDate, notes, reason) => {
     set({ error: null })
     try {
       const today = new Date().toISOString().split('T')[0]
-      const entry = await workflows.consumeWine(wineId, consumedDate || today, notes)
+      const entry = await workflows.consumeWine(wineId, consumedDate || today, notes, reason)
       await get().loadWines()
       get().triggerScheduleUpdate()
       if (get().selectedWine?.id === wineId) {

@@ -16,6 +16,7 @@ import type {
   WineType,
 } from '../types/index'
 import * as db from './database'
+import { DEFAULT_REASON } from './consumptionReason.service'
 
 // ============================================================================
 // WORKFLOW 1: LOAD WINE COLLECTION
@@ -276,7 +277,9 @@ export async function addBottles(
 export async function consumeWine(
   wineId: string,
   consumedDate: string,
-  notes?: string
+  notes?: string,
+  /** Why it left: drank unless said otherwise. See consumptionReason.service. */
+  reason: string = DEFAULT_REASON
 ): Promise<ConsumptionLogEntry> {
   const wine = await db.getWineById(wineId)
   if (!wine) {
@@ -304,6 +307,7 @@ export async function consumeWine(
     wine_id: wineId,
     consumed_date: consumedDate,
     notes: notes || undefined,
+    reason,
   })
 
   // Update wine inventory
@@ -326,7 +330,7 @@ export async function consumeWine(
  */
 export async function amendConsumption(
   logEntryId: string,
-  updates: { consumedDate?: string; notes?: string }
+  updates: { consumedDate?: string; notes?: string; reason?: string }
 ): Promise<ConsumptionLogEntry> {
   const entry = await db.getConsumptionEntryById(logEntryId)
   if (!entry) {
@@ -348,6 +352,7 @@ export async function amendConsumption(
   const updated = await db.updateConsumptionEntry(logEntryId, {
     consumed_date: updates.consumedDate,
     notes: updates.notes,
+    reason: updates.reason,
   })
 
   await db.createAuditLog({

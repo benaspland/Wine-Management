@@ -4,6 +4,7 @@ import { useWineStore, SORT_LABELS } from '../store/wineStore'
 import { useToastStore } from '../store/toastStore'
 import { getScheduledDeliveryDateForWine } from '../services/deliveryPlanning.service'
 import { wineDisplayName } from '../services/wine.service'
+import { reasonVerb } from '../services/consumptionReason.service'
 import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 import ConsumptionSheet from '../components/ConsumptionSheet'
@@ -117,12 +118,17 @@ export default function CollectionPage() {
   const wineLabel = (wine: Wine) => `${wineDisplayName(wine.producer, wine.name)} ${wine.vintage}`
 
   /** Log a bottle, then offer to annotate or undo it from the toast. */
-  const logConsumption = async (wineId: string, consumedDate?: string, notes?: string) => {
+  const logConsumption = async (
+    wineId: string,
+    consumedDate?: string,
+    notes?: string,
+    reason?: string
+  ) => {
     const wine = allWines.find(w => w.id === wineId)
     const label = wine ? wineLabel(wine) : 'Bottle'
 
-    const entry = await consumeWine(wineId, consumedDate, notes)
-    showToast(`${label} consumed`, {
+    const entry = await consumeWine(wineId, consumedDate, notes, reason)
+    showToast(`${label} ${reasonVerb(reason)}`, {
       action: {
         label: notes ? 'Edit note' : 'Add note',
         run: () => setAmending({ entry, label }),
@@ -187,8 +193,8 @@ export default function CollectionPage() {
           onClose={() => setLogging(null)}
           wineLabel={logging.label}
           initialDate={new Date().toISOString().split('T')[0]}
-          onSubmit={async ({ consumedDate, notes }) => {
-            await logConsumption(logging.wineId, consumedDate, notes || undefined)
+          onSubmit={async ({ consumedDate, notes, reason }) => {
+            await logConsumption(logging.wineId, consumedDate, notes || undefined, reason)
           }}
         />
       )}
@@ -202,8 +208,9 @@ export default function CollectionPage() {
           wineLabel={amending.label}
           initialDate={amending.entry.consumed_date}
           initialNotes={amending.entry.notes}
-          onSubmit={async ({ consumedDate, notes }) => {
-            await workflows.amendConsumption(amending.entry.id, { consumedDate, notes })
+          initialReason={amending.entry.reason}
+          onSubmit={async ({ consumedDate, notes, reason }) => {
+            await workflows.amendConsumption(amending.entry.id, { consumedDate, notes, reason })
             await refreshSelectedWine(amending.entry.wine_id)
             showToast('Tasting note saved')
           }}

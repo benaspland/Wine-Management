@@ -6,6 +6,7 @@ import WineThumbnail from './WineThumbnail'
 import LocationBadge from './LocationBadge'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
 import { wineDisplayName, criticRatingsOf, formatDeliveryMonth } from '../services/wine.service'
+import { reasonChip } from '../services/consumptionReason.service'
 import { X, Minus, Plus, Wine as WineIcon } from 'lucide-react'
 import { useBackDismiss } from '../hooks/useBackDismiss'
 
@@ -327,6 +328,11 @@ export default function WineDetailPanel({
                         year: 'numeric',
                       })}
                     </span>
+                    {reasonChip(entry.reason) && (
+                      <span className="shrink-0 rounded-full border border-outline-variant/70 px-2 py-[1px] text-[10px] font-bold uppercase tracking-widest text-outline">
+                        {reasonChip(entry.reason)}
+                      </span>
+                    )}
                     {entry.notes && <span className="text-outline italic truncate">{entry.notes}</span>}
                   </li>
                 ))}

@@ -9,6 +9,7 @@ import LocationBadge from '../components/LocationBadge'
 import MessageModal from '../components/MessageModal'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, drinkingWindowSummary, drinkingWindowYears } from '../services/wine.service'
+import { reasonChip, reasonVerb } from '../services/consumptionReason.service'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
 import { CircleCheck, Package, Wine as WineIcon, RefreshCw } from 'lucide-react'
 import ConsumptionSheet from '../components/ConsumptionSheet'
@@ -29,6 +30,7 @@ interface ScheduleEntry {
     status: string
     consumed?: boolean
     consumedDate?: string
+    consumedReason?: string
   }>
 }
 
@@ -60,13 +62,14 @@ export default function DrinkingSchedulePage() {
     wineId: string,
     label: string,
     consumedDate: string,
-    notes?: string
+    notes?: string,
+    reason?: string
   ) => {
-    const entry = await workflows.consumeWine(wineId, consumedDate, notes)
+    const entry = await workflows.consumeWine(wineId, consumedDate, notes, reason)
     await loadWines()
     await generateDrinkingSchedule()
 
-    showToast(`${label} marked as consumed`, {
+    showToast(`${label} ${reasonVerb(reason)}`, {
       action: {
         label: notes ? 'Edit note' : 'Add note',
         run: () => setAmending({ entry, label }),
@@ -156,17 +159,18 @@ export default function DrinkingSchedulePage() {
       // planned for a later year. Previously these were re-fetched year by
       // year from the finished schedule, which silently dropped any drink
       // in a year the schedule no longer covered.
-      const logQueues = new Map<string, string[]>() // wineId -> consumed dates asc
+      const logQueues = new Map<string, Array<{ date: string; reason?: string }>>()
       for (const log of [...allLogs].sort((a, b) => a.consumed_date.localeCompare(b.consumed_date))) {
         if (!logQueues.has(log.wine_id)) logQueues.set(log.wine_id, [])
-        logQueues.get(log.wine_id)!.push(log.consumed_date)
+        logQueues.get(log.wine_id)!.push({ date: log.consumed_date, reason: log.reason })
       }
 
       // Entries arrive sorted by year/month, so earlier scheduled slots
       // claim earlier consumption logs.
       drinkingSchedule.forEach(entry => {
         const queue = logQueues.get(entry.wineId)
-        const consumedDate = queue && queue.length > 0 ? queue.shift() : undefined
+        const logged = queue && queue.length > 0 ? queue.shift() : undefined
+        const consumedDate = logged?.date
 
         // Consumed wines file under the month they were actually drunk;
         // everything else stays in its scheduled slot.
@@ -192,6 +196,7 @@ export default function DrinkingSchedulePage() {
           status: entry.status,
           consumed: !!consumedDate,
           consumedDate,
+          consumedReason: logged?.reason,
         })
       })
 
@@ -330,8 +335,8 @@ export default function DrinkingSchedulePage() {
           onClose={() => setLogging(null)}
           wineLabel={logging.label}
           initialDate={new Date().toISOString().split('T')[0]}
-          onSubmit={async ({ consumedDate, notes }) => {
-            await logConsumption(logging.wineId, logging.label, consumedDate, notes || undefined)
+          onSubmit={async ({ consumedDate, notes, reason }) => {
+            await logConsumption(logging.wineId, logging.label, consumedDate, notes || undefined, reason)
           }}
         />
       )}
@@ -345,8 +350,9 @@ export default function DrinkingSchedulePage() {
           wineLabel={amending.label}
           initialDate={amending.entry.consumed_date}
           initialNotes={amending.entry.notes}
-          onSubmit={async ({ consumedDate, notes }) => {
-            await workflows.amendConsumption(amending.entry.id, { consumedDate, notes })
+          initialReason={amending.entry.reason}
+          onSubmit={async ({ consumedDate, notes, reason }) => {
+            await workflows.amendConsumption(amending.entry.id, { consumedDate, notes, reason })
             await loadWines()
             await generateDrinkingSchedule()
             showToast('Tasting note saved')
@@ -504,6 +510,14 @@ export default function DrinkingSchedulePage() {
                           />
                           <p className={`text-xs font-light mt-0.5 ${isConsumed ? 'text-outline-variant' : 'text-outline'}`}>
                             {wine.vintage} · {wine.region}
+                            {/* Only when it wasn't drunk: a schedule of
+                                bottles to open needs no reminder that a
+                                bottle was opened. */}
+                            {isConsumed && reasonChip(wine.consumedReason) && (
+                              <span className="ml-2 text-outline-variant">
+                                · {reasonChip(wine.consumedReason)}
+                              </span>
+                            )}
                           </p>
                           {/* The window, spelled out. This is the screen
                               where you decide whether to open something,
