@@ -422,6 +422,53 @@ describe('Workflows - Integration/Regression Tests', () => {
       expect(cleared.notes).toBeUndefined()
     })
 
+    /**
+     * Not every bottle that leaves the cellar gets drunk. The stock
+     * movement is identical either way — what changes is what the record
+     * says happened.
+     */
+    it('records why the bottle left, defaulting to drank', async () => {
+      const { entry } = await consumedWine()
+      expect(entry.reason).toBe('drank')
+    })
+
+    it('keeps a reason given at the time', async () => {
+      const wine = await db.createWine({
+        name: 'Gifted', vintage: 2015, tier: 1, region: 'Test',
+        drinking_window_start: 2020, drinking_window_end: 2045,
+        quantity_in_storage: 0, quantity_at_home: 3,
+      })
+      const today = new Date().toISOString().split('T')[0]
+      const entry = await workflows.consumeWine(wine.id, today, undefined, 'gifted')
+
+      expect(entry.reason).toBe('gifted')
+      const logs = await db.getConsumptionLogByWineId(wine.id)
+      expect(logs[0].reason).toBe('gifted')
+    })
+
+    it('takes a bottle off the shelf whatever the reason', async () => {
+      const wine = await db.createWine({
+        name: 'Corked', vintage: 2015, tier: 1, region: 'Test',
+        drinking_window_start: 2020, drinking_window_end: 2045,
+        quantity_in_storage: 0, quantity_at_home: 3,
+      })
+      const today = new Date().toISOString().split('T')[0]
+      await workflows.consumeWine(wine.id, today, undefined, 'corked')
+
+      // A corked bottle is as gone as a drunk one
+      expect((await db.getWineById(wine.id))!.quantity_at_home).toBe(2)
+    })
+
+    it('corrects the reason on an entry already logged', async () => {
+      const { entry } = await consumedWine()
+
+      const updated = await workflows.amendConsumption(entry.id, { reason: 'gifted' })
+
+      expect(updated.reason).toBe('gifted')
+      // and nothing else moved
+      expect(updated.consumed_date).toBe(entry.consumed_date)
+    })
+
     it('holds an amended date to the same rules as logging it', async () => {
       const { entry } = await consumedWine()
       const future = new Date(Date.now() + 86400000).toISOString().split('T')[0]

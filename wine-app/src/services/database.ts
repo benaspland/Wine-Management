@@ -352,7 +352,7 @@ export async function getConsumptionEntryById(id: string): Promise<ConsumptionLo
  */
 export async function updateConsumptionEntry(
   id: string,
-  updates: Partial<Pick<ConsumptionLogEntry, 'consumed_date' | 'notes'>>
+  updates: Partial<Pick<ConsumptionLogEntry, 'consumed_date' | 'notes' | 'reason'>>
 ): Promise<ConsumptionLogEntry> {
   const logs = getTable('consumption_log')
   const index = logs.findIndex((log) => log.id === id)
@@ -367,6 +367,9 @@ export async function updateConsumptionEntry(
   if (updates.notes !== undefined) {
     // Blank means "no note", not an empty note
     updated.notes = updates.notes.trim() || undefined
+  }
+  if (updates.reason !== undefined) {
+    updated.reason = updates.reason
   }
   logs[index] = updated
 

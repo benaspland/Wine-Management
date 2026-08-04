@@ -67,6 +67,12 @@ export interface ConsumptionLogEntry {
   wine_id: string;
   consumed_date: string; // Date wine was consumed (YYYY-MM-DD)
   notes?: string;
+  /**
+   * Why the bottle left: drank, gifted, sold, corked, cooking, lost.
+   * See consumptionReason.service. Absent on entries written before the
+   * field existed, which are read as "drank".
+   */
+  reason?: string;
   created_at: string;
 }
 

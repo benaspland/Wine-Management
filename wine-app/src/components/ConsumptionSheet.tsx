@@ -1,5 +1,12 @@
 import { useState } from 'react'
 import Modal from './Modal'
+import {
+  CONSUMPTION_REASONS,
+  DEFAULT_REASON,
+  REASON_ORDER,
+  reasonOf,
+  type ConsumptionReason,
+} from '../services/consumptionReason.service'
 
 /**
  * Log or amend a consumption: when the bottle was actually drunk, and
@@ -16,9 +23,14 @@ interface ConsumptionSheetProps {
   wineLabel: string
   initialDate: string
   initialNotes?: string
+  initialReason?: string
   /** Amending an existing entry rather than logging a new bottle. */
   isAmendment?: boolean
-  onSubmit: (values: { consumedDate: string; notes: string }) => Promise<void>
+  onSubmit: (values: {
+    consumedDate: string
+    notes: string
+    reason: ConsumptionReason
+  }) => Promise<void>
 }
 
 export default function ConsumptionSheet({
@@ -27,11 +39,15 @@ export default function ConsumptionSheet({
   wineLabel,
   initialDate,
   initialNotes,
+  initialReason,
   isAmendment,
   onSubmit,
 }: ConsumptionSheetProps) {
   const [consumedDate, setConsumedDate] = useState(initialDate)
   const [notes, setNotes] = useState(initialNotes ?? '')
+  const [reason, setReason] = useState<ConsumptionReason>(
+    initialReason ? reasonOf(initialReason) : DEFAULT_REASON
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,7 +58,7 @@ export default function ConsumptionSheet({
     setIsSaving(true)
     setError(null)
     try {
-      await onSubmit({ consumedDate, notes })
+      await onSubmit({ consumedDate, notes, reason })
       onClose()
     } catch (err) {
       // Stay open so the date can be corrected rather than retyped
@@ -56,15 +72,35 @@ export default function ConsumptionSheet({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isAmendment ? 'Edit Tasting' : 'Log a Bottle'}
+      title={isAmendment ? 'Edit Entry' : 'Log a Bottle'}
       size="sm"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <p className="text-sm text-outline">{wineLabel}</p>
 
+        {/* Reason first: it names what the date and the note are about,
+            and a bottle given away is not a tasting. */}
+        <div>
+          <label htmlFor="consumed-reason" className="block text-sm font-medium text-on-surface mb-1">
+            Reason
+          </label>
+          <select
+            id="consumed-reason"
+            value={reason}
+            onChange={e => setReason(e.target.value as ConsumptionReason)}
+            className="field"
+          >
+            {REASON_ORDER.map(key => (
+              <option key={key} value={key}>
+                {CONSUMPTION_REASONS[key].label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label htmlFor="consumed-date" className="block text-sm font-medium text-on-surface mb-1">
-            Date drunk
+            {reason === 'drank' ? 'Date drunk' : 'Date'}
           </label>
           <input
             id="consumed-date"
@@ -78,14 +114,17 @@ export default function ConsumptionSheet({
 
         <div>
           <label htmlFor="tasting-note" className="block text-sm font-medium text-on-surface mb-1">
-            Tasting note <span className="text-outline font-normal">(optional)</span>
+            {reason === 'drank' ? 'Tasting note' : 'Note'}{' '}
+            <span className="text-outline font-normal">(optional)</span>
           </label>
           <textarea
             id="tasting-note"
             value={notes}
             onChange={e => setNotes(e.target.value)}
             rows={4}
-            placeholder="How was it? Who was it with?"
+            placeholder={
+              reason === 'drank' ? 'How was it? Who was it with?' : 'Anything worth remembering?'
+            }
             className="field resize-none"
           />
         </div>
