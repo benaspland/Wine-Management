@@ -1,6 +1,6 @@
 import type { Wine } from '../types/index'
 import { TIER_LABELS } from '../types/index'
-import { wineDisplayName, wineTileName } from '../services/wine.service'
+import { wineDisplayName, wineTileName, drinkingWindowYears } from '../services/wine.service'
 import { Wine as WineIcon, House, Warehouse } from 'lucide-react'
 import HoldButton from './HoldButton'
 import WineThumbnail from './WineThumbnail'
@@ -94,6 +94,15 @@ export default function WineListRow({
             </span>
           </span>
         </div>
+        {/* The window, in full, on its own line.
+            This is the view you switch to when you want more than the
+            card gives you, and the card only has room for the year the
+            window shuts — so the years belong here rather than crowding
+            the line above, where the region would lose its width to
+            them. Same years, same dash, as the drinking schedule. */}
+        <p className="mt-0.5 text-xs text-outline tabular-nums">
+          {drinkingWindowYears(wine)}
+        </p>
       </div>
 
       {/* Only shown when there is something to drink: a permanently
