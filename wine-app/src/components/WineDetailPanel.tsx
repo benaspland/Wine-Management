@@ -5,7 +5,7 @@ import TierBadge from './TierBadge'
 import WineThumbnail from './WineThumbnail'
 import LocationBadge from './LocationBadge'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog'
-import { wineDisplayName, criticRatingsOf, formatDeliveryMonth } from '../services/wine.service'
+import { wineDisplayName, criticRatingsOf, formatDeliveryMonth, drinkingWindowYears } from '../services/wine.service'
 import { reasonChip } from '../services/consumptionReason.service'
 import { X, Minus, Plus, Wine as WineIcon } from 'lucide-react'
 import { useBackDismiss } from '../hooks/useBackDismiss'
@@ -203,8 +203,12 @@ export default function WineDetailPanel({
           <div className="grid grid-cols-2 gap-y-4 pt-4 border-t border-outline-variant/60">
             <div>
               <p className="text-[10px] text-outline uppercase tracking-wider">Optimal Window</p>
-              <p className="text-sm font-medium">
-                {wine.drinking_window_start} — {wine.drinking_window_end}
+              {/* Through the shared helper: the panel spelt the same
+                  window with an em dash and spaces while the cellar and
+                  the schedule used an en dash, which is three spellings
+                  of one fact. */}
+              <p className="text-sm font-medium tabular-nums">
+                {drinkingWindowYears(wine)}
               </p>
             </div>
             {scheduledDeliveryDate && (
