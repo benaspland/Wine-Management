@@ -149,6 +149,17 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     | { status: 'error'; message: string }
   >({ status: 'idle' })
 
+  /**
+   * Why the last save did not happen.
+   *
+   * This was a native alert, which on a phone is a box that appears over
+   * the form and is gone the moment it is dismissed — leaving someone
+   * looking at an unchanged form with no idea which of eight fields it
+   * objected to. The reason now sits beside the button that refused, and
+   * stays there until the next attempt.
+   */
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   const canLookUp =
     formData.producer.trim().length > 0 &&
     formData.name.trim().length > 0 &&
@@ -226,16 +237,17 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSaveError(null)
 
     if (!formData.producer.trim()) {
-      alert('A producer is required')
+      setSaveError('A producer is required')
       return
     }
 
     // Required by the form, not the data model: an estate legitimately
     // has no second line, and imported wines are allowed to lack one
     if (!estateWine && !formData.name.trim()) {
-      alert('A wine name is required')
+      setSaveError('A wine name is required')
       return
     }
 
@@ -248,19 +260,19 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     // Required numbers say so when blank rather than quietly becoming 0,
     // which would file a wine under the year zero or empty its rack.
     if (vintage === undefined || vintage < 1800) {
-      alert('A vintage is required, as a 4-digit year')
+      setSaveError('A vintage is required, as a 4-digit year')
       return
     }
     if (quantity === undefined || quantity < 0) {
-      alert('A number of bottles is required')
+      setSaveError('A number of bottles is required')
       return
     }
     if (windowStart === undefined || windowEnd === undefined) {
-      alert('A drinking window is required, as two years')
+      setSaveError('A drinking window is required, as two years')
       return
     }
     if (windowStart > windowEnd) {
-      alert('The drinking window must start before it ends')
+      setSaveError('The drinking window must start before it ends')
       return
     }
 
@@ -312,7 +324,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       })
       onClose()
     } catch (error) {
-      alert(`Error: ${(error as Error).message}`)
+      setSaveError((error as Error).message)
     }
   }
 
@@ -602,6 +614,19 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
             onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
           />
         </Section>
+
+        {/* Why it refused, where the refusal happened. A save that does
+            nothing and says nothing is the worst outcome on this form:
+            the wine looks entered, and it isn't. */}
+        {saveError && (
+          <p
+            role="alert"
+            className="flex items-start gap-2 rounded-[10px] border border-error/40 bg-error/10 p-3 text-sm text-error"
+          >
+            <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span>{saveError}</span>
+          </p>
+        )}
 
         <div className="flex gap-3 pt-2">
           <button
