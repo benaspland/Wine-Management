@@ -79,18 +79,14 @@ describe('WineForm - add mode quantity mapping', () => {
   })
 
   it('requires a producer, but not a separate wine name', async () => {
-    // happy-dom does not implement alert; stub the global the form calls
-    const alertStub = vi.fn()
-    vi.stubGlobal('alert', alertStub)
-
+    // Asserted on screen, not on window.alert: what matters is that the
+    // reason is visible and stays visible, not how it was raised
     fireEvent.click(screen.getByText('Save Wine'))
 
-    await waitFor(() =>
-      expect(alertStub).toHaveBeenCalledWith('A producer is required')
-    )
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    expect(screen.getByRole('alert').textContent).toContain('A producer is required')
     expect(onSubmit).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
-    vi.unstubAllGlobals()
   })
 
   /**
@@ -101,9 +97,6 @@ describe('WineForm - add mode quantity mapping', () => {
    * allowed to lack one.
    */
   it('labels the second field Appellation for an estate, and lets it be blank', async () => {
-    const alertStub = vi.fn()
-    vi.stubGlobal('alert', alertStub)
-
     setField('producer', 'Chateau Meyney')
     expect(screen.queryByText('Appellation')).not.toBeNull()
     expect(screen.queryByText('Wine Name')).toBeNull()
@@ -111,21 +104,19 @@ describe('WineForm - add mode quantity mapping', () => {
     fireEvent.click(screen.getByText('Save Wine'))
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
-    expect(alertStub).not.toHaveBeenCalled()
-    vi.unstubAllGlobals()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('labels it Wine Name for everything else, and requires one', async () => {
-    const alertStub = vi.fn()
-    vi.stubGlobal('alert', alertStub)
-
     setField('producer', 'Massolino')
     expect(screen.queryByText('Wine Name')).not.toBeNull()
     expect(screen.queryByText('Appellation')).toBeNull()
 
     fireEvent.click(screen.getByText('Save Wine'))
 
-    await waitFor(() => expect(alertStub).toHaveBeenCalledWith('A wine name is required'))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('A wine name is required')
+    )
     expect(onSubmit).not.toHaveBeenCalled()
 
     // Supplying one lets it through
@@ -142,9 +133,6 @@ describe('WineForm - add mode quantity mapping', () => {
   })
 
   it('saves a producer-only wine, as a Bordeaux château has no cuvée', async () => {
-    const alertStub = vi.fn()
-    vi.stubGlobal('alert', alertStub)
-
     fireEvent.change(screen.getByPlaceholderText('e.g., Château Margaux'), {
       target: { value: 'Chateau Meyney' },
     })
@@ -154,8 +142,7 @@ describe('WineForm - add mode quantity mapping', () => {
     const submitted = onSubmit.mock.calls[0][0]
     expect(submitted.producer).toBe('Chateau Meyney')
     expect(submitted.name).toBe('')
-    expect(alertStub).not.toHaveBeenCalled()
-    vi.unstubAllGlobals()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
 
@@ -245,11 +232,9 @@ describe('WineForm - edit mode quantity mapping', () => {
     expect(submitted.quantity_in_storage).toBe(0)
   })
 
-  it('surfaces a submit failure via alert and keeps the form open', async () => {
+  it('shows why a rejected save failed, and keeps the form open', async () => {
     const onSubmit = vi.fn().mockRejectedValue(new Error('capacity exceeded'))
     const onClose = vi.fn()
-    const alertStub = vi.fn()
-    vi.stubGlobal('alert', alertStub)
 
     render(
       <WineForm isOpen={true} onClose={onClose} onSubmit={onSubmit} initialWine={makeWine()} />
@@ -257,9 +242,12 @@ describe('WineForm - edit mode quantity mapping', () => {
 
     fireEvent.click(screen.getByText('Save Wine'))
 
-    await waitFor(() => expect(alertStub).toHaveBeenCalledWith('Error: capacity exceeded'))
+    // The reason has to stay on screen: a dialog that is dismissed
+    // leaves an unchanged form and no clue which field was objected to
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('capacity exceeded')
+    )
     expect(onClose).not.toHaveBeenCalled()
-    vi.unstubAllGlobals()
   })
 })
 
@@ -355,15 +343,29 @@ describe('WineForm - numeric fields', () => {
   })
 
   it('refuses a blank vintage rather than filing the wine under year zero', async () => {
-    const alerted = vi.fn()
-    vi.stubGlobal('alert', alerted)
     setField('producer', 'Château Test')
     setField('name', 'Cuvée Test')
     setField('vintage', '')
 
     fireEvent.click(screen.getByText('Save Wine'))
 
-    await waitFor(() => expect(alerted).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('A vintage is required')
+    )
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('clears the reason once the next save succeeds', async () => {
+    setField('producer', 'Château Test')
+    setField('name', 'Cuvée Test')
+    setField('vintage', '')
+    fireEvent.click(screen.getByText('Save Wine'))
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+
+    setField('vintage', '2018')
+    fireEvent.click(screen.getByText('Save Wine'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
