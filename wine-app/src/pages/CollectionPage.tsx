@@ -54,6 +54,7 @@ export default function CollectionPage() {
   const sortBy = useWineStore(state => state.sortBy)
   const sortDirection = useWineStore(state => state.sortDirection)
   const toggleSortDirection = useWineStore(state => state.toggleSortDirection)
+  const clearFilters = useWineStore(state => state.clearFilters)
   const searchTerm = useWineStore(state => state.searchTerm)
   const setSearchTerm = useWineStore(state => state.setSearchTerm)
   const locationFilter = useWineStore(state => state.locationFilter)
@@ -346,12 +347,29 @@ export default function CollectionPage() {
         {/* Empty State */}
         {!loading && wines.length === 0 && (
           <div className="text-center py-12">
+            {/* Says how many wines there are, not just that none matched.
+                "No wines match the current filters" reads like the wine
+                is missing when it is only hidden — and after adding one
+                and failing to find it, which of those it is happens to
+                be the only thing you want to know. */}
             <p className="text-outline mb-4">
-              {allWines.length === 0 ? 'No wines in collection yet' : 'No wines match the current filters'}
+              {allWines.length === 0
+                ? 'No wines in collection yet'
+                : `Nothing matches — ${allWines.length} ${allWines.length === 1 ? 'wine' : 'wines'} in the collection`}
             </p>
-            {allWines.length === 0 && (
+            {allWines.length === 0 ? (
               <button onClick={() => setShowForm(true)} className="btn-primary">
                 Add Your First Wine
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setSearchTerm('')
+                  clearFilters()
+                }}
+                className="btn-secondary"
+              >
+                Show all wines
               </button>
             )}
           </div>
