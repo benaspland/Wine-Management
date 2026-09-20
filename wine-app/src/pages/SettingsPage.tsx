@@ -5,11 +5,18 @@ import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/im
 import MessageModal from '../components/MessageModal'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import PageHeading from '../components/PageHeading'
-import { X, Check } from 'lucide-react'
+import { X, Check, Eye, EyeOff } from 'lucide-react'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
 import { SKINS, applySkin, storedSkin } from '../services/skin.service'
 import { toInt } from '../services/numberField.service'
+import {
+  looksLikeApiKey,
+  storedApiKey,
+  saveApiKey,
+  webSearchEnabled,
+  setWebSearchEnabled,
+} from '../services/aiSettings.service'
 
 /** What each CSV column expects, shown on the import card. */
 const COLUMN_HELP: Record<string, string> = {
@@ -61,6 +68,9 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [confirmingReset, setConfirmingReset] = useState(false)
   const [skin, setSkin] = useState(storedSkin)
+  const [apiKey, setApiKey] = useState(storedApiKey)
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [webSearch, setWebSearch] = useState(webSearchEnabled)
   const [importReport, setImportReport] = useState<{
     summary: string
     errors: string[]
@@ -394,6 +404,94 @@ export default function SettingsPage() {
                 </button>
               )
             })}
+          </div>
+        </div>
+
+        {/* Wine lookup — the key for it, and what it is allowed to do */}
+        <div className="card">
+          <h3 className="font-headline text-xl font-bold mb-2">Wine Lookup</h3>
+          <p className="text-sm text-outline mb-4">
+            Adding a wine can fill in its origin, drinking window and tasting
+            notes by asking Claude. It needs an API key from your own Anthropic
+            account, and each lookup is billed to that account.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="api-key" className="block text-sm font-medium text-on-surface mb-2">
+                Claude API Key
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="api-key"
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={e => {
+                    setApiKey(e.target.value)
+                    saveApiKey(e.target.value)
+                  }}
+                  placeholder="sk-ant-..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="field font-mono text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(v => !v)}
+                  aria-label={showApiKey ? 'Hide the key' : 'Show the key'}
+                  className="shrink-0 rounded-[10px] border border-outline-variant px-3 text-outline-variant hover:text-on-surface transition-colors"
+                >
+                  {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {/* Said plainly, because the consequence is real: this app
+                  has no server, so the key lives in this browser and
+                  anything with access to it can read the key. It is
+                  never committed, never built into the app, and never
+                  included in a backup or CSV export. */}
+              <p className="text-xs text-outline mt-2">
+                Stored only in this browser, on this device — never in a backup
+                or export. Anything with access to this browser can read it, so
+                revoke it in the{' '}
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-container underline"
+                >
+                  Anthropic Console
+                </a>{' '}
+                if this device is lost.
+              </p>
+              {apiKey.trim().length > 0 && !looksLikeApiKey(apiKey) && (
+                <p className="text-xs text-warning mt-1">
+                  That does not look like a Console key — they start “sk-ant-”.
+                </p>
+              )}
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={webSearch}
+                onChange={e => {
+                  setWebSearch(e.target.checked)
+                  setWebSearchEnabled(e.target.checked)
+                }}
+                className="mt-1 h-4 w-4 shrink-0 accent-[rgb(var(--accent))]"
+              />
+              <span>
+                <span className="block text-sm font-medium text-on-surface">
+                  Let lookups search the web
+                </span>
+                <span className="block text-xs text-outline mt-0.5">
+                  Much more accurate for small growers, and gives you the pages
+                  it read so you can check. Costs a little more per lookup.
+                  Without it Claude answers from memory alone.
+                </span>
+              </span>
+            </label>
           </div>
         </div>
 

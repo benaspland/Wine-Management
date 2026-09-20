@@ -7,6 +7,9 @@ import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
 import { isEstateWine } from '../services/wineName.service'
 import { formatCriticRatings, parseCriticRatings } from '../services/wine.service'
 import { toInt, toNumber } from '../services/numberField.service'
+import { lookupWine, describeFailure, type LookupFields } from '../services/wineLookup.service'
+import { hasApiKey } from '../services/aiSettings.service'
+import { Sparkles, TriangleAlert } from 'lucide-react'
 
 /** The app-wide field style, shared with the filter drawer and the
     settings form rather than redefined here. */
@@ -119,6 +122,78 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           image_url: '',
         }
   )
+
+  /**
+   * What the last lookup did, if anything.
+   *
+   * Kept next to the button rather than raised as a toast: the answer is
+   * about the fields directly below it, and it has to stay on screen
+   * while they are checked.
+   */
+  const [lookup, setLookup] = useState<
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'filled'; filled: string[]; sources: string[]; rejected: string[] }
+    | { status: 'not_found'; reason: string }
+    | { status: 'error'; message: string }
+  >({ status: 'idle' })
+
+  const canLookUp =
+    formData.producer.trim().length > 0 &&
+    formData.name.trim().length > 0 &&
+    toInt(formData.vintage) !== undefined
+
+  /** Human names for the fields, so the report reads as the form does. */
+  const FIELD_LABELS: Record<keyof LookupFields, string> = {
+    country: 'Country',
+    region: 'Region',
+    wine_type: 'Wine type',
+    varietal: 'Varietal',
+    alcohol_percent: 'Alcohol %',
+    drinking_window_start: 'Window from',
+    drinking_window_end: 'Window to',
+    serving_temp_min: 'Serve from',
+    serving_temp_max: 'Serve to',
+    critic_ratings: 'Critic scores',
+    flavor_profile: 'Flavour profile',
+    notes: 'Notes',
+  }
+
+  const handleLookup = async () => {
+    const vintage = toInt(formData.vintage)
+    if (!canLookUp || vintage === undefined) return
+
+    setLookup({ status: 'loading' })
+    try {
+      const result = await lookupWine({
+        producer: formData.producer.trim(),
+        name: formData.name.trim(),
+        vintage,
+      })
+
+      if (result.status === 'not_found') {
+        setLookup({ status: 'not_found', reason: result.reason })
+        return
+      }
+
+      // Everything the lookup knows is written in, including over the
+      // form's own defaults — a wine type of Red and a window of "this
+      // year to ten years' time" are placeholders, not answers, and
+      // leaving them in place would be the one outcome nobody wants.
+      // Nothing is saved by this: the form is still open, every value is
+      // still editable, and the list below says exactly what moved.
+      const entries = Object.entries(result.fields) as [keyof LookupFields, string][]
+      setFormData(prev => ({ ...prev, ...Object.fromEntries(entries) }))
+      setLookup({
+        status: 'filled',
+        filled: entries.map(([field]) => FIELD_LABELS[field]),
+        sources: result.sources,
+        rejected: result.rejected,
+      })
+    } catch (error) {
+      setLookup({ status: 'error', message: describeFailure(error) })
+    }
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -285,6 +360,89 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               ))}
             </select>
           </Field>
+
+          {/* The lookup sits directly under the three fields it asks
+              about, because those three are the whole question. It fills
+              origin, drinking and tasting below — never what is in the
+              cellar or what it cost, which are facts about the purchase
+              that no amount of research can know. */}
+          <div className="panel panel-sunken p-3 space-y-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleLookup}
+                disabled={!canLookUp || lookup.status === 'loading'}
+                className="btn-primary shrink-0 !px-4 !py-2.5 flex items-center gap-2 disabled:opacity-40"
+              >
+                <Sparkles
+                  size={14}
+                  aria-hidden="true"
+                  className={lookup.status === 'loading' ? 'animate-pulse' : ''}
+                />
+                {lookup.status === 'loading' ? 'Looking up...' : 'Look up details'}
+              </button>
+              <p className="text-xs text-outline min-w-0">
+                {!hasApiKey()
+                  ? 'Add a Claude API key in Settings to use this.'
+                  : canLookUp
+                    ? 'Fills origin, drinking and tasting from the producer, wine and vintage.'
+                    : 'Needs a producer, a wine name and a vintage.'}
+              </p>
+            </div>
+
+            {lookup.status === 'filled' && (
+              <div className="text-xs space-y-1.5">
+                <p className="text-primary-container font-medium">
+                  {lookup.filled.length === 0
+                    ? 'Found the wine, but nothing it was sure enough to fill in.'
+                    : `Filled ${lookup.filled.length} ${lookup.filled.length === 1 ? 'field' : 'fields'}: ${lookup.filled.join(', ')}.`}
+                </p>
+                <p className="text-outline">Check them before saving — nothing is saved yet.</p>
+                {/* Named, not swallowed: a field dropped for being
+                    impossible is the most interesting thing a lookup can
+                    report, and hiding it would hide the one sign that
+                    the answer was being made up. */}
+                {lookup.rejected.length > 0 && (
+                  <p className="flex items-start gap-1.5 text-warning">
+                    <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>
+                      Ignored an impossible {lookup.rejected.join(' and ')} — fill{' '}
+                      {lookup.rejected.length === 1 ? 'it' : 'them'} in by hand.
+                    </span>
+                  </p>
+                )}
+                {lookup.sources.length > 0 && (
+                  <p className="text-outline">
+                    Sources:{' '}
+                    {lookup.sources.map((url, i) => (
+                      <span key={url}>
+                        {i > 0 && ', '}
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary-container underline break-all"
+                        >
+                          {new URL(url).hostname.replace(/^www\./, '')}
+                        </a>
+                      </span>
+                    ))}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {lookup.status === 'not_found' && (
+              <p className="text-xs text-warning flex items-start gap-1.5">
+                <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span>{lookup.reason}</span>
+              </p>
+            )}
+
+            {lookup.status === 'error' && (
+              <p className="text-xs text-error">{lookup.message}</p>
+            )}
+          </div>
         </Section>
 
         <Section title="Origin">
