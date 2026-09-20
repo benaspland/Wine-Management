@@ -17,6 +17,21 @@ const MIN_QUALITY = 0.4
 /** Ceiling per photo; 125 of these stays comfortably inside IndexedDB. */
 const MAX_BYTES = 300_000
 
+/**
+ * A picture meant to be read, not kept.
+ *
+ * A stored label only ever renders a few hundred pixels wide, so 900px
+ * at middling quality is generous. Text is the opposite case: a
+ * screenshot of a merchant's email downscaled to 900px loses the line
+ * items entirely, and no amount of care in the prompt recovers a price
+ * that is no longer in the pixels. These go to the API and are then
+ * thrown away, so the only budget that matters is the request size.
+ */
+const SCAN_MAX_EDGE = 1800
+const SCAN_QUALITY = 0.85
+/** Comfortably inside the API's 5MB per-image limit once base64-encoded. */
+const SCAN_MAX_BYTES = 3_000_000
+
 export class UnsupportedImageError extends Error {
   constructor(message: string) {
     super(message)
@@ -86,7 +101,10 @@ async function decode(file: File): Promise<{ source: CanvasImageSource; width: n
  * Quality steps down until the result fits the size ceiling, so an
  * unusually detailed photo cannot quietly bloat the database.
  */
-export async function fileToStoredImage(file: File): Promise<string> {
+async function toDataUrl(
+  file: File,
+  { maxEdge, quality: startQuality, maxBytes }: { maxEdge: number; quality: number; maxBytes: number }
+): Promise<string> {
   if (!file.type.startsWith('image/')) {
     throw new UnsupportedImageError('That file is not an image')
   }
@@ -96,7 +114,7 @@ export async function fileToStoredImage(file: File): Promise<string> {
     throw new UnsupportedImageError('That image could not be read')
   }
 
-  const target = fitWithin(width, height)
+  const target = fitWithin(width, height, maxEdge)
   const canvas = document.createElement('canvas')
   canvas.width = target.width
   canvas.height = target.height
@@ -110,14 +128,36 @@ export async function fileToStoredImage(file: File): Promise<string> {
     source.close()
   }
 
-  let quality = INITIAL_QUALITY
+  let quality = startQuality
   let dataUrl = canvas.toDataURL('image/jpeg', quality)
-  while (dataUrlBytes(dataUrl) > MAX_BYTES && quality > MIN_QUALITY) {
+  while (dataUrlBytes(dataUrl) > maxBytes && quality > MIN_QUALITY) {
     quality -= 0.1
     dataUrl = canvas.toDataURL('image/jpeg', quality)
   }
 
   return dataUrl
+}
+
+export async function fileToStoredImage(file: File): Promise<string> {
+  return toDataUrl(file, {
+    maxEdge: MAX_EDGE,
+    quality: INITIAL_QUALITY,
+    maxBytes: MAX_BYTES,
+  })
+}
+
+/**
+ * A picked image at reading resolution, for sending to the API.
+ *
+ * Never stored: this is the same photo the stored version comes from,
+ * kept large only long enough to be read.
+ */
+export async function fileToScanImage(file: File): Promise<string> {
+  return toDataUrl(file, {
+    maxEdge: SCAN_MAX_EDGE,
+    quality: SCAN_QUALITY,
+    maxBytes: SCAN_MAX_BYTES,
+  })
 }
 
 /** True for images held on the device rather than fetched from a URL. */

@@ -14,8 +14,10 @@ import WineDetailPanel from '../components/WineDetailPanel'
 import WineForm from '../components/WineForm'
 import FilterDrawer from '../components/FilterDrawer'
 import ActiveFilters from '../components/ActiveFilters'
+import ReceiptScanSheet from '../components/ReceiptScanSheet'
+import type { ScannedWine } from '../services/receiptScan.service'
 import PageHeading from '../components/PageHeading'
-import { Plus, Search, SlidersHorizontal, LayoutGrid, List, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Search, SlidersHorizontal, LayoutGrid, List, ArrowUp, ArrowDown, Camera } from 'lucide-react'
 
 const VIEW_MODE_KEY = 'wine-app-view-mode'
 
@@ -43,6 +45,7 @@ export default function CollectionPage() {
   const [editingWine, setEditingWine] = useState<Wine | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [showScan, setShowScan] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(initialViewMode)
   const [selectedWineScheduledDate, setSelectedWineScheduledDate] = useState<string | undefined>()
   const [selectedWineLog, setSelectedWineLog] = useState<ConsumptionLogEntry[]>([])
@@ -93,6 +96,39 @@ export default function CollectionPage() {
     await addWine(wineData)
     setShowForm(false)
     showToast(`${wineDisplayName(wineData.producer, wineData.name)} added to the collection`)
+  }
+
+  /**
+   * Add everything read off a picture, in one go.
+   *
+   * The scan supplies what the purchase was; the rest is the form's own
+   * defaults, because a receipt says nothing about when a wine should
+   * be drunk. The window is left wide and the tier at everyday so the
+   * wines are usable immediately, and the detail can be filled in later
+   * by looking each one up.
+   */
+  const handleAddScanned = async (scanned: ScannedWine[]) => {
+    const thisYear = new Date().getFullYear()
+    for (const wine of scanned) {
+      await addWine({
+        producer: wine.producer || undefined,
+        name: wine.name,
+        vintage: wine.vintage,
+        region: '',
+        tier: 1,
+        format: wine.format,
+        quantity_in_storage: wine.quantity,
+        quantity_at_home: 0,
+        drinking_window_start: Math.max(wine.vintage, thisYear),
+        drinking_window_end: Math.max(wine.vintage, thisYear) + 10,
+        purchase_price: wine.purchase_price,
+        purchase_date: wine.purchase_date,
+        merchant: wine.merchant,
+      })
+    }
+    showToast(
+      `${scanned.length} ${scanned.length === 1 ? 'wine' : 'wines'} added — look each one up to fill in the rest`
+    )
   }
 
   const handleEditWine = async (wineData: Partial<Wine>) => {
@@ -186,6 +222,12 @@ export default function CollectionPage() {
   return (
     <>
       <FilterDrawer open={showFilters} onClose={() => setShowFilters(false)} />
+
+      <ReceiptScanSheet
+        isOpen={showScan}
+        onClose={() => setShowScan(false)}
+        onAdd={handleAddScanned}
+      />
 
       {/* Hold-to-log: choose the date actually drunk, plus a note */}
       {logging && (
@@ -321,6 +363,18 @@ export default function CollectionPage() {
                 <List size={16} />
               </button>
             </div>
+
+            {/* Photographing a receipt adds several wines at once and
+                is the only route that knows what they cost, so it sits
+                beside Add Wine rather than inside it. */}
+            <button
+              onClick={() => setShowScan(true)}
+              aria-label="Add from a photo"
+              title="Add wines from a photo of a receipt or confirmation email"
+              className="h-10 flex shrink-0 items-center justify-center w-11 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-primary transition-colors"
+            >
+              <Camera size={16} aria-hidden="true" />
+            </button>
 
             <button
               onClick={() => {

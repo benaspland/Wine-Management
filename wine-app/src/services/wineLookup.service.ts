@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import type { Wine, WineType } from '../types/index'
-import { storedApiKey, webSearchEnabled } from './aiSettings.service'
+import { webSearchEnabled } from './aiSettings.service'
+import {
+  CLAUDE_MODEL,
+  ClaudeError,
+  createClaudeClient,
+  describeFailure,
+} from './claudeClient.service'
 
 /**
  * Look a wine up with Claude and fill in what is known about it.
@@ -97,15 +103,7 @@ export interface LookupQuestion {
   vintage: number
 }
 
-/** Something went wrong with the call itself, as opposed to the answer. */
-export class WineLookupError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'WineLookupError'
-  }
-}
-
-export const LOOKUP_MODEL = 'claude-opus-5'
+export const LOOKUP_MODEL = CLAUDE_MODEL
 
 /**
  * The instruction.
@@ -398,25 +396,10 @@ export function usableSources(sources: string[]): string[] {
  * form at all.
  */
 export async function lookupWine(question: LookupQuestion): Promise<WineLookupResult> {
-  const apiKey = storedApiKey()
-  if (!apiKey) {
-    throw new WineLookupError(
-      'No Claude API key saved. Add one in Settings to look wines up.'
-    )
-  }
-
-  const [{ default: Anthropic }, { zodOutputFormat }] = await Promise.all([
-    import('@anthropic-ai/sdk'),
+  const [client, { zodOutputFormat }] = await Promise.all([
+    createClaudeClient(),
     import('@anthropic-ai/sdk/helpers/zod'),
   ])
-
-  const client = new Anthropic({
-    apiKey,
-    // There is no server to put in front of this: the app is a static
-    // site, so the call goes from the browser or not at all.
-    dangerouslyAllowBrowser: true,
-    maxRetries: 1,
-  })
 
   let message
   try {
@@ -434,19 +417,19 @@ export async function lookupWine(question: LookupQuestion): Promise<WineLookupRe
         : {}),
     })
   } catch (error) {
-    throw new WineLookupError(describeFailure(error))
+    throw new ClaudeError(describeFailure(error))
   }
 
   if (message.stop_reason === 'refusal') {
-    throw new WineLookupError('Claude declined to answer this lookup.')
+    throw new ClaudeError('Claude declined to answer this lookup.')
   }
   if (message.stop_reason === 'max_tokens') {
-    throw new WineLookupError('The answer was cut off before it finished. Try again.')
+    throw new ClaudeError('The answer was cut off before it finished. Try again.')
   }
 
   const payload = message.parsed_output
   if (!payload) {
-    throw new WineLookupError('Claude replied in a shape this app could not read.')
+    throw new ClaudeError('Claude replied in a shape this app could not read.')
   }
 
   if (!payload.found) {
@@ -462,37 +445,3 @@ export async function lookupWine(question: LookupQuestion): Promise<WineLookupRe
   return { status: 'found', fields, sources: usableSources(payload.sources), rejected }
 }
 
-/**
- * Say what actually went wrong.
- *
- * Every one of these has a different fix — a wrong key, an empty
- * account, too many requests, a phone with no signal — and "lookup
- * failed" sends the user looking in the wrong place for all of them.
- */
-export function describeFailure(error: unknown): string {
-  const status = (error as { status?: number })?.status
-  switch (status) {
-    case 401:
-    case 403:
-      return 'That API key was rejected. Check it in Settings, or make a new one in the Anthropic Console.'
-    case 400:
-      return `Claude rejected the request: ${(error as Error).message}`
-    case 404:
-      return `Model ${LOOKUP_MODEL} is not available to this account.`
-    case 429:
-      return 'Rate limited by the API. Wait a moment and try again.'
-    case 529:
-      return 'The API is overloaded right now. Try again shortly.'
-  }
-  if (status !== undefined && status >= 500) {
-    return 'The API had a server error. Try again shortly.'
-  }
-  const message = (error as Error)?.message ?? ''
-  if (/credit|billing|quota/i.test(message)) {
-    return 'The account has no API credit. Top it up in the Anthropic Console.'
-  }
-  if (/fetch|network|Connection/i.test(message)) {
-    return 'Could not reach the API. Check the connection and try again.'
-  }
-  return message || 'The lookup failed.'
-}
