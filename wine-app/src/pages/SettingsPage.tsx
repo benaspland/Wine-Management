@@ -44,6 +44,12 @@ const COLUMN_HELP: Record<string, string> = {
   'Wine Type': 'Optional override — Red, White, Rosé, Sparkling or Fortified',
 }
 
+/** Bytes as something readable at a glance. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /** Quote a CSV value only when it needs it, doubling any inner quotes. */
 function csvEscape(value: unknown): string {
   const text = value === null || value === undefined ? '' : String(value)
@@ -71,6 +77,15 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState(storedApiKey)
   const [showApiKey, setShowApiKey] = useState(false)
   const [webSearch, setWebSearch] = useState(webSearchEnabled)
+  /**
+   * How full this app's slice of browser storage is.
+   *
+   * Here because a full quota is silent: the whole database is rewritten
+   * on every change, and once it no longer fits, writes fail. They are
+   * reported now rather than swallowed, but a number you can look at
+   * beforehand is what turns "it didn't save" into "I can see why".
+   */
+  const [storage, setStorage] = useState<{ used: number; quota: number } | null>(null)
   const [importReport, setImportReport] = useState<{
     summary: string
     errors: string[]
@@ -85,6 +100,18 @@ export default function SettingsPage() {
   const showToast = useToastStore(state => state.show)
   const loadWines = useWineStore(state => state.loadWines)
   const triggerScheduleUpdate = useWineStore(state => state.triggerScheduleUpdate)
+
+  useEffect(() => {
+    if (!navigator.storage?.estimate) return
+    navigator.storage
+      .estimate()
+      .then(({ usage, quota }) => {
+        if (usage !== undefined && quota !== undefined) setStorage({ used: usage, quota })
+      })
+      .catch(() => {
+        // A reading is a convenience; its absence is not worth a message.
+      })
+  }, [])
 
   // Load cellar config on mount
   useEffect(() => {
@@ -406,6 +433,36 @@ export default function SettingsPage() {
             })}
           </div>
         </div>
+
+        {/* How much room is left, because running out is otherwise silent */}
+        {storage && (
+          <div className="card">
+            <h3 className="font-headline text-xl font-bold mb-2">Device Storage</h3>
+            <div
+              className="h-2.5 w-full rounded-full overflow-hidden bg-surface-container-highest"
+              role="meter"
+              aria-valuenow={Math.round((storage.used / storage.quota) * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Storage used by this app"
+            >
+              <div
+                className={`h-full rounded-full transition-all ${
+                  storage.used / storage.quota > 0.9 ? 'bg-error' : 'bg-primary-container'
+                }`}
+                style={{ width: `${Math.min(100, (storage.used / storage.quota) * 100)}%` }}
+              />
+            </div>
+            <p className="text-sm text-outline mt-2">
+              {formatBytes(storage.used)} of {formatBytes(storage.quota)} used
+              {storage.used / storage.quota > 0.9 && (
+                <span className="text-error">
+                  {' '}— almost full. Saves will start failing; wine photos take the most room.
+                </span>
+              )}
+            </p>
+          </div>
+        )}
 
         {/* Wine lookup — the key for it, and what it is allowed to do */}
         <div className="card">
