@@ -200,8 +200,39 @@ async function persist(): Promise<void> {
   try {
     await adapter.save(snapshot)
   } catch (error) {
-    console.warn('[Database] Failed to persist snapshot:', error)
+    // Never swallowed.
+    //
+    // This used to warn to the console and resolve, which made every
+    // write in the app a lie: the bottle was consumed, the wine was
+    // added, the toast said so — and none of it reached disk, so it was
+    // all gone on the next reload. A console warning is invisible on a
+    // phone, which is the only place this app runs.
+    //
+    // The in-memory table keeps the change; only the caller's error
+    // stops it being shown, since the store reloads from the database
+    // after a write and that reload never happens when the write throws.
+    throw new Error(describeStorageFailure(error))
   }
+}
+
+/**
+ * What a failed write means, in terms of what to do about it.
+ *
+ * A full quota is by far the likeliest, and it is the one the message
+ * has to name: the whole database is rewritten on every change, and
+ * photographs stored with the wines are what make it big enough to hit
+ * the limit.
+ */
+export function describeStorageFailure(error: unknown): string {
+  const name = (error as { name?: string })?.name
+  if (name === 'QuotaExceededError' || /quota/i.test((error as Error)?.message ?? '')) {
+    return (
+      'The browser has run out of storage for this app, so nothing was saved. ' +
+      'Removing wine photos frees the most space — see Settings for how full it is.'
+    )
+  }
+  const detail = (error as Error)?.message
+  return detail ? `Could not save to this device: ${detail}` : 'Could not save to this device.'
 }
 
 // ============================================================================
