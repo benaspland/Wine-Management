@@ -4,7 +4,7 @@ import * as db from '../services/database'
 import * as workflows from '../services/workflows.service'
 import { CLOSING_SOON_YEARS } from '../services/dashboard.service'
 
-export type SortKey = 'vintage' | 'tier' | 'producer' | 'window' | 'purchased'
+export type SortKey = 'vintage' | 'tier' | 'producer' | 'window' | 'purchased' | 'added'
 export type SortDirection = 'asc' | 'desc'
 
 /**
@@ -19,6 +19,7 @@ export type SortDirection = 'asc' | 'desc'
  * takes it from there.
  */
 const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
+  added: 'desc',
   vintage: 'desc',
   tier: 'desc',
   purchased: 'desc',
@@ -63,6 +64,19 @@ export const SORT_LABELS: Record<
     asc: { long: 'Oldest first', short: 'Oldest' },
     desc: { long: 'Newest first', short: 'Newest' },
   },
+  /**
+   * The answer to "where did the wine I just entered go".
+   *
+   * Every other order buries a new wine somewhere in the middle of a
+   * hundred others — by vintage it lands among its own decade — so the
+   * only way to confirm a wine was saved was to search for it, which is
+   * a poor thing to depend on when the doubt is whether it exists.
+   */
+  added: {
+    name: 'Recently added',
+    asc: { long: 'Oldest first', short: 'Oldest' },
+    desc: { long: 'Newest first', short: 'Newest' },
+  },
 }
 
 /** Ascending comparators, one per sort key. Direction is applied after. */
@@ -72,6 +86,7 @@ const COMPARATORS: Record<SortKey, (a: Wine, b: Wine) => number> = {
   producer: (a, b) => (a.producer || '').localeCompare(b.producer || ''),
   window: (a, b) => a.drinking_window_end - b.drinking_window_end,
   purchased: (a, b) => (a.purchase_date ?? '').localeCompare(b.purchase_date ?? ''),
+  added: (a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''),
 }
 
 interface WineStore {

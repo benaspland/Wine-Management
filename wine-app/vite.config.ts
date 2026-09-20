@@ -6,6 +6,18 @@ import path from 'path'
 const base = process.env.GITHUB_PAGES === 'true' ? '/Wine-Management/' : '/'
 
 export default defineConfig({
+  /**
+   * When this build was made.
+   *
+   * "Version 1.0.0" was hardcoded and never changed, so it could not
+   * answer the one question it gets asked: whether the app on this
+   * phone is the one that was just deployed. A service worker serves
+   * the old build until its update is accepted, which makes a fix look
+   * like it did not work.
+   */
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   base,
   plugins: [
     react(),
