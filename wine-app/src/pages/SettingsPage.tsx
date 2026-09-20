@@ -44,6 +44,23 @@ const COLUMN_HELP: Record<string, string> = {
   'Wine Type': 'Optional override — Red, White, Rosé, Sparkling or Fortified',
 }
 
+/**
+ * When this build was made, or nothing.
+ *
+ * Stamped by vite.config.ts. Guarded because it is a build-time
+ * substitution, not a value that exists everywhere the component can be
+ * rendered — under the test runner there is no build to stamp, and a
+ * bare reference would throw.
+ */
+function buildStamp(): string | null {
+  if (typeof __BUILD_TIME__ !== 'string') return null
+  const built = new Date(__BUILD_TIME__)
+  if (Number.isNaN(built.getTime())) return null
+  return built.toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
+
 /** Bytes as something readable at a glance. */
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -831,9 +848,9 @@ export default function SettingsPage() {
             <p>
               <strong>The Cellar</strong> - Wine Portfolio Management System
             </p>
-            <p>
-              Version 1.0.0
-            </p>
+            {/* The build, not a version number nobody increments: this
+                is what says whether the app has picked up a deploy. */}
+            {buildStamp() && <p>Built {buildStamp()}</p>}
             <p>
               Manage your wine collection across multiple locations with smart scheduling and consumption planning.
             </p>

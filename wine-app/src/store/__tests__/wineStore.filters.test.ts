@@ -206,3 +206,44 @@ describe('search', () => {
     expect(found()).toEqual(['Chateau Meyney 2018'])
   })
 })
+
+/**
+ * "Where did the wine I just entered go?"
+ *
+ * Every other order buries a new wine among a hundred others — by
+ * vintage it lands somewhere in its own decade — so confirming a wine
+ * was saved meant searching for it, which is a poor thing to depend on
+ * when the doubt is whether it exists at all.
+ */
+describe('sort by recently added', () => {
+  it('puts the wine entered last at the top', () => {
+    const old = wine({ name: 'Old', created_at: '2026-01-01T10:00:00.000Z' })
+    const middle = wine({ name: 'Middle', created_at: '2026-06-01T10:00:00.000Z' })
+    const newest = wine({ name: 'Newest', created_at: '2026-09-20T10:00:00.000Z' })
+    useWineStore.setState({ wines: [old, newest, middle] })
+    useWineStore.getState().clearFilters()
+
+    useWineStore.getState().setSortBy('added')
+
+    expect(useWineStore.getState().sortDirection).toBe('desc')
+    expect(useWineStore.getState().filteredWines.map(w => w.name)).toEqual([
+      'Newest',
+      'Middle',
+      'Old',
+    ])
+  })
+
+  it('reverses to oldest first like every other sort', () => {
+    useWineStore.setState({
+      wines: [
+        wine({ name: 'A', created_at: '2026-01-01T10:00:00.000Z' }),
+        wine({ name: 'B', created_at: '2026-09-01T10:00:00.000Z' }),
+      ],
+    })
+    useWineStore.getState().clearFilters()
+    useWineStore.getState().setSortBy('added')
+    useWineStore.getState().toggleSortDirection()
+
+    expect(useWineStore.getState().filteredWines.map(w => w.name)).toEqual(['A', 'B'])
+  })
+})
