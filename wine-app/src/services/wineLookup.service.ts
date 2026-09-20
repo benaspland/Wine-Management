@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { WineType } from '../types/index'
+import type { Wine, WineType } from '../types/index'
 import { storedApiKey, webSearchEnabled } from './aiSettings.service'
 
 /**
@@ -48,6 +48,7 @@ const LookupSchema = z.object({
   not_found_reason: z.string().nullable(),
   country: z.string().nullable(),
   region: z.string().nullable(),
+  classification: z.string().nullable(),
   wine_type: z.enum(WINE_TYPES).nullable(),
   varietal: z.string().nullable(),
   alcohol_percent: z.number().nullable(),
@@ -67,6 +68,7 @@ export type LookupPayload = z.infer<typeof LookupSchema>
 export interface LookupFields {
   country: string
   region: string
+  classification: string
   wine_type: WineType
   varietal: string
   alcohol_percent: string
@@ -157,14 +159,19 @@ export function buildSystemPrompt(): string {
     '7. serving_temp_min and serving_temp_max are degrees Celsius.',
     '   alcohol_percent is the stated ABV on the label for this vintage.',
     '',
-    '8. varietal is the grape or blend, separated by " : " — for example',
+    '8. classification is the wine\'s own appellation rank or quality tier as it',
+    '   appears on the label — "1er Cru", "DOCG", "VDP Grosse Lage", "Gran',
+    '   Reserva". Not the region, not a score, not a description. If the wine',
+    '   carries no such designation, return null rather than inventing a tier.',
+    '',
+    '9. varietal is the grape or blend, separated by " : " — for example',
     '   "Cabernet Sauvignon : Merlot". flavor_profile is a handful of tasting',
     '   descriptors in the same form — "Blackberry : Cassis : Graphite".',
     '',
-    '9. notes is two or three sentences on the wine — what it is, what marks it',
-    '   out. Keep it factual.',
+    '10. notes is two or three sentences on the wine — what it is, what marks it',
+    '    out. Keep it factual.',
     '',
-    '10. sources lists the URLs you actually consulted. If you did not consult',
+    '11. sources lists the URLs you actually consulted. If you did not consult',
     '    any, return an empty array; do not invent citations.',
   ].join('\n')
 }
@@ -206,6 +213,15 @@ export function plausible(
   if (country) fields.country = country
   const region = text(payload.region)
   if (region) fields.region = region
+
+  // A classification is a rank off a label, not a sentence about one.
+  // Anything long enough to be prose is the model describing the wine in
+  // a box meant for "1er Cru".
+  const classification = text(payload.classification)
+  if (classification) {
+    if (classification.length <= 60) fields.classification = classification
+    else rejected.push('classification')
+  }
   const varietal = text(payload.varietal)
   if (varietal) fields.varietal = varietal
   const flavour = text(payload.flavor_profile)
@@ -281,6 +297,76 @@ export function plausible(
   }
 
   return { fields, rejected }
+}
+
+/**
+ * Which looked-up fields may actually be written, and which must not.
+ *
+ * Adding a wine, everything on the form is a placeholder — a type of
+ * Red, a window of "this year to ten years' time" — so the lookup writes
+ * over all of it and nothing is lost.
+ *
+ * Editing one is the opposite case. The wine already has values that
+ * were imported, corrected by hand, or typed deliberately, and a lookup
+ * that overwrote them would quietly undo that work: the most likely
+ * reason to look up a wine you already own is that its record is thin,
+ * not that it is wrong. So on edit the lookup fills gaps only, and says
+ * which fields it left alone — clearing a field and looking up again is
+ * how you ask for a replacement, and the message is what makes that
+ * discoverable.
+ *
+ * A field counts as a gap when the stored wine has nothing in it, or
+ * when the box on screen is empty right now. The first is the usual
+ * case: a wine with no serving temperature recorded still shows 15-18°C
+ * in the form, because the form has to put something in the box, and
+ * reading that as an existing value would make the field most worth
+ * filling unfillable. The second is what makes "clear it and look up
+ * again" actually true — an empty box has nothing to protect, so filling
+ * one is never destructive, and without this the advice would only work
+ * after saving and reopening.
+ */
+export function fieldsToApply(
+  found: Partial<LookupFields>,
+  existing?: Wine,
+  /** What the form shows now, so a box just cleared counts as a gap. */
+  onForm?: Partial<Record<keyof LookupFields, string>>
+): { apply: Partial<LookupFields>; kept: (keyof LookupFields)[] } {
+  if (!existing) return { apply: found, kept: [] }
+
+  const alreadyKnown: Record<keyof LookupFields, boolean> = {
+    country: !!existing.country?.trim(),
+    region: !!existing.region?.trim(),
+    classification: !!existing.classification?.trim(),
+    wine_type: !!existing.wine_type,
+    varietal: !!existing.varietal?.trim(),
+    alcohol_percent: existing.alcohol_percent !== undefined && existing.alcohol_percent !== null,
+    // A stored wine always has a drinking window — it is required — so
+    // this is never a gap, and a researched window never displaces the
+    // one the schedules have been planning around.
+    drinking_window_start: true,
+    drinking_window_end: true,
+    serving_temp_min: existing.serving_temp_min !== undefined && existing.serving_temp_min !== null,
+    serving_temp_max: existing.serving_temp_max !== undefined && existing.serving_temp_max !== null,
+    critic_ratings: hasCriticRatings(existing.critic_ratings),
+    flavor_profile: !!existing.flavor_profile?.trim(),
+    notes: !!existing.notes?.trim(),
+  }
+
+  const apply: Partial<LookupFields> = {}
+  const kept: (keyof LookupFields)[] = []
+  for (const key of Object.keys(found) as (keyof LookupFields)[]) {
+    const blankOnForm = onForm !== undefined && (onForm[key] ?? '').trim() === ''
+    if (alreadyKnown[key] && !blankOnForm) kept.push(key)
+    else Object.assign(apply, { [key]: found[key] })
+  }
+  return { apply, kept }
+}
+
+/** Stored either as "JS 97 : RP 96" or as a parsed map, so check both. */
+function hasCriticRatings(ratings: Wine['critic_ratings']): boolean {
+  if (!ratings) return false
+  if (typeof ratings === 'string') return ratings.trim().length > 0
+  return Object.keys(ratings).length > 0
 }
 
 /**
