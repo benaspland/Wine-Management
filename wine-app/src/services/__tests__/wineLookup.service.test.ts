@@ -13,12 +13,12 @@ import {
   plausible,
   fieldsToApply,
   usableSources,
-  describeFailure,
   buildSystemPrompt,
   buildUserPrompt,
   LOOKUP_MODEL,
   type LookupPayload,
 } from '../wineLookup.service'
+import { describeFailure } from '../claudeClient.service'
 
 /** A found wine with nothing filled in; each test adds what it needs. */
 function payload(overrides: Partial<LookupPayload> = {}): LookupPayload {

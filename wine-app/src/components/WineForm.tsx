@@ -7,12 +7,8 @@ import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
 import { isEstateWine } from '../services/wineName.service'
 import { formatCriticRatings, parseCriticRatings } from '../services/wine.service'
 import { toInt, toNumber } from '../services/numberField.service'
-import {
-  lookupWine,
-  fieldsToApply,
-  describeFailure,
-  type LookupFields,
-} from '../services/wineLookup.service'
+import { lookupWine, fieldsToApply, type LookupFields } from '../services/wineLookup.service'
+import { describeFailure } from '../services/claudeClient.service'
 import { hasApiKey } from '../services/aiSettings.service'
 import { Sparkles, TriangleAlert } from 'lucide-react'
 
