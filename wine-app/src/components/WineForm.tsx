@@ -7,7 +7,12 @@ import { BOTTLE_FORMATS, normalizeFormat } from '../services/format.service'
 import { isEstateWine } from '../services/wineName.service'
 import { formatCriticRatings, parseCriticRatings } from '../services/wine.service'
 import { toInt, toNumber } from '../services/numberField.service'
-import { lookupWine, describeFailure, type LookupFields } from '../services/wineLookup.service'
+import {
+  lookupWine,
+  fieldsToApply,
+  describeFailure,
+  type LookupFields,
+} from '../services/wineLookup.service'
 import { hasApiKey } from '../services/aiSettings.service'
 import { Sparkles, TriangleAlert } from 'lucide-react'
 
@@ -133,7 +138,13 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
   const [lookup, setLookup] = useState<
     | { status: 'idle' }
     | { status: 'loading' }
-    | { status: 'filled'; filled: string[]; sources: string[]; rejected: string[] }
+    | {
+        status: 'filled'
+        filled: string[]
+        kept: string[]
+        sources: string[]
+        rejected: string[]
+      }
     | { status: 'not_found'; reason: string }
     | { status: 'error'; message: string }
   >({ status: 'idle' })
@@ -147,6 +158,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
   const FIELD_LABELS: Record<keyof LookupFields, string> = {
     country: 'Country',
     region: 'Region',
+    classification: 'Classification',
     wine_type: 'Wine type',
     varietal: 'Varietal',
     alcohol_percent: 'Alcohol %',
@@ -176,17 +188,19 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
         return
       }
 
-      // Everything the lookup knows is written in, including over the
-      // form's own defaults — a wine type of Red and a window of "this
-      // year to ten years' time" are placeholders, not answers, and
-      // leaving them in place would be the one outcome nobody wants.
-      // Nothing is saved by this: the form is still open, every value is
-      // still editable, and the list below says exactly what moved.
-      const entries = Object.entries(result.fields) as [keyof LookupFields, string][]
-      setFormData(prev => ({ ...prev, ...Object.fromEntries(entries) }))
+      // Adding: everything on the form is a placeholder, so all of it is
+      // written over. Editing: gaps only, because the record already
+      // holds values that were imported or corrected by hand and a
+      // lookup has no business undoing them. Either way nothing is saved
+      // here — the form stays open, every value stays editable, and the
+      // lines below say exactly what moved and what did not.
+      const { apply, kept } = fieldsToApply(result.fields, initialWine, formData)
+      const applied = Object.keys(apply) as (keyof LookupFields)[]
+      setFormData(prev => ({ ...prev, ...apply }))
       setLookup({
         status: 'filled',
-        filled: entries.map(([field]) => FIELD_LABELS[field]),
+        filled: applied.map(field => FIELD_LABELS[field]),
+        kept: kept.map(field => FIELD_LABELS[field]),
         sources: result.sources,
         rejected: result.rejected,
       })
@@ -384,9 +398,11 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               <p className="text-xs text-outline min-w-0">
                 {!hasApiKey()
                   ? 'Add a Claude API key in Settings to use this.'
-                  : canLookUp
-                    ? 'Fills origin, drinking and tasting from the producer, wine and vintage.'
-                    : 'Needs a producer, a wine name and a vintage.'}
+                  : !canLookUp
+                    ? 'Needs a producer, a wine name and a vintage.'
+                    : initialWine
+                      ? 'Fills only the details this wine is missing.'
+                      : 'Fills origin, drinking and tasting from the producer, wine and vintage.'}
               </p>
             </div>
 
@@ -394,10 +410,23 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               <div className="text-xs space-y-1.5">
                 <p className="text-primary-container font-medium">
                   {lookup.filled.length === 0
-                    ? 'Found the wine, but nothing it was sure enough to fill in.'
+                    ? lookup.kept.length > 0
+                      ? 'Found the wine — everything it knew was already filled in.'
+                      : 'Found the wine, but nothing it was sure enough to fill in.'
                     : `Filled ${lookup.filled.length} ${lookup.filled.length === 1 ? 'field' : 'fields'}: ${lookup.filled.join(', ')}.`}
                 </p>
                 <p className="text-outline">Check them before saving — nothing is saved yet.</p>
+                {/* Named rather than passed over in silence: without
+                    this, a lookup on a wine that already has most of its
+                    details reads as having done nothing at all, and the
+                    way to ask for a replacement — clear the field, look
+                    up again — would never occur to anyone. */}
+                {lookup.kept.length > 0 && (
+                  <p className="text-outline">
+                    Left alone, already filled in: {lookup.kept.join(', ')}. Clear a
+                    field and look up again to replace it.
+                  </p>
+                )}
                 {/* Named, not swallowed: a field dropped for being
                     impossible is the most interesting thing a lookup can
                     report, and hiding it would hide the one sign that
