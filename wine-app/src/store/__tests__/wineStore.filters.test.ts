@@ -150,3 +150,59 @@ describe('sort direction', () => {
       .toEqual(['Older', 'Dated', 'Undated'])
   })
 })
+
+/**
+ * Searching a cellar that holds several vintages of the same wine.
+ *
+ * The obvious way to find the one you just added is to type the producer
+ * and the year. That found nothing: the search tested one field at a
+ * time for the whole phrase, over name, producer and region only — so no
+ * field contains "meyney 2018", and the year was not searched at all.
+ */
+describe('search', () => {
+  const meyney2018 = wine({ producer: 'Chateau Meyney', name: 'Saint-Estephe', vintage: 2018, region: 'Bordeaux' })
+  const meyney2020 = wine({ producer: 'Chateau Meyney', name: 'Saint-Estephe', vintage: 2020, region: 'Bordeaux' })
+  const other = wine({ producer: 'Massolino', name: 'Barolo', vintage: 2018, region: 'Piedmont' })
+
+  beforeEach(() => {
+    useWineStore.setState({ wines: [meyney2018, meyney2020, other] })
+    useWineStore.getState().clearFilters()
+  })
+
+  const found = () => useWineStore.getState().filteredWines.map(w => `${w.producer} ${w.vintage}`)
+
+  it('finds one vintage among several of the same wine', () => {
+    useWineStore.getState().setSearchTerm('meyney 2018')
+    expect(found()).toEqual(['Chateau Meyney 2018'])
+  })
+
+  it('finds a wine by its vintage alone', () => {
+    useWineStore.getState().setSearchTerm('2020')
+    expect(found()).toEqual(['Chateau Meyney 2020'])
+  })
+
+  it('still finds every vintage when only the producer is given', () => {
+    useWineStore.getState().setSearchTerm('meyney')
+    expect(found().sort()).toEqual(['Chateau Meyney 2018', 'Chateau Meyney 2020'])
+  })
+
+  it('requires every word, so terms narrow rather than widen', () => {
+    useWineStore.getState().setSearchTerm('massolino bordeaux')
+    expect(found()).toEqual([])
+  })
+
+  it('searches country, classification and varietal too', () => {
+    useWineStore.setState({
+      wines: [wine({ producer: 'X', country: 'Spain', classification: 'DOCa', varietal: 'Tempranillo' })],
+    })
+    for (const term of ['spain', 'doca', 'tempranillo']) {
+      useWineStore.getState().setSearchTerm(term)
+      expect(useWineStore.getState().filteredWines).toHaveLength(1)
+    }
+  })
+
+  it('ignores stray whitespace rather than matching nothing', () => {
+    useWineStore.getState().setSearchTerm('  meyney   2018  ')
+    expect(found()).toEqual(['Chateau Meyney 2018'])
+  })
+})

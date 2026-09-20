@@ -375,14 +375,33 @@ export const useWineStore = create<WineStore>((set, get) => ({
       filtered = filtered.filter((w) => w.tier === tierFilter)
     }
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(
-        (w) =>
-          w.name.toLowerCase().includes(term) ||
-          (w.producer && w.producer.toLowerCase().includes(term)) ||
-          w.region.toLowerCase().includes(term)
-      )
+    if (searchTerm.trim()) {
+      // Every word has to match, against everything that identifies the
+      // wine — including the vintage.
+      //
+      // It used to test one field at a time for the whole phrase, over
+      // name, producer and region only. So the obvious way to find one
+      // wine among several vintages of it — type the producer and the
+      // year — found nothing, because no single field contains
+      // "meyney 2018", and the year was not searched at all. A cellar
+      // holding four vintages of the same château cannot be searched
+      // without the year.
+      const terms = searchTerm.toLowerCase().split(/\s+/).filter(Boolean)
+      filtered = filtered.filter((w) => {
+        const haystack = [
+          w.producer,
+          w.name,
+          w.region,
+          w.country,
+          w.classification,
+          w.varietal,
+          String(w.vintage),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        return terms.every((term) => haystack.includes(term))
+      })
     }
 
     if (regionFilter) {
