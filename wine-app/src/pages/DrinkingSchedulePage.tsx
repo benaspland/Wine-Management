@@ -10,8 +10,9 @@ import MessageModal from '../components/MessageModal'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, drinkingWindowSummary, drinkingWindowYears } from '../services/wine.service'
 import { reasonChip, reasonVerb } from '../services/consumptionReason.service'
+import { isPastPeriod, periodSummary } from '../services/schedulePeriod.service'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
-import { CircleCheck, Package, Wine as WineIcon, RefreshCw } from 'lucide-react'
+import { CircleCheck, Package, Wine as WineIcon, RefreshCw, ChevronDown } from 'lucide-react'
 import ConsumptionSheet from '../components/ConsumptionSheet'
 import HoldButton from '../components/HoldButton'
 import type { ConsumptionLogEntry } from '../types/index'
@@ -322,6 +323,47 @@ export default function DrinkingSchedulePage() {
     return picked
   })()
 
+  /**
+   * Periods opened or shut against their default.
+   *
+   * The default is the rule below — past is folded away, the present and
+   * what is coming is open — and this holds only the exceptions to it.
+   * Storing the exception rather than the state means the rule keeps
+   * applying as time passes: a month does not stay pinned open in
+   * October because it was opened in September.
+   */
+  const [flipped, setFlipped] = useState<Set<string>>(new Set())
+
+  const toggle = (key: string) => {
+    setFlipped(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const isOpen = (key: string, openByDefault: boolean) =>
+    openByDefault !== flipped.has(key)
+
+  /**
+   * The schedule, grouped so a whole year can fold into one line.
+   *
+   * A past year holds nothing but bottles already drunk — the planner
+   * starts at the current year, and consumed wines are filed under the
+   * month they were actually opened — so it is history, and history does
+   * not need scrolling past to reach what to drink tonight. Twelve
+   * collapsed months would be no better than twelve open ones, which is
+   * why the year folds rather than each month within it.
+   */
+  const timelineYears = years.map(year => ({
+    year,
+    months: schedule.filter(entry => entry.year === year),
+  }))
+
+  const countOf = (entries: ScheduleEntry[]) =>
+    periodSummary(entries.flatMap(entry => entry.wines))
+
   const jumpToYear = (year: number) => {
     yearRefs.current.get(year)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -446,33 +488,87 @@ export default function DrinkingSchedulePage() {
       ) : (
         // Extra left padding clears the fixed year rail on narrow screens
         <div className={`space-y-8 ${years.length > 1 ? 'pl-7 md:pl-0' : ''}`}>
-          {schedule.map((entry, idx) => {
-            const prevEntry = idx > 0 ? schedule[idx - 1] : null
-            const showYearSeparator = !prevEntry || prevEntry.year !== entry.year
+          {timelineYears.map(({ year, months }) => {
+            const yearIsPast = isPastPeriod(year, 12)
+            const yearOpen = isOpen(`y:${year}`, !yearIsPast)
 
             return (
-              <section key={`${entry.year}-${idx}`} className="relative">
-                {/* Year separator (anchor for the jump rail) */}
-                {showYearSeparator && (
-                  <div
-                    ref={el => {
-                      if (el) yearRefs.current.set(entry.year, el)
-                    }}
-                    data-year={entry.year}
-                    className="flex items-center mb-6 scroll-mt-20"
-                  >
-                    <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
-                    <span className="px-4 font-headline text-lg tracking-widest text-primary-container font-bold">
-                      {entry.year}
-                    </span>
-                    <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
-                  </div>
-                )}
+              <section key={year} className="relative space-y-8">
+                {/* Year separator, and the anchor the jump rail scrolls
+                    to. A past year is a button; the current one and
+                    everything ahead stay the plain divider they were,
+                    since there is nothing there worth hiding. */}
+                <div
+                  ref={el => {
+                    if (el) yearRefs.current.set(year, el)
+                  }}
+                  data-year={year}
+                  className="scroll-mt-20"
+                >
+                  {yearIsPast ? (
+                    <button
+                      onClick={() => toggle(`y:${year}`)}
+                      aria-expanded={yearOpen}
+                      className="w-full flex items-center gap-3 text-left group"
+                    >
+                      <span className="h-[1px] flex-1 bg-outline-variant/30" />
+                      <span className="flex items-center gap-2 px-2 font-headline text-lg tracking-widest text-outline font-bold group-hover:text-outline-variant transition-colors">
+                        <ChevronDown
+                          size={14}
+                          aria-hidden="true"
+                          className="transition-transform duration-200"
+                          style={{ transform: yearOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+                        />
+                        {year}
+                        <span className="text-xs font-normal tracking-normal">
+                          {countOf(months)}
+                        </span>
+                      </span>
+                      <span className="h-[1px] flex-1 bg-outline-variant/30" />
+                    </button>
+                  ) : (
+                    <div className="flex items-center">
+                      <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
+                      <span className="px-4 font-headline text-lg tracking-widest text-primary-container font-bold">
+                        {year}
+                      </span>
+                      <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
+                    </div>
+                  )}
+                </div>
 
-                <h3 className="font-headline text-xl text-on-surface mb-4">{entry.month}</h3>
+                {yearOpen &&
+                  months.map((entry, idx) => {
+                    const monthIsPast = isPastPeriod(year, MONTH_TO_NUMBER[entry.month] || 0)
+                    const monthKey = `m:${year}-${entry.month}`
+                    const monthOpen = isOpen(monthKey, !monthIsPast)
 
-                {/* Wines in this period: compact rows, status/action on the right */}
-                <div className="space-y-2.5">
+                    return (
+                      <section key={`${year}-${idx}`}>
+                        {monthIsPast ? (
+                          <button
+                            onClick={() => toggle(monthKey)}
+                            aria-expanded={monthOpen}
+                            className="w-full flex items-center gap-2 mb-4 text-left text-outline hover:text-on-surface transition-colors"
+                          >
+                            <ChevronDown
+                              size={15}
+                              aria-hidden="true"
+                              className="shrink-0 transition-transform duration-200"
+                              style={{ transform: monthOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+                            />
+                            <span className="font-headline text-xl">{entry.month}</span>
+                            <span className="text-xs">{countOf([entry])}</span>
+                          </button>
+                        ) : (
+                          <h3 className="font-headline text-xl text-on-surface mb-4">
+                            {entry.month}
+                          </h3>
+                        )}
+
+                        {/* Wines in this period: compact rows, status/action on the right */}
+                        {monthOpen && (
+                        <div className="space-y-2.5">
                   {entry.wines.map((wine, idx) => {
                     const isConsumed = wine.consumed || false
                     const consumedDate = wine.consumedDate ? new Date(wine.consumedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
@@ -590,6 +686,10 @@ export default function DrinkingSchedulePage() {
                     )
                   })}
                 </div>
+                        )}
+                      </section>
+                    )
+                  })}
               </section>
             )
           })}
