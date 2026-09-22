@@ -154,8 +154,8 @@ export const useWineStore = create<WineStore>((set, get) => ({
   wineTypeFilter: null,
   formatFilter: null,
   windowFilter: 'all',
-  sortBy: 'vintage',
-  sortDirection: DEFAULT_DIRECTION.vintage,
+  sortBy: 'purchased',
+  sortDirection: DEFAULT_DIRECTION.purchased,
 
   loadWines: async () => {
     set({ loading: true, error: null })
