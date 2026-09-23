@@ -1,6 +1,6 @@
 import type { Wine } from '../types/index'
 import { TIER_LABELS } from '../types/index'
-import { wineDisplayName, wineTileName, drinkingWindowYears } from '../services/wine.service'
+import { wineDisplayName, wineTileName, drinkingWindowYears, isCellarEmpty } from '../services/wine.service'
 import { Wine as WineIcon, House, Warehouse } from 'lucide-react'
 import HoldButton from './HoldButton'
 import WineThumbnail from './WineThumbnail'
@@ -46,6 +46,7 @@ export default function WineListRow({
   isLoading,
 }: WineListRowProps) {
   const atHome = wine.quantity_at_home > 0
+  const emptied = isCellarEmpty(wine)
 
   const handleConsume = () => {
     if (!atHome) return
@@ -60,7 +61,9 @@ export default function WineListRow({
   return (
     <div
       onClick={() => onSelect(wine)}
-      className="panel flex items-start gap-3 px-4 py-3 hover:bg-surface-container cursor-pointer transition-colors"
+      className={`panel flex items-start gap-3 px-4 py-3 hover:bg-surface-container cursor-pointer transition-colors ${
+        emptied ? 'panel-sunken opacity-[0.45]' : ''
+      }`}
     >
       <WineThumbnail wine={wine} />
 

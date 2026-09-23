@@ -116,6 +116,20 @@ export function drinkingWindowSummary(
   return `${verb} \u00b7 ${wine.drinking_window_start}\u2013${wine.drinking_window_end}`
 }
 
+/**
+ * No bottles left, anywhere.
+ *
+ * Named for the shelf rather than for drinking: a bottle that was
+ * gifted, sold or found corked has left the cellar just as surely as one
+ * that was drunk, and the record says which. What this asks is only
+ * whether there is anything still to open.
+ */
+export function isCellarEmpty(
+  wine: Pick<Wine, 'quantity_in_storage' | 'quantity_at_home'>
+): boolean {
+  return wine.quantity_in_storage + wine.quantity_at_home === 0
+}
+
 /** Just the years, for a wine you cannot act on yet. */
 export function drinkingWindowYears(
   wine: Pick<Wine, 'drinking_window_start' | 'drinking_window_end'>

@@ -1,5 +1,5 @@
 import type { Wine } from '../types/index'
-import { WineService } from '../services/wine.service'
+import { WineService, isCellarEmpty } from '../services/wine.service'
 import WineInfo from './WineInfo'
 import LocationBadge from './LocationBadge'
 import TierBadge from './TierBadge'
@@ -17,6 +17,7 @@ interface WineCardProps {
 
 export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed, isLoading }: WineCardProps) {
   const drinkingStatus = WineService.getDrinkingWindowLabel(wine)
+  const emptied = isCellarEmpty(wine)
 
   const handleConsume = () => {
     if (wine.quantity_at_home === 0) return
@@ -30,7 +31,16 @@ export default function WineCard({ wine, onSelect, onConsume, onConsumeDetailed,
 
   return (
     <div onClick={() => onSelect(wine)} className="group cursor-pointer h-full">
-      <div className="panel overflow-hidden h-full flex flex-col p-4 gap-3 transition-colors duration-300 hover:bg-surface-container">
+      {/* A wine with nothing left is kept, not hidden: its history and
+          its tasting notes are the point of having recorded it. But it
+          is no longer a bottle you can choose, so it recedes — dimmed
+          and set back into the page — and the eye passes over it on the
+          way to something drinkable. */}
+      <div
+        className={`panel overflow-hidden h-full flex flex-col p-4 gap-3 transition-colors duration-300 hover:bg-surface-container ${
+          emptied ? 'panel-sunken opacity-[0.45]' : ''
+        }`}
+      >
         {/* Thumbnail beside the text, not a band above it.
 
             A full-bleed photo header only appeared for wines that had a
