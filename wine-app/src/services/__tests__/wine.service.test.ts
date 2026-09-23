@@ -16,6 +16,7 @@ import {
   formatCriticRatings,
   parseCriticRatings,
   formatDeliveryMonth,
+  isCellarEmpty,
 } from '../wine.service'
 import type { Wine } from '../../types/index'
 
@@ -232,5 +233,33 @@ describe('formatDeliveryMonth', () => {
 
   it('returns nothing for an unparseable date rather than "Invalid Date"', () => {
     expect(formatDeliveryMonth('not a date')).toBe('')
+  })
+})
+
+/**
+ * A wine with nothing left still belongs in the cellar list — its
+ * history and its tasting notes are the point of having recorded it —
+ * but it is no longer a bottle that can be chosen, so the card recedes.
+ */
+describe('isCellarEmpty', () => {
+  const stock = (storage: number, home: number) => ({
+    quantity_in_storage: storage,
+    quantity_at_home: home,
+  })
+
+  it('is empty only when nothing is left anywhere', () => {
+    expect(isCellarEmpty(stock(0, 0))).toBe(true)
+  })
+
+  it('is not empty while a bottle waits in storage', () => {
+    expect(isCellarEmpty(stock(6, 0))).toBe(false)
+  })
+
+  it('is not empty while a bottle is at home', () => {
+    expect(isCellarEmpty(stock(0, 1))).toBe(false)
+  })
+
+  it('counts both places, not just the one in front of you', () => {
+    expect(isCellarEmpty(stock(3, 2))).toBe(false)
   })
 })
