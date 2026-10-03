@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Wine, Tier, WineType } from '../types/index'
 import { TIER_LABELS } from '../types/index'
 import Modal from './Modal'
@@ -10,6 +10,9 @@ import { toInt, toNumber } from '../services/numberField.service'
 import { lookupWine, fieldsToApply, type LookupFields } from '../services/wineLookup.service'
 import { describeFailure } from '../services/claudeClient.service'
 import { hasApiKey } from '../services/aiSettings.service'
+import * as db from '../services/database'
+import { UNALLOCATED_RULES } from '../services/storageLocation.service'
+import type { StorageLocation } from '../types/index'
 import { Sparkles, TriangleAlert } from 'lucide-react'
 
 /** The app-wide field style, shared with the filter drawer and the
@@ -95,6 +98,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           critic_ratings: formatCriticRatings(initialWine.critic_ratings),
           flavor_profile: initialWine.flavor_profile ?? '',
           image_url: initialWine.image_url ?? '',
+          storage_location_id: initialWine.storage_location_id ?? '',
         }
       : {
           producer: '',
@@ -121,6 +125,7 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           critic_ratings: '',
           flavor_profile: '',
           image_url: '',
+          storage_location_id: '',
         }
   )
 
@@ -155,6 +160,17 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
    * stays there until the next attempt.
    */
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  /** The lockers to choose from; empty until any are configured. */
+  const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([])
+  useEffect(() => {
+    // No locker list, no picker. The form is reachable before the
+    // database is ready — and is rendered in tests without one at all —
+    // and a wine can always be saved unallocated.
+    db.getAllStorageLocations()
+      .then(setStorageLocations)
+      .catch(() => setStorageLocations([]))
+  }, [])
 
   const canLookUp =
     formData.producer.trim().length > 0 &&
@@ -314,6 +330,9 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
         purchase_price: toNumber(purchase_price),
         // Blank optional text is "unrecorded", not an empty value
         purchase_date: purchase_date.trim() || undefined,
+        // Blank is unallocated, which is an absent value rather than an
+        // empty one — the schedulers test for the field, not for ''.
+        storage_location_id: wineFields.storage_location_id || undefined,
         merchant: merchant.trim() || undefined,
         quantity_in_storage,
         quantity_at_home,
@@ -523,6 +542,31 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
               </select>
             </Field>
           </div>
+          {/* Which locker the stored bottles sit in. Shown whether
+              adding or editing, because correcting the handful that are
+              not at the usual place is how a collection gets allocated
+              after the bulk assignment in Settings. */}
+          {storageLocations.length > 0 && (
+            <Field
+              label="Storage location"
+              hint="Sets when deliveries of this wine can happen"
+            >
+              <select
+                name="storage_location_id"
+                value={formData.storage_location_id}
+                onChange={handleChange}
+                className={INPUT}
+              >
+                <option value="">{UNALLOCATED_RULES.name}</option>
+                {storageLocations.map(location => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
           {/* Only meaningful when adding: an edit leaves bottles where
               they already are, so offering the choice would imply an
               effect it does not have */}

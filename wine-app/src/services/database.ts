@@ -6,6 +6,7 @@ import type {
   DeliveryWindowWine,
   DeliveryCompletionLog,
   AuditLogEntry,
+  StorageLocation,
 } from '../types/index'
 import { v4 as uuidv4 } from 'uuid'
 import {
@@ -26,6 +27,7 @@ import {
 
 interface TableRowMap {
   wines: Wine
+  storage_location: StorageLocation
   cellar_config: CellarConfig
   consumption_log: ConsumptionLogEntry
   delivery_window: DeliveryWindow
@@ -38,6 +40,7 @@ type TableName = keyof TableRowMap
 
 const TABLE_NAMES: TableName[] = [
   'wines',
+  'storage_location',
   'cellar_config',
   'consumption_log',
   'delivery_window',
@@ -358,6 +361,81 @@ export async function updateCellarConfig(updates: Partial<CellarConfig>): Promis
 // ============================================================================
 // CONSUMPTION LOG
 // ============================================================================
+
+/**
+ * Storage locations — the lockers wines sit in before they come home.
+ *
+ * Deleting one does not delete its wines: they fall back to
+ * unallocated, which is the state the app is built to tolerate, rather
+ * than vanishing with the locker.
+ */
+export async function createStorageLocation(
+  location: Omit<StorageLocation, 'id' | 'created_at' | 'updated_at'>
+): Promise<StorageLocation> {
+  const now = new Date().toISOString()
+  const record: StorageLocation = {
+    ...location,
+    id: uuidv4(),
+    created_at: now,
+    updated_at: now,
+  }
+  getTable('storage_location').push(record)
+  await persist()
+  return record
+}
+
+export async function getAllStorageLocations(): Promise<StorageLocation[]> {
+  return [...getTable('storage_location')].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function updateStorageLocation(
+  id: string,
+  updates: Partial<Omit<StorageLocation, 'id' | 'created_at'>>
+): Promise<StorageLocation> {
+  const rows = getTable('storage_location')
+  const index = rows.findIndex(row => row.id === id)
+  if (index === -1) throw new Error(`Storage location not found: ${id}`)
+  rows[index] = { ...rows[index], ...updates, updated_at: new Date().toISOString() }
+  await persist()
+  return rows[index]
+}
+
+export async function deleteStorageLocation(id: string): Promise<void> {
+  const rows = getTable('storage_location')
+  const index = rows.findIndex(row => row.id === id)
+  if (index === -1) throw new Error(`Storage location not found: ${id}`)
+  rows.splice(index, 1)
+
+  // The wines outlive the locker, unallocated.
+  for (const wine of getTable('wines')) {
+    if (wine.storage_location_id === id) wine.storage_location_id = undefined
+  }
+  for (const window of getTable('delivery_window')) {
+    if (window.storage_location_id === id) window.storage_location_id = undefined
+  }
+  await persist()
+}
+
+/**
+ * Put every wine that has no location into one.
+ *
+ * The way a collection already in the app gets allocated: most of it
+ * lives in one place, so it is set in a single action and the handful
+ * of exceptions are corrected one at a time.
+ */
+export async function assignUnallocatedWines(locationId: string): Promise<number> {
+  const rows = getTable('wines')
+  let moved = 0
+  for (const wine of rows) {
+    if (!wine.storage_location_id) {
+      wine.storage_location_id = locationId
+      wine.updated_at = new Date().toISOString()
+      moved++
+    }
+  }
+  if (moved > 0) await persist()
+  return moved
+}
 
 export async function createConsumptionEntry(
   entry: Omit<ConsumptionLogEntry, 'id' | 'created_at'>
