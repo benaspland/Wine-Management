@@ -42,6 +42,44 @@ export interface Wine {
   quantity_in_storage: number; // Bottles at cellar/storage
   quantity_at_home: number; // Bottles at home, ready to drink
   notes?: string;
+  /**
+   * Where the bottles in storage are kept. Absent means unallocated —
+   * the state every wine starts in, and the one existing records are in
+   * until they are assigned.
+   */
+  storage_location_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Where a wine is kept before it comes home.
+ *
+ * Providers differ in ways that change when it is sensible to take
+ * delivery, so each one carries its own rules rather than inheriting a
+ * single global pair of delivery months.
+ */
+export type DeliveryCadence = 'fixed' | 'flexible';
+
+export interface StorageLocation {
+  id: string;
+  name: string;
+  /**
+   * `fixed` visits only in `delivery_months`; `flexible` can deliver in
+   * any month, which is what free delivery buys — there is no reason to
+   * batch when a visit costs nothing.
+   */
+  cadence: DeliveryCadence;
+  delivery_months: number[]; // 1-12, used when cadence is 'fixed'
+  min_bottles: number; // Smallest delivery worth taking from here
+  /**
+   * The month the next year's storage is charged for, when it is paid a
+   * year in advance. Bottles still here when it comes round cost another
+   * full year, so deliveries before it are preferred. Absent means
+   * billing is by actual time stored, where the opposite is true and
+   * leaving wine as long as possible is cheapest.
+   */
+  renewal_month?: number; // 1-12
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +120,8 @@ export interface ConsumptionLogEntry {
 export interface DeliveryWindow {
   id: string;
   scheduled_date: string; // Planned delivery date (YYYY-MM-DD)
+  /** Which locker it comes out of. Absent on windows predating locations. */
+  storage_location_id?: string;
   locked: boolean; // Is window manually locked (no regeneration)?
   status: DeliveryWindowStatus;
   created_at: string;

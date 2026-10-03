@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useWineStore } from '../store/wineStore'
 import { useDeliverySchedule } from '../hooks/useDeliverySchedule'
 import MessageModal from '../components/MessageModal'
 import { wineDisplayName, formatDeliveryMonth } from '../services/wine.service'
 import { useToastStore } from '../store/toastStore'
-import { ChevronDown, Lock } from 'lucide-react'
+import { ChevronDown, Lock, MapPin } from 'lucide-react'
 import PageHeading from '../components/PageHeading'
+import * as db from '../services/database'
+import { groupWinesByLocation } from '../services/storageLocation.service'
+import type { StorageLocation } from '../types/index'
 import DeliveryStatusBadge, { type DeliveryState } from '../components/DeliveryStatusBadge'
 
 export default function DeliverySchedulePage() {
@@ -15,6 +18,22 @@ export default function DeliverySchedulePage() {
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const showToast = useToastStore(state => state.show)
+  /**
+   * The lockers, so each delivery can say where it is coming from.
+   *
+   * The schedule itself is still planned as one stream — per-location
+   * cadence and minimums come next — so this groups what the planner
+   * produced rather than claiming the plan already respects each
+   * provider's rules. Seeing a delivery split across two providers is
+   * exactly the thing that shows why it needs to.
+   */
+  const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([])
+  useEffect(() => {
+    db.getAllStorageLocations()
+      .then(setStorageLocations)
+      .catch(() => setStorageLocations([]))
+  }, [])
+
   const [isPromoting, setIsPromoting] = useState(false)
   const [isDelaying, setIsDelaying] = useState(false)
   /**
@@ -220,8 +239,22 @@ export default function DeliverySchedulePage() {
 
                 {expanded && (
                   <div className="px-4 pb-4">
+                    {groupWinesByLocation(delivery.wines, wines, storageLocations).map(group => (
+                    <div key={group.name} className="mb-4 last:mb-0">
+                      {/* Only worth a heading when there is more than one
+                          place involved; a single-source delivery needs
+                          no label telling you it came from one place. */}
+                      {group.showHeading && (
+                        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-outline">
+                          <MapPin size={11} aria-hidden="true" />
+                          {group.name}
+                          <span className="font-normal tracking-normal">
+                            {group.bottles} {group.bottles === 1 ? 'bottle' : 'bottles'}
+                          </span>
+                        </p>
+                      )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {delivery.wines.map(wine => (
+                      {group.wines.map(wine => (
                         <div key={wine.id} className="panel panel-sunken p-3 text-sm">
                           <div className="flex justify-between items-start gap-2">
                             <div className="min-w-0">
@@ -270,6 +303,8 @@ export default function DeliverySchedulePage() {
                         </div>
                       ))}
                     </div>
+                    </div>
+                    ))}
 
                     {/* The one solid button on the screen, and only on
                         the delivery that is actually next: confirming a

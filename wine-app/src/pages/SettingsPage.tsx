@@ -5,6 +5,7 @@ import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/im
 import MessageModal from '../components/MessageModal'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import PageHeading from '../components/PageHeading'
+import StorageLocationsCard from '../components/StorageLocationsCard'
 import { X, Check, Eye, EyeOff } from 'lucide-react'
 import { useToastStore } from '../store/toastStore'
 import { wineDisplayName, criticRatingsOf } from '../services/wine.service'
@@ -480,6 +481,12 @@ export default function SettingsPage() {
             </p>
           </div>
         )}
+
+        <StorageLocationsCard
+          wines={wines}
+          onWinesChanged={loadWines}
+          onMessage={text => showToast(text)}
+        />
 
         {/* Wine lookup — the key for it, and what it is allowed to do */}
         <div className="card">
