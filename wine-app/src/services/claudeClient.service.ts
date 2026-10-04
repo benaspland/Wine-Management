@@ -10,7 +10,7 @@
 
 import { storedApiKey } from './aiSettings.service'
 
-export const CLAUDE_MODEL = 'claude-opus-5'
+export const CLAUDE_MODEL = 'claude-opus-5-5'
 
 /** Something went wrong with the call itself, as opposed to the answer. */
 export class ClaudeError extends Error {
