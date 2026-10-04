@@ -1,5 +1,6 @@
 import type { StorageLocation, Wine } from '../types/index'
 import type { DeliveryDisplayEntry } from './schedule.service'
+import { CASE_ML } from './format.service'
 
 /**
  * The rules a storage provider imposes on when it is sensible to take
@@ -26,17 +27,108 @@ export const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ] as const
 
-/** The rules an unallocated wine follows: exactly today's behaviour. */
-export const UNALLOCATED_RULES = {
-  id: UNALLOCATED,
-  name: 'Unallocated',
-  cadence: 'fixed' as const,
-  delivery_months: [3, 9],
-  min_bottles: 24,
-  renewal_month: undefined,
+/** A 75cl bottle — the unit any minimum stored in bottles was written in. */
+const STANDARD_BOTTLE_ML = 750
+
+/**
+ * Everything the scheduler needs to know about a location, with the
+ * minimum resolved to a volume.
+ *
+ * The scheduler only ever sees these. It has no idea which providers
+ * are configured or how many — every rule it applies comes from here,
+ * so any combination of fixed and flexible, prepaid and pro-rata, one
+ * locker or six, is planned by the same code.
+ */
+export interface LocationRules {
+  /** The location's id, or UNALLOCATED. */
+  id: string
+  name: string
+  cadence: 'fixed' | 'flexible'
+  delivery_months: number[]
+  min_volume_ml: number
+  renewal_month?: number
 }
 
-export type LocationDraft = Omit<StorageLocation, 'id' | 'created_at' | 'updated_at'>
+/**
+ * The rules an unallocated wine follows: exactly the app's original
+ * behaviour, so a collection nobody has allocated yet is scheduled as it
+ * always was. The minimum comes from the cellar setting, read as 75cl
+ * bottles.
+ */
+export function unallocatedRules(minBottles = 24): LocationRules {
+  return {
+    id: UNALLOCATED,
+    name: 'Unallocated',
+    cadence: 'fixed',
+    delivery_months: [3, 9],
+    min_volume_ml: minBottles * STANDARD_BOTTLE_ML,
+    renewal_month: undefined,
+  }
+}
+
+/** The default unallocated rules, for places that only need its name. */
+export const UNALLOCATED_RULES = unallocatedRules()
+
+/**
+ * A location's minimum as a volume.
+ *
+ * Locations saved before minimums were volumes carry a bottle count
+ * instead, which was always meant as 75cl bottles, so it converts
+ * without anyone having to re-enter it.
+ */
+export function minVolumeMl(location: Pick<StorageLocation, 'min_volume_ml' | 'min_bottles'>): number {
+  if (location.min_volume_ml !== undefined) return location.min_volume_ml
+  return (location.min_bottles ?? 24) * STANDARD_BOTTLE_ML
+}
+
+export function rulesFor(location: StorageLocation): LocationRules {
+  return {
+    id: location.id,
+    name: location.name,
+    cadence: location.cadence,
+    delivery_months: [...location.delivery_months],
+    min_volume_ml: minVolumeMl(location),
+    renewal_month: location.renewal_month,
+  }
+}
+
+/** Whether a location can deliver in this month at all. */
+export function isDeliveryMonth(rules: Pick<LocationRules, 'cadence' | 'delivery_months'>, month: number): boolean {
+  return rules.cadence === 'flexible' || rules.delivery_months.includes(month)
+}
+
+/**
+ * The first month after this one in which the location can deliver.
+ * A flexible location can always deliver next month.
+ */
+export function nextDeliveryMonth(
+  rules: Pick<LocationRules, 'cadence' | 'delivery_months'>,
+  year: number,
+  month: number
+): { year: number; month: number } {
+  for (let step = 1; step <= 12; step++) {
+    const absolute = month - 1 + step
+    const candidate = { year: year + Math.floor(absolute / 12), month: (absolute % 12) + 1 }
+    if (isDeliveryMonth(rules, candidate.month)) return candidate
+  }
+  // A fixed location with no months cannot be saved, but never loop.
+  return { year: year + 1, month }
+}
+
+/** "2 cases", "1 case", "2.5 cases". */
+export function formatCases(volumeMl: number): string {
+  const cases = Math.round((volumeMl / CASE_ML) * 10) / 10
+  return `${cases} ${cases === 1 ? 'case' : 'cases'}`
+}
+
+/** The editable fields of a location, with the minimum as a volume. */
+export interface LocationDraft {
+  name: string
+  cadence: 'fixed' | 'flexible'
+  delivery_months: number[]
+  min_volume_ml: number
+  renewal_month?: number
+}
 
 /** A new location starts on the schedule the app already used. */
 export function blankLocation(): LocationDraft {
@@ -44,8 +136,19 @@ export function blankLocation(): LocationDraft {
     name: '',
     cadence: 'fixed',
     delivery_months: [3, 9],
-    min_bottles: 24,
+    min_volume_ml: 4 * CASE_ML,
     renewal_month: undefined,
+  }
+}
+
+/** A saved location, opened for editing. */
+export function draftOf(location: StorageLocation): LocationDraft {
+  return {
+    name: location.name,
+    cadence: location.cadence,
+    delivery_months: [...location.delivery_months],
+    min_volume_ml: minVolumeMl(location),
+    renewal_month: location.renewal_month,
   }
 }
 
@@ -57,8 +160,8 @@ export function blankLocation(): LocationDraft {
  */
 export function validateLocation(draft: LocationDraft): string | null {
   if (!draft.name.trim()) return 'A name is required'
-  if (!Number.isInteger(draft.min_bottles) || draft.min_bottles < 1) {
-    return 'The minimum delivery must be at least one bottle'
+  if (!Number.isFinite(draft.min_volume_ml) || draft.min_volume_ml <= 0) {
+    return 'The minimum delivery must be more than nothing'
   }
   if (draft.cadence === 'fixed' && draft.delivery_months.length === 0) {
     return 'Pick at least one delivery month, or allow delivery any month'
@@ -76,7 +179,10 @@ export function validateLocation(draft: LocationDraft): string | null {
 }
 
 /** The location's rules in a line, for the card that lists them. */
-export function describeLocation(location: StorageLocation): string {
+export function describeLocation(
+  location: Pick<LocationRules, 'cadence' | 'delivery_months' | 'renewal_month'> &
+    Partial<Pick<StorageLocation, 'min_volume_ml' | 'min_bottles'>>
+): string {
   const when =
     location.cadence === 'flexible'
       ? 'Any month'
@@ -85,7 +191,7 @@ export function describeLocation(location: StorageLocation): string {
           .sort((a, b) => a - b)
           .map(month => MONTH_NAMES[month - 1])
           .join(' & ')
-  const parts = [when, `min ${location.min_bottles} bottles`]
+  const parts = [when, `min ${formatCases(minVolumeMl(location))}`]
   if (location.renewal_month !== undefined) {
     parts.push(`renews ${MONTH_NAMES[location.renewal_month - 1]}`)
   }
@@ -172,4 +278,34 @@ export function groupWinesByLocation(
       showHeading: groups.size > 1,
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * How a delivery is identified once more than one locker can deliver in
+ * the same month: its date and where it comes from. A window from before
+ * locations whose wines came from several places has no single source,
+ * and is identified by its date alone.
+ */
+export function deliveryKey(date: string, locationId?: string): string {
+  return locationId ? `${date}|${locationId}` : date
+}
+
+/**
+ * Which location a delivery window is for.
+ *
+ * Windows record it from now on. Older ones do not, but their wines say:
+ * if every wine in one comes from the same place, so did the window.
+ * Mixed or empty ones stay unknown, and are treated as covering every
+ * location in their month.
+ */
+export function windowLocation(
+  stored: string | undefined,
+  rows: Array<{ wine_id: string }>,
+  wines: Wine[]
+): string | undefined {
+  if (stored) return stored
+  if (rows.length === 0) return undefined
+  const byId = new Map(wines.map(wine => [wine.id, wine]))
+  const sources = new Set(rows.map(row => byId.get(row.wine_id)?.storage_location_id ?? UNALLOCATED))
+  return sources.size === 1 ? [...sources][0] : undefined
 }

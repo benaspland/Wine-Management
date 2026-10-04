@@ -152,6 +152,34 @@ export function bottlesPerCase(format?: string): number {
   }
 }
 
+/**
+ * A standard case, as a volume: six 75cl bottles, three magnums or
+ * twelve halves all come to 4.5 litres. Delivery minimums are measured
+ * in these so that "two cases" means the same amount of wine whatever
+ * size of bottle it arrives in.
+ */
+export const CASE_ML = 4500
+
+/**
+ * How much wine one bottle of this format holds, in millilitres.
+ *
+ * Anything unrecognised is counted as a standard bottle — the safe
+ * assumption, and the one a minimum written as "cases of 75cl" is
+ * already built on.
+ */
+export function bottleVolumeMl(format?: string): number {
+  switch (normalizeFormat(format)) {
+    case 'Half Bottle':
+      return 375
+    case 'Magnum':
+      return 1500
+    case 'Double Magnum':
+      return 3000
+    default:
+      return 750
+  }
+}
+
 /** Large formats are rationed to one per year by the schedulers. */
 export function isMagnumOrLarger(format?: string): boolean {
   const normalized = normalizeFormat(format)

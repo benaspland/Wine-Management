@@ -49,16 +49,16 @@ export function useDeliverySchedule() {
   )
 
   const deferWine = useCallback(
-    async (wineId: string, date: string) => {
-      await planner.deferWineFromDelivery(schedule, wineId, date)
+    async (wineId: string, key: string) => {
+      await planner.deferWineFromDelivery(schedule, wineId, key)
       await refresh()
     },
     [schedule, refresh]
   )
 
   const confirmDelivery = useCallback(
-    async (date: string) => {
-      await planner.confirmDelivery(schedule, date)
+    async (key: string) => {
+      await planner.confirmDelivery(schedule, key)
       await loadWines()
       await refresh()
     },

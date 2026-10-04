@@ -186,6 +186,7 @@ describe('computeDashboardStats', () => {
 describe('nextDelivery', () => {
   function displayEntry(date: string, status: string, quantities: number[]): DeliveryDisplayEntry {
     return {
+      key: date,
       date,
       windowId: '',
       status,

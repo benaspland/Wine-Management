@@ -71,7 +71,17 @@ export interface StorageLocation {
    */
   cadence: DeliveryCadence;
   delivery_months: number[]; // 1-12, used when cadence is 'fixed'
-  min_bottles: number; // Smallest delivery worth taking from here
+  /**
+   * Smallest delivery worth taking from here, as a volume. Measured in
+   * wine rather than bottles so that a minimum of "two cases" is met by
+   * twelve bottles or six magnums alike.
+   */
+  min_volume_ml?: number;
+  /**
+   * The same minimum as first stored, counted in bottles. Read as 75cl
+   * bottles for locations saved before volume, and cleared on next save.
+   */
+  min_bottles?: number;
   /**
    * The month the next year's storage is charged for, when it is paid a
    * year in advance. Bottles still here when it comes round cost another
@@ -190,4 +200,6 @@ export interface DeliveryScheduleEntry {
   tier: Tier;
   region: string;
   status: 'pending' | 'delivered';
+  /** The location it comes out of; absent for unallocated wine. */
+  storage_location_id?: string;
 }

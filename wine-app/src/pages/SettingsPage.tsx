@@ -597,7 +597,7 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-on-surface mb-2">Minimum Delivery (bottles)</label>
+              <label className="block text-sm font-medium text-on-surface mb-2">Minimum Delivery for Unallocated Wine (75cl bottles)</label>
               <input
                 type="number"
                 value={minDeliveryBottles}
@@ -607,7 +607,7 @@ export default function SettingsPage() {
                 max="100"
                 className="field"
               />
-              <p className="text-xs text-outline mt-1">Minimum bottles required for a delivery to be created</p>
+              <p className="text-xs text-outline mt-1">Applies only to wine with no storage location — each location sets its own. Measured by volume, so a magnum counts as two.</p>
             </div>
 
             <div>

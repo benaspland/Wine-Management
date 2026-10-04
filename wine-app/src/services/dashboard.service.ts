@@ -174,9 +174,12 @@ export function nextDelivery(
 ): { date: string; bottles: number; wines: number } | null {
   const entry = schedule.find(d => d.status !== 'completed')
   if (!entry) return null
+  // Several lockers can deliver in the same month; count them together
+  const sameDay = schedule.filter(d => d.status !== 'completed' && d.date === entry.date)
+  const wines = sameDay.flatMap(d => d.wines)
   return {
     date: entry.date,
-    bottles: entry.wines.reduce((sum, w) => sum + w.quantity, 0),
-    wines: new Set(entry.wines.map(w => w.id)).size,
+    bottles: wines.reduce((sum, w) => sum + w.quantity, 0),
+    wines: new Set(wines.map(w => w.id)).size,
   }
 }

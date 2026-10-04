@@ -7,7 +7,7 @@ import { useToastStore } from '../store/toastStore'
 import { ChevronDown, Lock, MapPin } from 'lucide-react'
 import PageHeading from '../components/PageHeading'
 import * as db from '../services/database'
-import { groupWinesByLocation } from '../services/storageLocation.service'
+import { UNALLOCATED, UNALLOCATED_RULES, groupWinesByLocation, locationName } from '../services/storageLocation.service'
 import type { StorageLocation } from '../types/index'
 import DeliveryStatusBadge, { type DeliveryState } from '../components/DeliveryStatusBadge'
 
@@ -18,15 +18,7 @@ export default function DeliverySchedulePage() {
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const showToast = useToastStore(state => state.show)
-  /**
-   * The lockers, so each delivery can say where it is coming from.
-   *
-   * The schedule itself is still planned as one stream — per-location
-   * cadence and minimums come next — so this groups what the planner
-   * produced rather than claiming the plan already respects each
-   * provider's rules. Seeing a delivery split across two providers is
-   * exactly the thing that shows why it needs to.
-   */
+  /** The lockers, so each delivery can say where it is coming from. */
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([])
   useEffect(() => {
     db.getAllStorageLocations()
@@ -48,33 +40,47 @@ export default function DeliverySchedulePage() {
 
   const currentWinesAtHome = wines.reduce((sum, w) => sum + w.quantity_at_home, 0)
 
-  const toggleCollapse = (date: string) => {
+  const toggleCollapse = (key: string) => {
     setFlipped(prev => {
       const next = new Set(prev)
-      if (next.has(date)) next.delete(date)
-      else next.add(date)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
 
   /**
-   * The next delivery is the earliest one not yet confirmed.
+   * Each locker's next delivery is its earliest one not yet confirmed.
    *
    * Derived from position, not from the date: a delivery whose date has
    * passed but which you never confirmed is still the next thing to
    * deal with, and calling it complete would say something that hasn't
-   * happened. The list is in date order, so everything after the first
-   * unconfirmed entry is simply Planned — which is why "next up" can
-   * never sit below a "planned" card.
+   * happened. Lockers run on their own timetables, so each has its own
+   * next delivery — within one locker, "next up" never sits below a
+   * "planned" card.
    */
-  const nextUpDate = deliverySchedule.find(d => d.status !== 'completed')?.date
+  const nextUpKeys = new Set<string>()
+  const seenLocations = new Set<string | undefined>()
+  for (const d of deliverySchedule) {
+    if (d.status === 'completed' || seenLocations.has(d.locationId)) continue
+    seenLocations.add(d.locationId)
+    nextUpKeys.add(d.key)
+  }
 
-  const stateOf = (delivery: { date: string; status: string }): DeliveryState =>
-    delivery.status === 'completed' ? 'complete' : delivery.date === nextUpDate ? 'next' : 'planned'
+  type Entry = (typeof deliverySchedule)[number]
+  const stateOf = (delivery: Entry): DeliveryState =>
+    delivery.status === 'completed' ? 'complete' : nextUpKeys.has(delivery.key) ? 'next' : 'planned'
 
-  /** Only the next delivery opens by default; the rest are a list of dates. */
-  const isExpanded = (delivery: { date: string; status: string }) =>
-    (stateOf(delivery) === 'next') !== flipped.has(delivery.date)
+  /** Only next deliveries open by default; the rest are a list of dates. */
+  const isExpanded = (delivery: Entry) => (stateOf(delivery) === 'next') !== flipped.has(delivery.key)
+
+  /** Where a delivery comes from, once there is more than one place it could. */
+  const sourceOf = (delivery: Entry): string | null => {
+    if (storageLocations.length === 0) return null
+    if (delivery.locationId === undefined) return 'Several locations'
+    if (delivery.locationId === UNALLOCATED) return UNALLOCATED_RULES.name
+    return locationName(delivery.locationId, storageLocations)
+  }
 
   // Successes are non-blocking toasts; errors stay as a modal that must
   // be acknowledged before continuing to curate.
@@ -98,10 +104,10 @@ export default function DeliverySchedulePage() {
     }
   }
 
-  const handleDeferWine = async (wineId: string, date: string, wineName: string) => {
+  const handleDeferWine = async (wineId: string, key: string, wineName: string) => {
     setIsDelaying(true)
     try {
-      await deferWine(wineId, date)
+      await deferWine(wineId, key)
       flashMessage('success', `${wineName} deferred to a future delivery`)
     } catch (error) {
       flashMessage('error', `Failed to defer: ${(error as Error).message}`)
@@ -110,10 +116,14 @@ export default function DeliverySchedulePage() {
     }
   }
 
-  const handleConfirmDelivery = async (date: string) => {
+  const handleConfirmDelivery = async (delivery: Entry) => {
     try {
-      await confirmDelivery(date)
-      flashMessage('success', `Delivery for ${date} confirmed`)
+      await confirmDelivery(delivery.key)
+      const source = sourceOf(delivery)
+      flashMessage(
+        'success',
+        `${formatDeliveryMonth(delivery.date)} delivery${source ? ` from ${source}` : ''} confirmed`
+      )
     } catch (error) {
       flashMessage('error', `Failed to confirm delivery: ${(error as Error).message}`)
     }
@@ -187,10 +197,11 @@ export default function DeliverySchedulePage() {
             const expanded = isExpanded(delivery)
             const totalBottles = delivery.wines.reduce((sum, w) => sum + w.quantity, 0)
             const totalWines = delivery.wines.length
+            const source = sourceOf(delivery)
 
             return (
               <div
-                key={delivery.date}
+                key={delivery.key}
                 /* Three states, told by the edge and the weight of the
                    card rather than by a dot of colour: done and faded,
                    next and outlined in accent, or simply on the list. */
@@ -203,7 +214,7 @@ export default function DeliverySchedulePage() {
                 }`}
               >
                 <button
-                  onClick={() => toggleCollapse(delivery.date)}
+                  onClick={() => toggleCollapse(delivery.key)}
                   aria-expanded={expanded}
                   className="w-full p-4 flex justify-between items-center gap-3 hover:bg-surface-container-high transition-colors text-left"
                 >
@@ -218,6 +229,12 @@ export default function DeliverySchedulePage() {
                       <h3 className="text-lg font-bold text-on-surface">
                         {formatDeliveryMonth(delivery.date)}
                       </h3>
+                      {source && (
+                        <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-on-surface-variant">
+                          <MapPin size={11} aria-hidden="true" />
+                          {source}
+                        </p>
+                      )}
                       <p className="text-xs text-outline mt-0.5">
                         {totalWines} {totalWines === 1 ? 'wine' : 'wines'} · {totalBottles} {totalBottles === 1 ? 'bottle' : 'bottles'}
                         {delivery.locked && state !== 'complete' && (
@@ -281,7 +298,7 @@ export default function DeliverySchedulePage() {
                                 commits a delivery. */}
                             {state === 'next' && (
                               <button
-                                onClick={() => handleDeferWine(wine.id, delivery.date, wineDisplayName(wine.producer, wine.name))}
+                                onClick={() => handleDeferWine(wine.id, delivery.key, wineDisplayName(wine.producer, wine.name))}
                                 disabled={isDelaying || delivery.wines.length <= 1}
                                 className="shrink-0 px-3 py-1.5 rounded-full border border-outline-variant text-outline-variant text-xs font-medium hover:text-on-surface hover:border-outline transition-colors disabled:opacity-40 whitespace-nowrap"
                                 title="Defer this wine to a future delivery"
@@ -312,7 +329,7 @@ export default function DeliverySchedulePage() {
                         house four years early. */}
                     {state === 'next' && (
                       <button
-                        onClick={() => handleConfirmDelivery(delivery.date)}
+                        onClick={() => handleConfirmDelivery(delivery)}
                         className="btn-primary w-full mt-4"
                       >
                         Confirm Delivery
