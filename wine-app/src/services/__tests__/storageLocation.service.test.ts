@@ -17,6 +17,12 @@ import {
   bottlesPerLocation,
   UNALLOCATED,
   groupWinesByLocation,
+  minVolumeMl,
+  unallocatedRules,
+  isDeliveryMonth,
+  nextDeliveryMonth,
+  formatCases,
+  draftOf,
 } from '../storageLocation.service'
 
 const location = (overrides: Partial<StorageLocation> = {}): StorageLocation => ({
@@ -24,7 +30,7 @@ const location = (overrides: Partial<StorageLocation> = {}): StorageLocation => 
   name: 'Nexus',
   cadence: 'fixed',
   delivery_months: [3, 9],
-  min_bottles: 24,
+  min_volume_ml: 18000,
   created_at: '2026-01-01',
   updated_at: '2026-01-01',
   ...overrides,
@@ -69,7 +75,7 @@ describe('validateLocation', () => {
   })
 
   it('refuses a minimum below one bottle', () => {
-    expect(validateLocation({ ...blankLocation(), name: 'X', min_bottles: 0 })).toMatch(/minimum/i)
+    expect(validateLocation({ ...blankLocation(), name: 'X', min_volume_ml: 0 })).toMatch(/minimum/i)
   })
 
   it('refuses months that are not months', () => {
@@ -84,7 +90,7 @@ describe('validateLocation', () => {
 
 describe('describeLocation', () => {
   it('reads as the rule it is', () => {
-    expect(describeLocation(location())).toBe('March & September · min 24 bottles')
+    expect(describeLocation(location())).toBe('March & September · min 4 cases')
   })
 
   it('says when a prepaid year rolls over', () => {
@@ -92,8 +98,8 @@ describe('describeLocation', () => {
   })
 
   it('says any month for free delivery', () => {
-    expect(describeLocation(location({ cadence: 'flexible', min_bottles: 12 }))).toBe(
-      'Any month · min 12 bottles'
+    expect(describeLocation(location({ cadence: 'flexible', min_volume_ml: 9000 }))).toBe(
+      'Any month · min 2 cases'
     )
   })
 })
@@ -218,5 +224,57 @@ describe('groupWinesByLocation', () => {
   it('treats a wine the delivery names but the cellar has lost as unallocated', () => {
     const groups = groupWinesByLocation([line('ghost', 6)], cellar, [nexus])
     expect(groups[0].name).toBe('Unallocated')
+  })
+})
+
+/**
+ * Minimums are volumes, because "two cases" is a quantity of wine: six
+ * magnums meet it as surely as twelve bottles do.
+ */
+describe('volume minimums', () => {
+  it('reads a location saved in bottles as 75cl bottles', () => {
+    // Saved before minimums were volumes; nobody should have to re-enter it
+    const legacy = { ...location(), min_volume_ml: undefined, min_bottles: 12 }
+    expect(minVolumeMl(legacy)).toBe(9000)
+  })
+
+  it('prefers the volume once one is saved', () => {
+    expect(minVolumeMl({ min_volume_ml: 4500, min_bottles: 24 })).toBe(4500)
+  })
+
+  it('opens a legacy location for editing as a volume', () => {
+    const legacy = { ...location(), min_volume_ml: undefined, min_bottles: 12 }
+    expect(draftOf(legacy).min_volume_ml).toBe(9000)
+  })
+
+  it('takes the unallocated minimum from the cellar setting', () => {
+    expect(unallocatedRules(24).min_volume_ml).toBe(18000)
+    expect(unallocatedRules(12).min_volume_ml).toBe(9000)
+  })
+
+  it('says cases in words a person would use', () => {
+    expect(formatCases(4500)).toBe('1 case')
+    expect(formatCases(9000)).toBe('2 cases')
+    expect(formatCases(6750)).toBe('1.5 cases')
+  })
+})
+
+describe('when a location can deliver', () => {
+  const fixed = { cadence: 'fixed' as const, delivery_months: [3, 9] }
+  const flexible = { cadence: 'flexible' as const, delivery_months: [] }
+
+  it('limits a fixed location to its months', () => {
+    expect(isDeliveryMonth(fixed, 3)).toBe(true)
+    expect(isDeliveryMonth(fixed, 4)).toBe(false)
+  })
+
+  it('lets a flexible location deliver any month', () => {
+    for (let month = 1; month <= 12; month++) expect(isDeliveryMonth(flexible, month)).toBe(true)
+  })
+
+  it('finds the next slot, across the turn of the year', () => {
+    expect(nextDeliveryMonth(fixed, 2026, 3)).toEqual({ year: 2026, month: 9 })
+    expect(nextDeliveryMonth(fixed, 2026, 10)).toEqual({ year: 2027, month: 3 })
+    expect(nextDeliveryMonth(flexible, 2026, 12)).toEqual({ year: 2027, month: 1 })
   })
 })

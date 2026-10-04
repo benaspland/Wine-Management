@@ -3,15 +3,17 @@ import type { StorageLocation, Wine } from '../types/index'
 import * as db from '../services/database'
 import {
   blankLocation,
+  draftOf,
   validateLocation,
   describeLocation,
   bottlesPerLocation,
+  unallocatedRules,
   MONTH_NAMES,
   UNALLOCATED,
-  UNALLOCATED_RULES,
   type LocationDraft,
 } from '../services/storageLocation.service'
-import { toInt } from '../services/numberField.service'
+import { CASE_ML } from '../services/format.service'
+import { toNumber } from '../services/numberField.service'
 import { Plus, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 
 /**
@@ -40,6 +42,13 @@ export default function StorageLocationsCard({
   const [editing, setEditing] = useState<{ id?: string; draft: LocationDraft } | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [unallocatedMin, setUnallocatedMin] = useState(24)
+  useEffect(() => {
+    db.getCellarConfig().then(
+      config => setUnallocatedMin(config.min_delivery_bottles || 24),
+      () => setUnallocatedMin(24)
+    )
+  }, [])
 
   // Tolerant of a database that is not ready: this card renders with
   // the rest of Settings, and an empty list is the correct first state
@@ -66,7 +75,9 @@ export default function StorageLocationsCard({
     }
     setBusy(true)
     try {
-      const draft = { ...editing.draft, name: editing.draft.name.trim() }
+      // The volume replaces any bottle count saved before minimums were
+      // volumes, so the two can never disagree.
+      const draft = { ...editing.draft, name: editing.draft.name.trim(), min_bottles: undefined }
       if (editing.id) await db.updateStorageLocation(editing.id, draft)
       else await db.createStorageLocation(draft)
       await load()
@@ -131,33 +142,33 @@ export default function StorageLocationsCard({
           ) : (
             <div key={location.id} className="panel panel-sunken p-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                {/* The whole description opens the editor. A faint
+                    pencil in the corner was the only way in, and it
+                    read as decoration rather than a control — a saved
+                    mistake looked permanent. */}
+                <button
+                  type="button"
+                  onClick={() => setEditing({ id: location.id, draft: draftOf(location) })}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="text-sm font-semibold text-on-surface">{location.name}</p>
                   <p className="text-xs text-outline mt-0.5">{describeLocation(location)}</p>
                   <p className="text-xs text-outline-variant mt-0.5">
                     {counts.get(location.id) ?? 0} bottles here
                   </p>
-                </div>
-                <div className="flex shrink-0 gap-1">
+                </button>
+                <div className="flex shrink-0 gap-1.5">
                   <button
-                    onClick={() =>
-                      setEditing({
-                        id: location.id,
-                        draft: {
-                          name: location.name,
-                          cadence: location.cadence,
-                          delivery_months: [...location.delivery_months],
-                          min_bottles: location.min_bottles,
-                          renewal_month: location.renewal_month,
-                        },
-                      })
-                    }
+                    type="button"
+                    onClick={() => setEditing({ id: location.id, draft: draftOf(location) })}
                     aria-label={`Edit ${location.name}`}
-                    className="h-9 w-9 flex items-center justify-center rounded-full border border-outline-variant text-outline-variant hover:text-on-surface transition-colors"
+                    className="h-9 flex items-center gap-1.5 rounded-full border border-outline-variant px-3 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:border-primary transition-colors"
                   >
-                    <Pencil size={14} />
+                    <Pencil size={12} aria-hidden="true" />
+                    Edit
                   </button>
                   <button
+                    type="button"
                     onClick={() => setConfirmingDelete(location.id)}
                     aria-label={`Delete ${location.name}`}
                     className="h-9 w-9 flex items-center justify-center rounded-full border border-outline-variant text-outline-variant hover:text-error transition-colors"
@@ -215,9 +226,9 @@ export default function StorageLocationsCard({
             absence of one. Shown anyway, because a collection with
             bottles sitting in it is the thing most worth noticing. */}
         <div className="panel panel-sunken p-3 opacity-80">
-          <p className="text-sm font-semibold text-outline">{UNALLOCATED_RULES.name}</p>
+          <p className="text-sm font-semibold text-outline">{unallocatedRules().name}</p>
           <p className="text-xs text-outline-variant mt-0.5">
-            {describeLocation({ ...UNALLOCATED_RULES, created_at: '', updated_at: '' })} ·{' '}
+            {describeLocation(unallocatedRules(unallocatedMin))} ·{' '}
             {unallocated} bottles
           </p>
           {unallocated > 0 && locations.length === 0 && (
@@ -337,14 +348,27 @@ function LocationForm({
         <label className="block text-xs text-outline mb-1 uppercase tracking-wider">
           Smallest delivery worth taking
         </label>
-        <input
-          type="number"
-          value={draft.min_bottles}
-          onChange={e => onChange({ ...draft, min_bottles: toInt(e.target.value) ?? 0 })}
-          className={fieldClass}
-        />
+        {/* In cases, because that is how deliveries are talked about —
+            and a case is the same 4.5 litres whether it holds six
+            bottles, three magnums or twelve halves, so the minimum is
+            really a volume and is checked as one. */}
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.5"
+            min="0.5"
+            value={draft.min_volume_ml ? String(draft.min_volume_ml / CASE_ML) : ''}
+            onChange={e =>
+              onChange({ ...draft, min_volume_ml: (toNumber(e.target.value) ?? 0) * CASE_ML })
+            }
+            className={fieldClass}
+          />
+          <span className="shrink-0 text-sm text-outline">cases</span>
+        </div>
         <p className="text-xs text-outline mt-1">
-          In bottles. Two standard cases is 12; the old single rule was 24.
+          Measured by volume: a case is six 75cl bottles, three magnums or
+          twelve halves.
         </p>
       </div>
 

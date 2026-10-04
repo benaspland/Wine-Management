@@ -1,9 +1,10 @@
-import type { Wine } from '../types/index'
+import type { StorageLocation, Wine } from '../types/index'
 import * as db from './database'
 import * as workflows from './workflows.service'
 import { ScheduleService } from './schedule.service'
 import type { DeliveryDisplayEntry } from './schedule.service'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
+import { UNALLOCATED, deliveryKey, rulesFor, unallocatedRules, windowLocation } from './storageLocation.service'
 
 /**
  * Delivery planning orchestration.
@@ -32,7 +33,10 @@ interface LockedWindowState {
  * already at home, so counting them as committed would reserve the same
  * bottles twice. They are only wanted as a record of what arrived.
  */
-async function loadLockedWindowState(): Promise<LockedWindowState> {
+async function loadLockedWindowState(
+  wines: Wine[],
+  locations: StorageLocation[]
+): Promise<LockedWindowState> {
   const dbWindows = await db.getAllDeliveryWindows()
   const lockedWindowWines = new Map<string, Array<{ wine_id: string; quantity: number }>>()
   const completedWindowWines = new Map<string, Array<{ wine_id: string; quantity: number }>>()
@@ -49,7 +53,13 @@ async function loadLockedWindowState(): Promise<LockedWindowState> {
       const wws = await db.getDeliveryWindowWines(w.id)
       const wineList = wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
       lockedWindowWines.set(w.id, wineList)
-      lockedDeliveries[w.scheduled_date] = wineList
+      // Keyed by source, so a locked delivery from one locker does not
+      // stop the others delivering that month. An old window of mixed
+      // origin keeps its bare date and still stands in for them all.
+      const location =
+        windowLocation(w.storage_location_id, wineList, wines) ??
+        (locations.length === 0 ? UNALLOCATED : undefined)
+      lockedDeliveries[deliveryKey(w.scheduled_date, location)] = wineList
       for (const ww of wineList) {
         committedQuantities[ww.wine_id] = (committedQuantities[ww.wine_id] || 0) + ww.quantity
       }
@@ -64,10 +74,19 @@ async function loadLockedWindowState(): Promise<LockedWindowState> {
  * windows excluded and locked deliveries simulated for capacity math.
  * Used by the drinking schedule to know when wines become available.
  */
+async function loadLocations(): Promise<StorageLocation[]> {
+  try {
+    return await db.getAllStorageLocations()
+  } catch {
+    return []
+  }
+}
+
 export async function buildDeliveryScheduleEntries(wines: Wine[]) {
   const config = await db.getCellarConfig()
   const totalAtHome = wines.reduce((sum, w) => sum + w.quantity_at_home, 0)
-  const { committedQuantities, lockedDeliveries } = await loadLockedWindowState()
+  const locations = await loadLocations()
+  const { committedQuantities, lockedDeliveries } = await loadLockedWindowState(wines, locations)
 
   return ScheduleService.generateDeliverySchedule(
     wines,
@@ -77,15 +96,17 @@ export async function buildDeliveryScheduleEntries(wines: Wine[]) {
     config.annual_consumption_target || 30,
     config.min_delivery_bottles || 24,
     committedQuantities,
-    lockedDeliveries
+    lockedDeliveries,
+    locations
   )
 }
 
 export async function buildDeliverySchedule(wines: Wine[]): Promise<DeliveryDisplayEntry[]> {
   const config = await db.getCellarConfig()
   const totalAtHome = wines.reduce((sum, w) => sum + w.quantity_at_home, 0)
+  const locations = await loadLocations()
   const { dbWindows, lockedWindowWines, completedWindowWines, committedQuantities, lockedDeliveries } =
-    await loadLockedWindowState()
+    await loadLockedWindowState(wines, locations)
 
   // Generate the in-memory delivery schedule for storage wines, excluding
   // bottles already committed to locked windows and simulating locked
@@ -98,7 +119,8 @@ export async function buildDeliverySchedule(wines: Wine[]): Promise<DeliveryDisp
     config.annual_consumption_target || 30,
     config.min_delivery_bottles || 24,
     committedQuantities,
-    lockedDeliveries
+    lockedDeliveries,
+    locations
   )
 
   // Reconcile the in-memory schedule with DB-backed locked windows.
@@ -110,7 +132,9 @@ export async function buildDeliverySchedule(wines: Wine[]): Promise<DeliveryDisp
     dbWindows,
     lockedWindowWines,
     DELIVERY_CONFIG.months as [number, number],
-    completedWindowWines
+    completedWindowWines,
+    locations,
+    config.min_delivery_bottles || 24
   )
 }
 
@@ -151,6 +175,7 @@ async function ensureLockedWindow(delivery: DeliveryDisplayEntry): Promise<strin
   if (!windowId) {
     const newWindow = await db.createDeliveryWindow({
       scheduled_date: delivery.date,
+      storage_location_id: delivery.locationId,
       locked: false,
       status: 'planned',
     })
@@ -172,14 +197,60 @@ async function ensureLockedWindow(delivery: DeliveryDisplayEntry): Promise<strin
   return windowId
 }
 
-/** Promote a wine into the first upcoming delivery. */
+/** A delivery still to come, by key — or by date, for callers that only know that. */
+function findDelivery(schedule: DeliveryDisplayEntry[], ref: string): DeliveryDisplayEntry | undefined {
+  const upcoming = schedule.filter(d => d.status !== 'completed')
+  return (
+    upcoming.find(d => d.key === ref) ??
+    upcoming.find(d => d.date === ref) ??
+    schedule.find(d => d.key === ref || d.date === ref)
+  )
+}
+
+/**
+ * The first upcoming delivery a wine can travel on: the next one from
+ * the locker it is kept in. If that locker has nothing planned, a new
+ * delivery is opened at its next delivery month.
+ */
+async function nextDeliveryForWine(
+  schedule: DeliveryDisplayEntry[],
+  wineId: string
+): Promise<DeliveryDisplayEntry> {
+  const [wine, locations] = await Promise.all([db.getWineById(wineId), loadLocations()])
+  const stored = wine?.storage_location_id
+  const location = locations.find(l => l.id === stored)
+  const locationId = location ? location.id : UNALLOCATED
+
+  const existing = schedule.find(
+    d => d.status !== 'completed' && (d.locationId === locationId || d.locationId === undefined)
+  )
+  if (existing) return existing
+
+  const config = await db.getCellarConfig()
+  const rules = location
+    ? rulesFor(location)
+    : { ...unallocatedRules(config.min_delivery_bottles || 24), delivery_months: [...DELIVERY_CONFIG.months] }
+  const today = new Date()
+  const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+  const date = ScheduleService.nextDeliveryDate(thisMonth, rules)
+  return {
+    key: deliveryKey(date, locationId),
+    date,
+    locationId,
+    windowId: '',
+    status: 'pending',
+    locked: false,
+    wines: [],
+  }
+}
+
+/** Promote a wine into the next delivery from its own location. */
 export async function promoteWineToNextDelivery(
   schedule: DeliveryDisplayEntry[],
   wineId: string,
   quantity: number
 ): Promise<void> {
-  const firstDelivery = schedule.find(d => d.status !== 'completed')
-  if (!firstDelivery) throw new Error('No upcoming delivery scheduled')
+  const firstDelivery = await nextDeliveryForWine(schedule, wineId)
 
   // Check capacity at the delivery date, not today: we assume the user
   // will continue drinking at their configured annual rate between now
@@ -225,9 +296,10 @@ export async function promoteWineToNextDelivery(
 export async function deferWineFromDelivery(
   schedule: DeliveryDisplayEntry[],
   wineId: string,
+  /** The delivery's key, or for a single-source month its date. */
   date: string
 ): Promise<void> {
-  const delivery = schedule.find(d => d.date === date)
+  const delivery = findDelivery(schedule, date)
   if (!delivery) throw new Error('Delivery not found')
 
   if (delivery.wines.length <= 1) {
@@ -241,9 +313,10 @@ export async function deferWineFromDelivery(
 /** Confirm a delivery: move its wines home and complete the window. */
 export async function confirmDelivery(
   schedule: DeliveryDisplayEntry[],
-  date: string
+  /** The delivery's key, or for a single-source month its date. */
+  key: string
 ): Promise<void> {
-  const entry = schedule.find(d => d.date === date)
+  const entry = findDelivery(schedule, key)
   if (!entry) throw new Error('Delivery not found in schedule')
 
   // Validate the FULL delivery fits in home space before touching anything.
@@ -266,7 +339,8 @@ export async function confirmDelivery(
   let windowId = entry.windowId
   if (!windowId) {
     const newWindow = await db.createDeliveryWindow({
-      scheduled_date: date,
+      scheduled_date: entry.date,
+      storage_location_id: entry.locationId,
       locked: false,
       status: 'planned',
     })
