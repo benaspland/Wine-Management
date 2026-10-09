@@ -9,6 +9,7 @@ import type {
   StorageLocation,
 } from '../types/index'
 import { v4 as uuidv4 } from 'uuid'
+import { withoutPhotos } from './backup.service'
 import {
   createStorageAdapter,
   readLegacyLocalStorageSnapshot,
@@ -178,6 +179,11 @@ export async function initializeDatabase(): Promise<void> {
     configs[0].min_delivery_bottles = DEFAULT_CONFIG.min_delivery_bottles
   }
 
+  // Photos copied into the history by edits made before it stopped
+  // storing them — nearly all of a backup's size, and never read back
+  const auditLog = getTable('audit_log')
+  for (let i = 0; i < auditLog.length; i++) auditLog[i] = withoutPhotos(auditLog[i])
+
   // Normalize booleans persisted as 0/1 by the legacy SQL-string layer
   for (const window of getTable('delivery_window')) {
     window.locked = Boolean(window.locked)
@@ -285,6 +291,28 @@ export async function findWineByNameVintageProducer(
   )
 }
 
+/**
+ * What an edit actually changed, for the history log.
+ *
+ * Saving the edit form sends every field back, and the log used to keep
+ * all of them twice — the whole record before, and every field after —
+ * photo included. A photo is stored as the image itself, so each edit
+ * copied it again, and the history grew to most of the backup's size.
+ * Only fields whose value changed are kept now, and a photo is noted as
+ * changed rather than stored.
+ */
+function changesBetween<T extends object>(before: T, updates: Partial<T>) {
+  const old_values: Record<string, unknown> = {}
+  const new_values: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(updates)) {
+    const previous = (before as Record<string, unknown>)[key]
+    if (JSON.stringify(previous) === JSON.stringify(value)) continue
+    old_values[key] = previous
+    new_values[key] = value
+  }
+  return withoutPhotos({ fields_changed: Object.keys(new_values), old_values, new_values })
+}
+
 export async function updateWine(id: string, updates: Partial<Wine>): Promise<void> {
   const wines = getTable('wines')
   const index = wines.findIndex((w) => w.id === id)
@@ -301,11 +329,7 @@ export async function updateWine(id: string, updates: Partial<Wine>): Promise<vo
   await createAuditLog({
     action: 'edit_wine_details',
     wine_id: id,
-    details: {
-      fields_changed: Object.keys(safeUpdates),
-      old_values: before,
-      new_values: safeUpdates,
-    },
+    details: changesBetween(before, safeUpdates),
   })
 }
 
@@ -351,10 +375,7 @@ export async function updateCellarConfig(updates: Partial<CellarConfig>): Promis
 
   await createAuditLog({
     action: 'update_cellar_config',
-    details: {
-      old_values: before,
-      new_values: safeUpdates,
-    },
+    details: changesBetween(before, safeUpdates),
   })
 }
 

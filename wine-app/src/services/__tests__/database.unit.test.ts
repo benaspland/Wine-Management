@@ -528,6 +528,38 @@ describe('Database Layer - Unit Tests', () => {
       expect(entry.details.test).toBe('data')
     })
 
+    it('records only what an edit changed, and never the photo itself', async () => {
+      const photo = 'data:image/jpeg;base64,' + 'A'.repeat(5000)
+      const wine = await db.createWine({
+        name: 'Tondonia', vintage: 2010, tier: 3, region: 'Rioja',
+        drinking_window_start: 2020, drinking_window_end: 2040,
+        quantity_in_storage: 6, quantity_at_home: 0, image_url: photo,
+      })
+
+      // The edit form sends every field back, photo included
+      await db.updateWine(wine.id, { ...wine, name: 'Vina Tondonia' })
+      const [edit] = (await db.getAuditLog(10)).filter(l => l.action === 'edit_wine_details')
+      expect(edit.details.fields_changed).toEqual(['name'])
+      expect(edit.details.old_values).toEqual({ name: 'Tondonia' })
+      expect(JSON.stringify(edit.details)).not.toContain('data:image')
+
+      await db.updateWine(wine.id, { image_url: 'data:image/png;base64,BBBB' })
+      const latest = (await db.getAuditLog(10)).find(l => l.details.fields_changed?.toString() === 'image_url')!
+      expect(JSON.stringify(latest.details)).not.toContain('data:image')
+      expect((await db.getWineById(wine.id))?.image_url).toBe('data:image/png;base64,BBBB')
+    })
+
+    it('clears photos already copied into the history when it loads', async () => {
+      const backup = await db.exportDatabase()
+      backup.tables.audit_log = [
+        { id: 'a1', action: 'edit_wine_details', details: { old_values: { image_url: 'data:image/jpeg;base64,AAAA' } }, created_at: '2026-01-01' },
+      ]
+      await db.restoreDatabase(backup)
+      await db.initializeDatabase()
+      const logs = await db.getAuditLog(10)
+      expect(JSON.stringify(logs)).not.toContain('data:image')
+    })
+
     it('should retrieve audit log with details JSON parsing', async () => {
       await db.createAuditLog({
         action: 'edit_wine_details',
