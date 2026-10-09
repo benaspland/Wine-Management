@@ -303,6 +303,42 @@ describe('deferWineFromDelivery', () => {
 })
 
 describe('confirmDelivery', () => {
+  it('confirms a curated delivery for what storage holds when it lists more', async () => {
+    const wines = await seedCollection()
+    const [short, full] = wines
+    const window = await db.createDeliveryWindow({ scheduled_date: '2027-03-01', locked: true, status: 'planned' })
+    await db.addWineToDeliveryWindow(window.id, short.id, 6)
+    await db.addWineToDeliveryWindow(window.id, full.id, 6)
+    // Two of the six were since corrected out of storage
+    await db.updateWine(short.id, { quantity_in_storage: 4 })
+
+    const schedule = await planner.buildDeliverySchedule(await db.getAllWines())
+    const entry = schedule.find(d => d.windowId === window.id)!
+    expect(entry.wines.find(w => w.id === short.id)?.quantity).toBe(4)
+
+    await planner.confirmDelivery(schedule, entry.key)
+
+    expect((await db.getWineById(short.id))?.quantity_in_storage).toBe(0)
+    expect((await db.getWineById(full.id))?.quantity_at_home).toBe(6)
+    expect((await db.getDeliveryWindowById(window.id))?.status).toBe('completed')
+    const rows = await db.getDeliveryWindowWines(window.id)
+    expect(rows.find(r => r.wine_id === short.id)?.quantity).toBe(4)
+  })
+
+  it('moves nothing when any wine in the delivery is short', async () => {
+    const wines = await seedCollection()
+    const schedule = await planner.buildDeliverySchedule(wines)
+    const entry = schedule[0]
+    const last = entry.wines[entry.wines.length - 1]
+    // Storage changes after the schedule was drawn up
+    await db.updateWine(last.id, { quantity_in_storage: last.quantity - 1 })
+
+    await expect(planner.confirmDelivery(schedule, entry.key)).rejects.toThrow(/Nothing has been moved/)
+    const after = await db.getAllWines()
+    expect(after.reduce((sum, w) => sum + w.quantity_at_home, 0)).toBe(0)
+    expect((await db.getAllDeliveryWindows()).some(w => w.status === 'completed')).toBe(false)
+  })
+
   it('stops showing confirmed bottles in another window that also listed them', async () => {
     const wines = await seedCollection()
     const wine = wines[0]

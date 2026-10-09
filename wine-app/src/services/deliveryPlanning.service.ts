@@ -362,6 +362,22 @@ export async function confirmDelivery(
     )
   }
 
+  // Every wine must still have the bottles the delivery lists before
+  // any of them move. Checking one at a time as they moved meant a
+  // shortfall on the fifth wine left the first four at home, the rest
+  // in storage and the delivery not recorded — half a delivery, with
+  // nothing to say which half.
+  const stored = new Map(freshWines.map(w => [w.id, w]))
+  for (const wine of entry.wines) {
+    const inStorage = stored.get(wine.id)?.quantity_in_storage ?? 0
+    if (wine.quantity > inStorage) {
+      throw new Error(
+        `${wine.producer ? `${wine.producer} ` : ''}${wine.name} is listed for ${wine.quantity} ` +
+          `but only ${inStorage} ${inStorage === 1 ? 'is' : 'are'} in storage. Nothing has been moved.`
+      )
+    }
+  }
+
   // If no DB record exists yet for this scheduled date, create one now
   let windowId = entry.windowId
   if (!windowId) {
@@ -389,11 +405,15 @@ export async function confirmDelivery(
   // scheduler stops planning them — so without this the record of what
   // was in the delivery is gone the second it is confirmed, and the
   // completed window is an empty date.
+  //
+  // A curated window's rows are brought into line with what moved: one
+  // booked for more than storage held is shown — and confirmed — for
+  // what was there, and the record should say the same.
   const existingRows = await db.getDeliveryWindowWines(window.id)
-  if (existingRows.length === 0) {
-    for (const wine of entry.wines) {
-      await db.addWineToDeliveryWindow(window.id, wine.id, wine.quantity)
-    }
+  for (const wine of entry.wines) {
+    const row = existingRows.find(r => r.wine_id === wine.id)
+    if (!row) await db.addWineToDeliveryWindow(window.id, wine.id, wine.quantity)
+    else if (row.quantity !== wine.quantity) await db.updateDeliveryWindowWine(window.id, wine.id, wine.quantity)
   }
 
   // Update window status and record actual delivery date
