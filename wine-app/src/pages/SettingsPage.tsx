@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useWineStore } from '../store/wineStore'
 import * as db from '../services/database'
+import { withoutPhotos } from '../services/backup.service'
 import { ImportService, CSV_COLUMNS, CSV_REQUIRED_COLUMNS } from '../services/import.service'
 import MessageModal from '../components/MessageModal'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
@@ -259,21 +260,22 @@ export default function SettingsPage() {
     }
   }
 
-  const handleBackup = async () => {
+  const handleBackup = async (photos: boolean) => {
     setIsLoading(true)
     try {
-      const backup = await db.exportDatabase()
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const full = await db.exportDatabase()
+      const backup = photos ? full : withoutPhotos(full)
+      const blob = new Blob([JSON.stringify(backup, null, photos ? 2 : undefined)], { type: 'application/json' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `wine-cellar-backup-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `wine-cellar-backup${photos ? '' : '-no-photos'}-${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      showToast('Full backup downloaded')
+      showToast(photos ? 'Full backup downloaded' : 'Backup without photos downloaded')
     } catch (error) {
       setMessage({ type: 'error', text: `Backup failed: ${(error as Error).message}` })
     } finally {
@@ -776,7 +778,7 @@ export default function SettingsPage() {
 
           <div className="flex flex-col sm:flex-row gap-3">
             <button
-              onClick={handleBackup}
+              onClick={() => handleBackup(true)}
               disabled={isLoading}
               className="btn-primary flex-1 disabled:opacity-50"
             >
@@ -800,6 +802,16 @@ export default function SettingsPage() {
               Restore Backup
             </button>
           </div>
+
+          {/* Photos are nearly all of a backup's size; without them it
+              is small enough to attach to a message. */}
+          <button
+            onClick={() => handleBackup(false)}
+            disabled={isLoading}
+            className="mt-4 w-full text-xs text-outline underline underline-offset-4 hover:text-on-surface disabled:opacity-50"
+          >
+            Download backup without photos (small, for sharing)
+          </button>
         </div>
 
         {/* Data Summary */}
