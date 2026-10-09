@@ -37,21 +37,48 @@ async function loadLockedWindowState(
   wines: Wine[],
   locations: StorageLocation[]
 ): Promise<LockedWindowState> {
-  const dbWindows = await db.getAllDeliveryWindows()
+  const allWindows = await db.getAllDeliveryWindows()
+  const dbWindows: typeof allWindows = []
   const lockedWindowWines = new Map<string, Array<{ wine_id: string; quantity: number }>>()
   const completedWindowWines = new Map<string, Array<{ wine_id: string; quantity: number }>>()
   const committedQuantities: Record<string, number> = {}
   const lockedDeliveries: Record<string, Array<{ wine_id: string; quantity: number }>> = {}
 
-  for (const w of dbWindows) {
+  /**
+   * What is actually still in storage to be delivered.
+   *
+   * A wine can be listed in more than one open window — a promote adds
+   * it to one while an older curated window still holds it — and once
+   * one of them is confirmed, its bottles are at home. The other window
+   * kept listing them, so a delivery you had already taken carried on
+   * showing as due at a later date. Windows are read in date order and
+   * may only claim what storage still holds; one left with nothing it
+   * could deliver is dropped.
+   */
+  const inStorage = new Map(wines.map(wine => [wine.id, wine.quantity_in_storage]))
+
+  for (const w of allWindows) {
     if (w.status === 'completed') {
+      dbWindows.push(w)
       const wws = await db.getDeliveryWindowWines(w.id)
       if (wws.length > 0) {
         completedWindowWines.set(w.id, wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity })))
       }
-    } else if (w.locked) {
+    } else if (!w.locked) {
+      dbWindows.push(w)
+    } else {
       const wws = await db.getDeliveryWindowWines(w.id)
-      const wineList = wws.map(ww => ({ wine_id: ww.wine_id, quantity: ww.quantity }))
+      const wineList: Array<{ wine_id: string; quantity: number }> = []
+      for (const ww of wws) {
+        const available = inStorage.get(ww.wine_id) ?? 0
+        const quantity = Math.min(ww.quantity, available)
+        if (quantity <= 0) continue
+        inStorage.set(ww.wine_id, available - quantity)
+        wineList.push({ wine_id: ww.wine_id, quantity })
+      }
+      // Everything it listed has already come home
+      if (wws.length > 0 && wineList.length === 0) continue
+      dbWindows.push(w)
       lockedWindowWines.set(w.id, wineList)
       // Keyed by source, so a locked delivery from one locker does not
       // stop the others delivering that month. An old window of mixed
