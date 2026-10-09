@@ -1,7 +1,7 @@
 /**
- * WineForm component tests — the form's single quantity + location pair
- * must translate correctly into the split quantity_in_storage /
- * quantity_at_home fields. A regression here once imported wines with
+ * WineForm component tests — adding takes one quantity + location pair
+ * and editing takes home and storage counts; both must translate
+ * correctly into the split quantity_in_storage / quantity_at_home fields. A regression here once imported wines with
  * undefined quantities, so the mapping is pinned for both add and edit
  * modes.
  */
@@ -187,49 +187,43 @@ describe('WineForm - purchase price', () => {
 })
 
 describe('WineForm - edit mode quantity mapping', () => {
-  it('shows the combined bottle count and keeps home bottles when reducing quantity', async () => {
+  it('edits bottles at home and in storage separately', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined)
     render(
       <WineForm
         isOpen={true}
         onClose={vi.fn()}
         onSubmit={onSubmit}
-        initialWine={makeWine({ quantity_in_storage: 10, quantity_at_home: 2 })}
+        initialWine={makeWine({ quantity_in_storage: 6, quantity_at_home: 2 })}
       />
     )
 
-    // Storage 10 + home 2 render as a single quantity of 12
-    const quantityField = document.querySelector('[name="quantity"]') as HTMLInputElement
-    expect(quantityField.value).toBe('12')
+    expect((document.querySelector('[name="at_home"]') as HTMLInputElement).value).toBe('2')
+    expect((document.querySelector('[name="in_storage"]') as HTMLInputElement).value).toBe('6')
+    expect(document.querySelector('[name="quantity"]')).toBeNull()
 
-    setField('quantity', '8')
+    // Correcting the home count leaves storage — and any delivery
+    // booked from it — alone
+    setField('at_home', '0')
     fireEvent.click(screen.getByText('Save Wine'))
 
-    // Bottles at home stay at home; the reduction comes out of storage
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
     const submitted = onSubmit.mock.calls[0][0]
-    expect(submitted.quantity_at_home).toBe(2)
+    expect(submitted.quantity_at_home).toBe(0)
     expect(submitted.quantity_in_storage).toBe(6)
+    expect(submitted).not.toHaveProperty('at_home')
+    expect(submitted).not.toHaveProperty('in_storage')
   })
 
-  it('caps home bottles at the new total when reducing below the home count', async () => {
+  it('refuses a blank count rather than reading it as none', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined)
-    render(
-      <WineForm
-        isOpen={true}
-        onClose={vi.fn()}
-        onSubmit={onSubmit}
-        initialWine={makeWine({ quantity_in_storage: 10, quantity_at_home: 2 })}
-      />
-    )
+    render(<WineForm isOpen={true} onClose={vi.fn()} onSubmit={onSubmit} initialWine={makeWine()} />)
 
-    setField('quantity', '1')
+    setField('in_storage', '')
     fireEvent.click(screen.getByText('Save Wine'))
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
-    const submitted = onSubmit.mock.calls[0][0]
-    expect(submitted.quantity_at_home).toBe(1)
-    expect(submitted.quantity_in_storage).toBe(0)
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('in storage'))
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 
   it('shows why a rejected save failed, and keeps the form open', async () => {
