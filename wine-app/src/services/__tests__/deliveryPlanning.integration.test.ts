@@ -170,7 +170,9 @@ describe('promoteWineToNextDelivery', () => {
     const rebuilt = await planner.buildDeliverySchedule(wines)
     expect(rebuilt[0].locked).toBe(true)
     const inFirst = rebuilt[0].wines.find(w => w.id === target.id)
-    expect(inFirst?.quantity).toBe(before + 3)
+    // Never more than storage holds: a window cannot deliver bottles
+    // that are not there
+    expect(inFirst?.quantity).toBe(Math.min(before + 3, target.quantity_in_storage))
   })
 
   it('adds to the quantity when the wine is already in the delivery', async () => {
@@ -301,6 +303,27 @@ describe('deferWineFromDelivery', () => {
 })
 
 describe('confirmDelivery', () => {
+  it('stops showing confirmed bottles in another window that also listed them', async () => {
+    const wines = await seedCollection()
+    const wine = wines[0]
+
+    // Two curated windows both list every bottle of the same wine
+    const soon = await db.createDeliveryWindow({ scheduled_date: '2027-03-01', locked: true, status: 'planned' })
+    await db.addWineToDeliveryWindow(soon.id, wine.id, wine.quantity_in_storage)
+    const later = await db.createDeliveryWindow({ scheduled_date: '2035-03-01', locked: true, status: 'planned' })
+    await db.addWineToDeliveryWindow(later.id, wine.id, wine.quantity_in_storage)
+
+    const before = await planner.buildDeliverySchedule(await db.getAllWines())
+    const target = before.find(d => d.windowId === soon.id)!
+    await planner.confirmDelivery(before, target.key)
+    expect((await db.getWineById(wine.id))?.quantity_in_storage).toBe(0)
+
+    const after = await planner.buildDeliverySchedule(await db.getAllWines())
+    const upcoming = after.filter(d => d.status !== 'completed')
+    expect(upcoming.some(d => d.wines.some(w => w.id === wine.id))).toBe(false)
+    expect(upcoming.some(d => d.windowId === later.id)).toBe(false)
+  })
+
   it('moves every bottle of the delivery from storage to home', async () => {
     const wines = await seedCollection()
     const bottlesBefore = await totalBottles()
