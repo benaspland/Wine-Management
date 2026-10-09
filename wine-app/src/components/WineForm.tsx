@@ -83,6 +83,8 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           tier: String(initialWine.tier),
           location: 'storage' as 'storage' | 'home',
           quantity: String((initialWine.quantity_in_storage || 0) + (initialWine.quantity_at_home || 0)),
+          at_home: String(initialWine.quantity_at_home || 0),
+          in_storage: String(initialWine.quantity_in_storage || 0),
           // Normalised so a legacy value like "75cl" preselects its
           // trade name instead of leaving the dropdown blank
           format: normalizeFormat(initialWine.format) ?? 'Bottle',
@@ -112,6 +114,8 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
           tier: '1',
           location: 'storage' as 'storage' | 'home',
           quantity: '1',
+          at_home: '0',
+          in_storage: '0',
           format: 'Bottle',
           drinking_window_start: String(new Date().getFullYear()),
           drinking_window_end: String(new Date().getFullYear() + 10),
@@ -266,6 +270,8 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
     // The one place text becomes numbers.
     const vintage = toInt(formData.vintage)
     const quantity = toInt(formData.quantity)
+    const atHome = toInt(formData.at_home)
+    const inStorage = toInt(formData.in_storage)
     const windowStart = toInt(formData.drinking_window_start)
     const windowEnd = toInt(formData.drinking_window_end)
 
@@ -275,7 +281,12 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       setSaveError('A vintage is required, as a 4-digit year')
       return
     }
-    if (quantity === undefined || quantity < 0) {
+    if (initialWine) {
+      if (atHome === undefined || atHome < 0 || inStorage === undefined || inStorage < 0) {
+        setSaveError('Bottles at home and in storage are both required — 0 if there are none')
+        return
+      }
+    } else if (quantity === undefined || quantity < 0) {
       setSaveError('A number of bottles is required')
       return
     }
@@ -288,28 +299,33 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
       return
     }
 
-    // Translate the form's single quantity + location into the split
-    // inventory fields the Wine record uses. When editing, bottles at
-    // home stay at home and any quantity change is applied to storage.
-    // quantity and location describe the form, not the record: they
-    // become quantity_in_storage / quantity_at_home below.
+    // Adding takes one quantity and where it is. Editing takes the two
+    // counts separately: a single total, with any change applied to
+    // storage, meant correcting the bottles at home took them out of
+    // storage instead — and out of a delivery booked to bring them.
+    // These describe the form, not the record: they become
+    // quantity_in_storage / quantity_at_home below.
     const {
       location,
       quantity: _quantity,
+      at_home: _atHome,
+      in_storage: _inStorage,
       purchase_price,
       purchase_date,
       merchant,
       ...wineFields
     } = formData
     void _quantity
+    void _atHome
+    void _inStorage
     let quantity_in_storage: number
     let quantity_at_home: number
     if (initialWine) {
-      quantity_at_home = Math.min(initialWine.quantity_at_home, quantity)
-      quantity_in_storage = quantity - quantity_at_home
+      quantity_at_home = atHome!
+      quantity_in_storage = inStorage!
     } else {
-      quantity_in_storage = location === 'storage' ? quantity : 0
-      quantity_at_home = location === 'home' ? quantity : 0
+      quantity_in_storage = location === 'storage' ? quantity! : 0
+      quantity_at_home = location === 'home' ? quantity! : 0
     }
 
     try {
@@ -530,10 +546,22 @@ export default function WineForm({ isOpen, onClose, onSubmit, initialWine, isLoa
         </Section>
 
         <Section title="In the cellar">
+          {initialWine && (
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="At home">
+                <input type="number" name="at_home" value={formData.at_home} onChange={handleChange} min="0" className={INPUT} />
+              </Field>
+              <Field label="In storage">
+                <input type="number" name="in_storage" value={formData.in_storage} onChange={handleChange} min="0" className={INPUT} />
+              </Field>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Quantity">
-              <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} min="0" className={INPUT} />
-            </Field>
+            {!initialWine && (
+              <Field label="Quantity">
+                <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} min="0" className={INPUT} />
+              </Field>
+            )}
             <Field label="Format">
               <select name="format" value={formData.format} onChange={handleChange} className={INPUT}>
                 {BOTTLE_FORMATS.map(format => (
