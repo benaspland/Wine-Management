@@ -1,0 +1,1 @@
+import{g as e}from"./values-B-pLHt9r.js";var t=15e3,n=5e3;function r(t,r){if(!(t>=5e3))throw new e(`${r} must be at least ${n}ms (got ${t}); to run without memory sync, pass \`memorySyncIntervalMs: null\` to the worker instead`)}export{n,r,t};
