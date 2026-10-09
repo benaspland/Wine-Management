@@ -67,7 +67,8 @@ test('add a wine, persist it across reload, then delete it', async ({ page }) =>
 test('delivery and drinking schedule pages render', async ({ page }) => {
   await page.goto('/deliveries')
   await expect(page.getByText('Delivery Schedule').first()).toBeVisible()
-  await expect(page.getByText('Upcoming Deliveries').first()).toBeVisible()
+  // "Deliveries", not "Upcoming": completed ones are listed too
+  await expect(page.getByRole('heading', { name: 'Deliveries', exact: true })).toBeVisible()
 
   await page.goto('/schedule')
   await expect(page.getByText('Drinking Schedule').first()).toBeVisible()
