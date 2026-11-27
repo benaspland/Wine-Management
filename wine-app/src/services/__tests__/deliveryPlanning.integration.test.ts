@@ -302,6 +302,21 @@ describe('deferWineFromDelivery', () => {
   })
 })
 
+describe('missed deliveries', () => {
+  it('moves an unconfirmed delivery from a month already gone to one still to come', async () => {
+    const wines = await seedCollection()
+    const window = await db.createDeliveryWindow({ scheduled_date: '2020-03-01', locked: true, status: 'planned' })
+    await db.addWineToDeliveryWindow(window.id, wines[0].id, 6)
+
+    const schedule = await planner.buildDeliverySchedule(await db.getAllWines())
+    const entry = schedule.find(d => d.windowId === window.id)!
+    const now = new Date()
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    expect(entry.date >= thisMonth).toBe(true)
+    expect(entry.wines.map(w => w.id)).toEqual([wines[0].id])
+  })
+})
+
 describe('confirmDelivery', () => {
   it('confirms a curated delivery for what storage holds when it lists more', async () => {
     const wines = await seedCollection()

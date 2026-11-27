@@ -4,7 +4,40 @@ import * as workflows from './workflows.service'
 import { ScheduleService } from './schedule.service'
 import type { DeliveryDisplayEntry } from './schedule.service'
 import { DELIVERY_CONFIG } from '../config/deliveryConfig'
-import { UNALLOCATED, deliveryKey, rulesFor, unallocatedRules, windowLocation } from './storageLocation.service'
+import {
+  UNALLOCATED,
+  deliveryKey,
+  isDeliveryMonth,
+  rulesFor,
+  unallocatedRules,
+  windowLocation,
+} from './storageLocation.service'
+
+/**
+ * When a saved delivery that was never confirmed is now due.
+ *
+ * A curated delivery keeps the date it was given, so one left
+ * unconfirmed sat in a month already gone — still listed as next, and
+ * left out of the planning, which starts from this month. It rolls
+ * forward to the first month its location can deliver, starting with
+ * this one. A window still to come, or one with no single location,
+ * is left as it is.
+ */
+export function dueDate(
+  scheduledDate: string,
+  locationId: string | undefined,
+  locations: StorageLocation[],
+  now: Date = new Date()
+): string {
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  if (scheduledDate >= thisMonth) return scheduledDate
+  const location = locations.find(l => l.id === locationId)
+  const rules = location
+    ? rulesFor(location)
+    : { ...unallocatedRules(), delivery_months: [...DELIVERY_CONFIG.months] }
+  if (isDeliveryMonth(rules, now.getMonth() + 1)) return thisMonth
+  return ScheduleService.nextDeliveryDate(thisMonth, rules)
+}
 
 /**
  * Delivery planning orchestration.
@@ -78,15 +111,16 @@ async function loadLockedWindowState(
       }
       // Everything it listed has already come home
       if (wws.length > 0 && wineList.length === 0) continue
-      dbWindows.push(w)
-      lockedWindowWines.set(w.id, wineList)
       // Keyed by source, so a locked delivery from one locker does not
       // stop the others delivering that month. An old window of mixed
       // origin keeps its bare date and still stands in for them all.
       const location =
         windowLocation(w.storage_location_id, wineList, wines) ??
         (locations.length === 0 ? UNALLOCATED : undefined)
-      lockedDeliveries[deliveryKey(w.scheduled_date, location)] = wineList
+      const due = { ...w, scheduled_date: dueDate(w.scheduled_date, location, locations) }
+      dbWindows.push(due)
+      lockedWindowWines.set(w.id, wineList)
+      lockedDeliveries[deliveryKey(due.scheduled_date, location)] = wineList
       for (const ww of wineList) {
         committedQuantities[ww.wine_id] = (committedQuantities[ww.wine_id] || 0) + ww.quantity
       }
