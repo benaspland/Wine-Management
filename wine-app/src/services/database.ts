@@ -673,6 +673,16 @@ export async function removeWineFromDeliveryWindow(
   await persist()
 }
 
+/** Remove a delivery window and the wines booked into it. */
+export async function deleteDeliveryWindow(id: string): Promise<void> {
+  tables.set('delivery_window', getTable('delivery_window').filter((w) => w.id !== id))
+  tables.set(
+    'delivery_window_wines',
+    getTable('delivery_window_wines').filter((w) => w.delivery_window_id !== id)
+  )
+  await persist()
+}
+
 export async function deleteDeliveryWindowWinesByWindow(windowId: string): Promise<void> {
   const rows = getTable('delivery_window_wines')
   tables.set(

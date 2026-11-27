@@ -76,6 +76,14 @@ export function useDeliverySchedule() {
     [schedule, refresh]
   )
 
+  const resetDelivery = useCallback(
+    async (key: string) => {
+      await planner.resetDelivery(schedule, key)
+      await refresh()
+    },
+    [schedule, refresh]
+  )
+
   const confirmDelivery = useCallback(
     async (key: string) => {
       await planner.confirmDelivery(schedule, key)
@@ -85,5 +93,5 @@ export function useDeliverySchedule() {
     [schedule, loadWines, refresh]
   )
 
-  return { schedule, error, cellarCapacity, refresh, promoteWine, deferWine, confirmDelivery }
+  return { schedule, error, cellarCapacity, refresh, promoteWine, deferWine, resetDelivery, confirmDelivery }
 }
