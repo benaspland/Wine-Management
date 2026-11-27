@@ -371,6 +371,27 @@ export async function deferWineFromDelivery(
   await db.removeWineFromDeliveryWindow(windowId, wineId)
 }
 
+/**
+ * Hand a curated delivery back to the planner.
+ *
+ * Promoting or deferring saves a delivery as you left it, and from then
+ * on it stays that way. This undoes that: the saved delivery and its
+ * list are dropped, and the wines are planned again like any others —
+ * which may put them in a different month, or a different delivery.
+ * Nothing moves between storage and home.
+ */
+export async function resetDelivery(
+  schedule: DeliveryDisplayEntry[],
+  /** The delivery's key, or for a single-source month its date. */
+  key: string
+): Promise<void> {
+  const entry = findDelivery(schedule, key)
+  if (!entry) throw new Error('Delivery not found')
+  if (entry.status === 'completed') throw new Error('A delivery already received cannot be handed back')
+  if (!entry.locked || !entry.windowId) return
+  await db.deleteDeliveryWindow(entry.windowId)
+}
+
 /** Confirm a delivery: move its wines home and complete the window. */
 export async function confirmDelivery(
   schedule: DeliveryDisplayEntry[],

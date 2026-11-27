@@ -13,7 +13,7 @@ import DeliveryStatusBadge, { type DeliveryState } from '../components/DeliveryS
 
 export default function DeliverySchedulePage() {
   const wines = useWineStore(state => state.wines)
-  const { schedule: deliverySchedule, error: scheduleError, cellarCapacity, promoteWine, deferWine, confirmDelivery } =
+  const { schedule: deliverySchedule, error: scheduleError, cellarCapacity, promoteWine, deferWine, resetDelivery, confirmDelivery } =
     useDeliverySchedule()
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -113,6 +113,19 @@ export default function DeliverySchedulePage() {
       flashMessage('error', `Failed to defer: ${(error as Error).message}`)
     } finally {
       setIsDelaying(false)
+    }
+  }
+
+  const handleResetDelivery = async (delivery: Entry) => {
+    const proceed = confirm(
+      'Drop your changes to this delivery? Its wines go back to the planner, which may schedule them differently.'
+    )
+    if (!proceed) return
+    try {
+      await resetDelivery(delivery.key)
+      flashMessage('success', 'Delivery handed back to the planner')
+    } catch (error) {
+      flashMessage('error', `Failed to reset: ${(error as Error).message}`)
     }
   }
 
@@ -333,6 +346,18 @@ export default function DeliverySchedulePage() {
                         className="btn-primary w-full mt-4"
                       >
                         Confirm Delivery
+                      </button>
+                    )}
+
+                    {/* Undoes promote and defer for this delivery: the
+                        saved version is dropped and the planner takes
+                        its wines back. */}
+                    {delivery.locked && state !== 'complete' && (
+                      <button
+                        onClick={() => handleResetDelivery(delivery)}
+                        className="w-full mt-3 py-2 text-xs text-outline underline underline-offset-4 hover:text-on-surface transition-colors"
+                      >
+                        Undo my changes — let the planner decide
                       </button>
                     )}
                   </div>

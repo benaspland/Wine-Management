@@ -302,6 +302,37 @@ describe('deferWineFromDelivery', () => {
   })
 })
 
+describe('resetDelivery', () => {
+  it('hands a curated delivery back to the planner without losing any bottles', async () => {
+    const wines = await seedSmallCollection()
+    const schedule = await planner.buildDeliverySchedule(wines)
+    await planner.promoteWineToNextDelivery(schedule, wines[5].id, 3)
+
+    const curated = await planner.buildDeliverySchedule(await db.getAllWines())
+    const locked = curated.find(d => d.locked)!
+    expect(locked).toBeDefined()
+
+    await planner.resetDelivery(curated, locked.key)
+
+    expect(await db.getAllDeliveryWindows()).toHaveLength(0)
+    const replanned = await planner.buildDeliverySchedule(await db.getAllWines())
+    expect(replanned.some(d => d.locked)).toBe(false)
+    const planned = replanned.reduce((sum, d) => sum + d.wines.reduce((s, w) => s + w.quantity, 0), 0)
+    const inStorage = wines.reduce((sum, w) => sum + w.quantity_in_storage, 0)
+    expect(planned).toBe(inStorage)
+  })
+
+  it('refuses to hand back a delivery already received', async () => {
+    const wines = await seedCollection()
+    const schedule = await planner.buildDeliverySchedule(wines)
+    await planner.confirmDelivery(schedule, schedule[0].key)
+    const after = await planner.buildDeliverySchedule(await db.getAllWines())
+    const done = after.find(d => d.status === 'completed')!
+    await expect(planner.resetDelivery(after, done.key)).rejects.toThrow()
+    expect((await db.getAllDeliveryWindows()).some(w => w.status === 'completed')).toBe(true)
+  })
+})
+
 describe('missed deliveries', () => {
   it('moves an unconfirmed delivery from a month already gone to one still to come', async () => {
     const wines = await seedCollection()
